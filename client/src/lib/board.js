@@ -452,16 +452,16 @@ export function initBoard() {
     function tokenTexture(n) {
       var c = makeCanvas(128, 128), ctx = c.getContext('2d'), red = (n === 6 || n === 8);
       ctx.fillStyle = '#fff3d2'; ctx.fillRect(0, 0, 128, 128);
-      ctx.strokeStyle = '#3b2a18'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(64, 64, 58, 0, 6.2832); ctx.stroke();
+      ctx.strokeStyle = '#3b2a18'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(64, 64, 60, 0, 6.2832); ctx.stroke();
       ctx.fillStyle = red ? '#b3261e' : '#2b2118';
       // Se mide el trazo real del número (no la caja de la tipografía) y se centra el bloque
       // número + puntos en el círculo, tanto en horizontal como en vertical.
-      var label = String(n), size = n >= 10 ? 74 : 88, m, w, maxW = 76;
+      var label = String(n), size = n >= 10 ? 62 : 78, m, w, maxW = 62;
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
       ctx.font = 'bold ' + size + 'px Georgia, "Times New Roman", serif'; m = ctx.measureText(label);
       w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
       if (w > maxW) { size = Math.floor(size * maxW / w); ctx.font = 'bold ' + size + 'px Georgia, "Times New Roman", serif'; m = ctx.measureText(label); w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight; }
-      var dots = 6 - Math.abs(7 - n), dotR = 6, dotStep = 15, gap = 9;
+      var dots = 6 - Math.abs(7 - n), dotR = 5.2, dotStep = 13.5, gap = 8;
       var numH = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent, top = 64 - (numH + gap + dotR * 2) / 2;
       ctx.fillText(label, 64 - w / 2 + m.actualBoundingBoxLeft, top + m.actualBoundingBoxAscent);
       var sx = 64 - (dots - 1) * dotStep / 2, dy = top + numH + gap + dotR;
@@ -474,7 +474,9 @@ export function initBoard() {
       var g = new THREE.Group(); g.add(mesh(G.tokenBase, MAT.token)); g.children[0].position.y = 0.025;
       if (!tokenTexCache[n]) { var tt = tokenTexture(n); tokenTexCache[n] = new THREE.MeshStandardMaterial({ map: tt, emissive: 0xffffff, emissiveMap: tt, emissiveIntensity: 0.4, roughness: 0.5, metalness: 0, envMapIntensity: 0.2 }); }
       var f = new THREE.Mesh(G.tokenFace, tokenTexCache[n]); f.rotation.x = -Math.PI / 2; f.position.y = 0.052; f.receiveShadow = true;
-      g.add(f); g.position.y = TILE_TOP;
+      // La ficha va al ras de la casilla: su borde queda 4 milésimas sobre la cara superior
+      // (no coincide exacto para evitar z-fighting) y el resto del disco queda enterrado.
+      g.add(f); g.position.y = TILE_TOP - 0.046;
       return g;
     }
 
