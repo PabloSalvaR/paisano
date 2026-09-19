@@ -87,9 +87,9 @@ export function initBoard() {
     scene.fog = new THREE.Fog(col(0xb9c9cf), 24, 70);
 
     var camera = new THREE.PerspectiveCamera(35, 1, 0.5, 200);
-    // Arranca casi cenital, con una leve inclinación (~20° respecto de la vertical, a distancia 20) para que se note el 3D
-    // antes de mover nada. El norte del tablero queda hacia arriba de la pantalla.
-    camera.position.set(0, 18.8, 6.85);
+    // Arranca con el tablero bien encuadrado y una inclinación de ~30° respecto de la vertical (a distancia ~17) para que
+    // se note el 3D antes de mover nada. El norte del tablero queda hacia arriba de la pantalla.
+    camera.position.set(0, 14.9, 8.5);
 
     var controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 0.2, 0);
