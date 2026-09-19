@@ -14,7 +14,7 @@ export const MARKUP = `
   </header>
 
   <div class="panel hover" id="hover" hidden></div>
-  <div class="dice" id="dice" hidden></div>
+  <div class="dice" id="dice" role="status" aria-live="polite" hidden></div>
 
   <nav class="panel bar" aria-label="Controles del tablero">
     <div class="group">
@@ -779,23 +779,59 @@ export function initBoard() {
     });
     renderer.domElement.addEventListener('pointerleave', function () { setHover(null); });
 
-    var diceBox = document.getElementById('dice'), diceTimer = null;
+    // ------------------------------------------------------------------ dados (modal con dados 3D de CSS)
+    // Cada dado es un cubo de 6 caras con puntos. Para mostrar la cara `v` de frente hay que girar el cubo:
+    //   [rotateX, rotateY] en grados; las caras opuestas suman 7 (1-6, 2-5, 3-4).
+    var DIE_FACES = { 1: [0, 0], 6: [0, 180], 3: [0, -90], 4: [0, 90], 2: [-90, 0], 5: [90, 0] };
+    var DIE_PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+    var DIE_LAYOUT = [[1, 'front'], [6, 'back'], [3, 'right'], [4, 'left'], [2, 'top'], [5, 'bottom']];
+    var DIE_TILT = 'rotateX(-22deg) rotateY(-28deg)'; // leve inclinación fija para que se vean el techo y un costado
+    function buildDie() {
+      var el = document.createElement('div'), cube = document.createElement('div');
+      el.className = 'die'; el.setAttribute('aria-hidden', 'true'); cube.className = 'cube'; el.appendChild(cube);
+      DIE_LAYOUT.forEach(function (f) {
+        var face = document.createElement('div'); face.className = 'face ' + f[1] + (f[0] === 1 ? ' one' : '');
+        for (var i = 0; i < 9; i++) { var c = document.createElement('span'); if (DIE_PIPS[f[0]].indexOf(i) >= 0) c.className = 'on'; face.appendChild(c); }
+        cube.appendChild(face);
+      });
+      cube.style.transform = DIE_TILT;
+      return { el: el, cube: cube, cx: 0, cy: 0 };
+    }
+    // Gira el dado hasta dejar la cara `v` de frente, sumando vueltas completas (mínimo ~1.5) desde donde estaba.
+    function spinDie(die, v, animate) {
+      var f = DIE_FACES[v];
+      die.cx = f[0] + 360 * Math.ceil((die.cx + 540 - f[0]) / 360 + Math.floor(Math.random() * 2));
+      die.cy = f[1] + 360 * Math.ceil((die.cy + 540 - f[1]) / 360 + Math.floor(Math.random() * 2));
+      die.cube.style.transition = animate ? 'transform 1.15s cubic-bezier(.15,.75,.25,1)' : 'none';
+      die.cube.style.transform = DIE_TILT + ' rotateX(' + die.cx + 'deg) rotateY(' + die.cy + 'deg)';
+      die.el.classList.remove('hop'); void die.el.offsetWidth; if (animate) die.el.classList.add('hop');
+    }
+    var diceBox = document.getElementById('dice'), diceTimer = null, diceBusy = false, btnDice = document.getElementById('btnDice');
+    diceBox.innerHTML = '<div class="dice-row"></div><b></b>';
+    var diceRow = diceBox.firstChild, diceSum = diceRow.nextSibling;
+    var dieA = buildDie(), dieB = buildDie(); diceRow.appendChild(dieA.el); diceRow.appendChild(dieB.el);
     function rollDice() {
-      var a = 1 + Math.floor(Math.random() * 6), b = 1 + Math.floor(Math.random() * 6), s = a + b, kinds = [];
-      diceBox.innerHTML = '<b></b><span></span>';
-      diceBox.firstChild.textContent = a + ' + ' + b + ' = ' + s;
-      if (s === 7) { robberPulse = 1; diceBox.lastChild.textContent = 'Sale el 7: se mueve el ladrón'; }
-      else {
-        tiles.forEach(function (t) { if (t.num === s) { t.pulse = 1; if (kinds.indexOf(TERRAINS[t.kind].res) < 0) kinds.push(TERRAINS[t.kind].res); } });
-        diceBox.lastChild.textContent = kinds.length ? 'Producen: ' + kinds.join(', ') : 'Ninguna casilla produce';
-      }
+      if (diceBusy) return;
+      diceBusy = true; btnDice.disabled = true;
+      var a = 1 + Math.floor(Math.random() * 6), b = 1 + Math.floor(Math.random() * 6), s = a + b;
+      var animate = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      clearTimeout(diceTimer);
+      diceSum.textContent = '';
       diceBox.hidden = false;
-      clearTimeout(diceTimer); diceTimer = setTimeout(function () { diceBox.hidden = true; }, 3200);
+      spinDie(dieA, a, animate); spinDie(dieB, b, animate);
+      // el resultado (solo el total) y el efecto sobre el tablero aparecen cuando los dados terminan de caer
+      diceTimer = setTimeout(function () {
+        diceSum.textContent = s;
+        if (s === 7) robberPulse = 1;
+        else tiles.forEach(function (t) { if (t.num === s) t.pulse = 1; });
+        diceBusy = false; btnDice.disabled = false;
+        diceTimer = setTimeout(function () { diceBox.hidden = true; }, 3200);
+      }, animate ? 1250 : 0);
     }
 
     function pressed(btn, on) { btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
     document.getElementById('btnNew').addEventListener('click', function () { buildBoard((Math.random() * 1e9) | 0); });
-    document.getElementById('btnDice').addEventListener('click', rollDice);
+    btnDice.addEventListener('click', rollDice);
     var lightBtns = Array.prototype.slice.call(document.querySelectorAll('[data-light]'));
     lightBtns.forEach(function (b) {
       b.addEventListener('click', function () {

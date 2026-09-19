@@ -74,15 +74,34 @@ body{
 .hover strong{font-family:'Fraunces',Georgia,serif;font-size:1rem;display:block}
 .hover span{color:var(--muted)}
 
+/* Modal de dados: a la derecha, pero corrido hacia el centro (a la izquierda del menú) para que no quede pegado al borde
+   ni tape el tablero. Tamaño FIJO: la línea del resultado tiene altura reservada, así que no cambia mientras los dados
+   ruedan ni al mostrar el total. Los dados son cubos 3D de CSS (ver buildDie en board.js). */
 .dice{
-  position:absolute;z-index:3;left:50%;top:22%;transform:translateX(-50%);
-  text-align:center;padding:14px 26px;border-radius:14px;
+  position:absolute;z-index:3;top:14px;right:210px;width:240px;
+  text-align:center;padding:14px 20px 12px;border-radius:14px;
   background:var(--panel);border:1px solid var(--border);box-shadow:var(--shadow);
   -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
   pointer-events:none;
 }
-.dice b{display:block;font-family:'Fraunces',Georgia,serif;font-size:2.2rem;line-height:1.1;font-weight:700}
-.dice span{display:block;margin-top:4px;font-size:.86rem;color:var(--muted)}
+.dice b{display:block;height:2.8rem;font-family:'Fraunces',Georgia,serif;font-size:2.6rem;line-height:2.8rem;font-weight:700}
+.dice-row{display:flex;gap:22px;justify-content:center;margin:4px 0 12px;padding:6px 0}
+/* la perspectiva va en cada dado (padre directo del cubo); en el contenedor no llegaba al cubo por ser nieto */
+.die{--s:56px;width:var(--s);height:var(--s);perspective:520px}
+.die.hop{animation:dice-hop 1.15s cubic-bezier(.3,.6,.4,1)}
+@keyframes dice-hop{0%{transform:translateY(0)}18%{transform:translateY(-20px)}42%{transform:translateY(0)}56%{transform:translateY(-7px)}72%,100%{transform:translateY(0)}}
+.cube{position:relative;width:100%;height:100%;transform-style:preserve-3d}
+.face{position:absolute;inset:0;display:grid;grid:repeat(3,1fr)/repeat(3,1fr);padding:8px;border-radius:9px;
+  background:linear-gradient(145deg,#fffaea,#f0e2c0);border:1px solid rgba(59,42,24,.6);box-shadow:inset 0 0 7px rgba(120,90,50,.38)}
+.face span{display:block;margin:12%}
+.face span.on{border-radius:50%;background:radial-gradient(circle at 35% 30%,#4a3a2c,#1f1710 70%)}
+.face.one span.on{background:radial-gradient(circle at 35% 30%,#d8483f,#a3201a 70%)}
+.face.front{transform:translateZ(calc(var(--s) / 2))}
+.face.back{transform:rotateY(180deg) translateZ(calc(var(--s) / 2))}
+.face.right{transform:rotateY(90deg) translateZ(calc(var(--s) / 2))}
+.face.left{transform:rotateY(-90deg) translateZ(calc(var(--s) / 2))}
+.face.top{transform:rotateX(90deg) translateZ(calc(var(--s) / 2))}
+.face.bottom{transform:rotateX(-90deg) translateZ(calc(var(--s) / 2))}
 
 .bar{
   right:14px;top:50%;transform:translateY(-50%);
@@ -98,6 +117,7 @@ body{
   transition:background-color .15s,color .15s,border-color .15s;
 }
 .bar button:hover{background:var(--btn-hover)}
+.bar button:disabled{opacity:.55;cursor:default}
 .bar button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .bar button[aria-pressed="true"]{background:var(--btn-on);color:var(--btn-on-text);border-color:var(--btn-on)}
 .bar button.primary{border-color:var(--accent)}
@@ -122,7 +142,21 @@ body{
   .group + .group{padding-top:0;border-top:none;padding-left:10px;border-left:1px solid var(--border)}
   .bar button{padding:7px 10px;font-size:.8rem}
   .hover{top:auto;bottom:112px;right:10px;left:10px;max-width:none}
+  /* el modal de dados se hace más chico para convivir con el título (arriba a la izquierda) */
+  .dice{top:10px;right:10px;padding:10px 12px 9px;width:calc(100% - 214px)}
+  .dice-row{gap:14px;margin:2px 0 8px}
+  .die{--s:42px}
+  .dice b{height:2.1rem;font-size:1.9rem;line-height:2.1rem}
+}
+/* entre 641 y 900 px de ancho no hay lugar para el modal junto al menú: vuelve al borde derecho */
+@media (min-width:641px) and (max-width:900px){
+  .dice{right:14px}
+}
+/* en ese rango angosto, si además la pantalla es baja, el menú baja al rincón inferior derecho para no chocar con el modal */
+@media (min-width:641px) and (max-width:900px) and (max-height:760px){
+  .bar{top:auto;bottom:14px;transform:none}
 }
 @media (prefers-reduced-motion: reduce){
   .bar button{transition:none}
+  .die.hop{animation:none}
 }
