@@ -122,7 +122,7 @@ Mapa hexagonal de casillas con la punta hacia arriba (*pointy-top*), coordenadas
 La referencia visual es el propio tablero del cliente: `client/src/lib/board.js` (three.js r128, JavaScript plano, geometría procedural). Nació de un prototipo HTML (`docs/prototipos/tablero-3d.html`) que se **eliminó** por estar superado; sigue en el historial de git (commit `48ef43f`). Al migrar a React Three Fiber hay que conservar lo siguiente (las medidas de esta sección son la especificación de partida; el código manda si difiere):
 
 **Escala y capas** (circunradio de casilla = 1)
-- Casilla: extrusión hexagonal biselada, cara superior a `y = 0.4`, separación entre casillas ≈ 0.12.
+- Casilla: extrusión hexagonal biselada, cara superior a `y = 0.4`. Las casillas van **pegadas** (radio 1 = circunradio de la grilla, sin hueco de agua); el bisel deja la línea divisoria.
 - Nivel del agua `y = 0.16`, marco de madera hexagonal (radio interior 6.4) alrededor de todo el mar.
 - Sobre una mesa de madera que se pierde en niebla.
 
@@ -135,18 +135,20 @@ La referencia visual es el propio tablero del cliente: `client/src/lib/board.js`
 | Campo | `#e8bf45` | plantas de maíz instanciadas en filas (recurso: Maíz) |
 | Barro (antes Colina) | `#c96a3b` | pilas de ladrillos y montículos (recurso: Ladrillo) |
 | Cantera (antes Montaña) | `#8d949c` | rocas irregulares grandes y chicas (sin picos ni nieve; recurso: Piedra) |
-| Desierto | `#e3c78d` | dunas y cactus |
+| Desierto | `#e3c78d` | sin decorado (solo el ladrón, que arranca ahí) |
 
-- Fichas de número crema, con **6 y 8 en rojo** y puntos de probabilidad.
-- Colores de jugador: rojo `#d94141`, azul `#3b6fd6`, naranja `#f0932b`, blanco `#f1eee6`.
+- El decorado va a la mitad de altura (`DECOR_HEIGHT = 0.5`) y **nunca pisa** la ficha del número, los caminos (aristas) ni los poblados/ciudades (vértices): cada objeto se trata como un círculo que debe caber (`fitsTile` en `board.js`). Si se agranda un objeto o una pieza, revisar esas reservas.
+- Fichas de número: crema brillante con borde oscuro, **al ras de la casilla** (sin relieve), **6 y 8 en rojo** y puntos de probabilidad. Todas las cifras usan el mismo tamaño y altura (fuente de cifras "lining"; Georgia usaba cifras old-style y el 10/11/12 se veían chicos).
+- Colores de jugador: rojo `#d94141`, azul `#3b6fd6`, naranja `#f0932b`, blanco `#f1eee6`. Las piezas llevan un contorno fino en un tono muy oscuro de su propio color (no negro puro) y ajustan intensidad/brillo según la luz: de día más intensas y profundas, de noche más brillantes, para contrastar siempre con el tablero.
 - Piezas: casa (perfil de casa extruido), ciudad (sala + torre), camino (prisma), ladrón (torno + esfera).
 - Puertos: barco con vela y cartel `3:1` / `2:1` con franja del color del recurso, unido a la costa por dos muelles.
 
 **Render**
 - Pipeline en sRGB con tone mapping ACES Filmic, sombras suaves (PCF soft, 2048), mapa de entorno generado por gradiente, niebla que coincide con el fondo.
 - Tres iluminaciones con transición suave: **día**, **atardecer** (sol bajo y cálido) y **noche** (luna azulada y dos luces cálidas).
-- Cámara orbital con zoom y ángulo limitados, sin paneo; campo de visión mayor en pantallas verticales. **Arranca en vista cenital (90°, mirando recto hacia abajo)** y se puede inclinar desde ahí.
-- Extras deseados: casilla que se levanta al pasar el cursor, salto de casillas al tirar dados, barcos que se mecen, agua animada. **Descartado:** efecto "maqueta" (desenfoque arriba y abajo); se probó y se quitó por no aportar.
+- Cámara orbital con zoom y ángulo limitados, sin paneo; campo de visión mayor en pantallas verticales. **Arranca a ~30° de la vertical y bastante cerca (distancia ~17)**, con el norte del tablero hacia arriba; se puede llegar hasta la vista cenital y hasta el límite de inclinación.
+- Extras: salto leve de las casillas al tirar dados (0.06), barcos que se mecen, agua animada (el fondo de la textura del agua es de un solo color: un degradado dejaba costuras en bloques al repetirse). **Descartados:** efecto "maqueta" (desenfoque arriba y abajo), casilla que se levanta al pasar el cursor y botón "Girar solo": se probaron o se quitaron por no aportar.
+- **Dados:** modal arriba, a la izquierda del menú, con dos dados 3D de CSS (sin librerías) que ruedan y muestran solo el **total** al caer. Tamaño fijo. El resultado hoy sale de `Math.random()` en el cliente (provisorio; ver "Decisiones pendientes").
 - Presupuesto orientativo del prototipo: ~35 mil triángulos y ~500 objetos. Si el rendimiento en móvil lo exige, usar instancing y fusionar geometrías estáticas.
 
 **Assets definitivos** (fase de pulido): modelos glTF (comprimidos con Draco/KTX2), texturas propias, HDRI y postprocesado (bloom, oclusión ambiental, corrección de color).
@@ -179,7 +181,7 @@ La referencia visual es el propio tablero del cliente: `client/src/lib/board.js`
 7. **Arte y pulido:** modelos, iluminación, animaciones y sonido.
 8. **Deploy y portfolio:** Docker Compose, CI, demo online, README con diagramas y un video o GIF.
 
-Estado actual: **replanteo (sept 2026)**. Prioridad: prueba jugable y gratis con amigos, sin backend Java ni cuentas por ahora. Hecho: Node 24 instalado; `/client` (Next.js + TypeScript, npm) con el prototipo 3D portado (three r128 exacto desde npm, JS plano en `client/src/lib/board.js`) y corriendo en localhost (`cd client; npm run dev`). Repo en GitHub (`PabloSalvaR/paisano`, remoto `origin`) y desplegado en Vercel Hobby (Root Directory = `client`); cada push a `main` despliega solo y el tablero 3D se ve bien en el link público. **Ahora:** pulido visual del prototipo 3D (aspecto) antes de avanzar. **Después:** motor de reglas en TypeScript (proponer primero el diseño) y multijugador. Las fases 1-4 originales (Java/Spring) quedan pospuestas.
+Estado actual: **replanteo (sept 2026)**. Prioridad: prueba jugable y gratis con amigos, sin backend Java ni cuentas por ahora. Hecho: Node 24 instalado; `/client` (Next.js + TypeScript, npm) con el tablero 3D (three r128 exacto desde npm, JS plano en `client/src/lib/board.js`), ya con README y logo y corriendo en localhost (`cd client; npm run dev`). Repo en GitHub (`PabloSalvaR/paisano`, remoto `origin`) y desplegado en Vercel Hobby (Root Directory = `client`); cada push a `main` despliega solo y el tablero 3D se ve bien en el link público. Pulido visual del tablero **cerrado por ahora** (identidad argentina, luces día/atardecer/noche, dados en modal, logo, menú a la derecha). **Siguiente:** motor de reglas en TypeScript (proponer primero el diseño, incluido el azar de los dados; ver abajo) y después multijugador. Las fases 1-4 originales (Java/Spring) quedan pospuestas.
 
 ## Decisiones pendientes
 
@@ -188,4 +190,7 @@ Estado actual: **replanteo (sept 2026)**. Prioridad: prueba jugable y gratis con
 - Librería de tests (propuesta: JUnit 5 + AssertJ; evaluar tests basados en propiedades para las simulaciones).
 - Nombre de paquetes Java (si se retoma el backend): `com.<org>.paisano`.
 - Login: solo nombre + token, o también Google/Discord.
-- Hosting de la demo (VPS pequeño, Railway o Fly.io).
+- Hosting de la demo: **resuelto por ahora** con Vercel Hobby (VPS, Railway o Fly.io solo si se retoma el backend Java).
+- **Azar y dados (propuesta, sin confirmar):** el resultado lo decide el servidor y el cliente solo lo anima (las vueltas del dado son cosméticas); una **semilla por partida** con flujos separados (mapa, dados, cartas); cada tirada calculada a partir de semilla + contador guardado con el estado (Vercel no comparte memoria entre peticiones, así que no puede haber un generador en memoria); semilla inicial con `crypto.getRandomValues`. Distribución como opción de sala (`GameConfig`): dados reales (por defecto) o mazo barajado de las 36 combinaciones. Encaja al empezar el motor de reglas.
+- **`client/AGENTS.md`:** ya se borró del repo (commit `8555db3`), pero es un archivo que Next.js recrea al correr `npm run dev`. Si reaparece, no commitearlo o agregarlo al `.gitignore` de `client/`.
+- Búsqueda de marca y disponibilidad de URL para el nombre Paisano.
