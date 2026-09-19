@@ -6,8 +6,6 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 export const MARKUP = `
 <div id="stage">
-  <div class="tilt top" id="tiltTop"></div>
-  <div class="tilt bottom" id="tiltBottom"></div>
   <div class="vignette"></div>
 
   <header class="panel title">
@@ -31,7 +29,6 @@ export const MARKUP = `
     </div>
     <div class="group">
       <button type="button" id="btnPieces" aria-pressed="true">Piezas</button>
-      <button type="button" id="btnTilt" aria-pressed="true">Efecto maqueta</button>
       <button type="button" id="btnSpin" aria-pressed="false">Girar solo</button>
     </div>
   </nav>
@@ -54,6 +51,9 @@ export function initBoard() {
     // ------------------------------------------------------------------ constantes
     var SQ3 = Math.sqrt(3);
     var TILE_TOP = 0.4;      // altura de la cara superior de las casillas
+    var DECOR_HEIGHT = 0.5;  // escala vertical del decorado (para no tapar fichas ni piezas)
+    var HOVER_LIFT = 0.07;   // cuánto sube la casilla bajo el cursor
+    var DICE_BOUNCE = 0.12;  // altura del salto de las casillas al salir su número
     var WATER_Y = 0.16;      // nivel del mar
     var RC = 6.4;            // radio del marco (hexágono grande, vértices en ±x)
     var stage = document.getElementById('stage');
@@ -285,7 +285,7 @@ export function initBoard() {
     scene.add(water);
 
     // ------------------------------------------------------------------ geometrías y materiales compartidos
-    var HEX_R = 0.93;
+    var HEX_R = 1;           // = circunradio de la grilla: las casillas se tocan (la bisel deja la línea divisoria)
     function tileShape() {
       var s = new THREE.Shape(), r = HEX_R - 0.05;
       for (var i = 0; i < 6; i++) { var a = Math.PI / 2 + i * Math.PI / 3, x = r * Math.cos(a), y = r * Math.sin(a); if (i) s.lineTo(x, y); else s.moveTo(x, y); }
@@ -323,8 +323,8 @@ export function initBoard() {
       cactus: new THREE.CylinderGeometry(0.045, 0.05, 0.28, 8),
       arm: new THREE.CylinderGeometry(0.03, 0.03, 0.12, 8),
       boulder: new THREE.DodecahedronGeometry(0.07, 0),
-      tokenBase: new THREE.CylinderGeometry(0.27, 0.285, 0.05, 32),
-      tokenFace: new THREE.CircleGeometry(0.235, 32)
+      tokenBase: new THREE.CylinderGeometry(0.315, 0.335, 0.05, 32),
+      tokenFace: new THREE.CircleGeometry(0.28, 32)
     };
     G.stalk.translate(0, 0.1, 0); G.ear.translate(0, 0.235, 0);
     G.mound.scale(1, 0.4, 1); G.dune.scale(1, 0.24, 1);
@@ -338,6 +338,8 @@ export function initBoard() {
       token: M(0xf3e6c4, 0.55), robber: M(0x24272d, 0.3, 0.35, { env: 0.8 }),
       dock: M(0x8a5a2b, 0.8), hull: M(0x8b5a34, 0.6), sail: M(0xf4ecd8, 0.85), road: null
     };
+    MAT.snow.polygonOffset = true; MAT.snow.polygonOffsetFactor = -2; MAT.snow.polygonOffsetUnits = -2;
+    MAT.token.emissive = new THREE.Color(0xf3e6c4); MAT.token.emissiveIntensity = 0.35;
     var PLAYERS = [0xd94141, 0x3b6fd6, 0xf0932b, 0xf1eee6].map(function (h) { return M(h, 0.38, 0.05, { env: 0.6 }); });
 
     // ------------------------------------------------------------------ piezas (casas, ciudades, caminos, ladrón)
@@ -424,8 +426,10 @@ export function initBoard() {
         scatter(4, 0.5, 0.42, rnd).forEach(function (p, idx) {
           var R = 0.2 + rnd() * 0.1, H = 0.5 + rnd() * 0.28, cone = mesh(new THREE.ConeGeometry(R, H, 5), idx % 2 ? MAT.rock2 : MAT.rock);
           cone.position.set(p.x, H / 2, p.z); cone.rotation.y = rnd() * 6;
-          var Hc = H * 0.35, cap = mesh(new THREE.ConeGeometry(R * 0.35, Hc, 5), MAT.snow);
-          cap.position.set(p.x, H * 0.65 + Hc / 2, p.z); cap.rotation.y = cone.rotation.y;
+          // El casquete tiene la misma pendiente que la roca: si coinciden exactamente, las caras
+          // se pelean por la profundidad (z-fighting) y la nieve titila. Se agranda un 8 % sobre el mismo ápice.
+          var Hc = H * 0.35 * 1.08, cap = mesh(new THREE.ConeGeometry(R * 0.35 * 1.08, Hc, 5), MAT.snow);
+          cap.position.set(p.x, H + 0.004 - Hc / 2, p.z); cap.rotation.y = cone.rotation.y;
           g.add(cone); g.add(cap);
         });
         scatter(3, 0.45, 0.3, rnd).forEach(function (p) { var b = mesh(G.boulder, MAT.rock); b.position.set(p.x, 0.04, p.z); b.scale.setScalar(0.6 + rnd() * 0.7); g.add(b); });
@@ -438,27 +442,35 @@ export function initBoard() {
           c.position.set(p.x, 0, p.z); c.rotation.y = rnd() * 6; g.add(c);
         });
       }
+      g.scale.y = DECOR_HEIGHT;
       g.position.y = TILE_TOP;
       return g;
     }
 
     function tokenTexture(n) {
       var c = makeCanvas(128, 128), ctx = c.getContext('2d'), red = (n === 6 || n === 8);
-      ctx.fillStyle = '#f3e6c4'; ctx.fillRect(0, 0, 128, 128);
-      ctx.strokeStyle = 'rgba(90,60,30,.35)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(64, 64, 58, 0, 6.2832); ctx.stroke();
+      ctx.fillStyle = '#fff3d2'; ctx.fillRect(0, 0, 128, 128);
+      ctx.strokeStyle = '#3b2a18'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(64, 64, 58, 0, 6.2832); ctx.stroke();
       ctx.fillStyle = red ? '#b3261e' : '#2b2118';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = 'bold ' + (n >= 10 ? 54 : 64) + 'px Georgia, "Times New Roman", serif';
-      ctx.fillText(String(n), 64, 54);
-      var dots = 6 - Math.abs(7 - n), sx = 64 - (dots - 1) * 7;
-      for (var i = 0; i < dots; i++) { ctx.beginPath(); ctx.arc(sx + i * 14, 98, 4.2, 0, 6.2832); ctx.fill(); }
+      // Se mide el trazo real del número (no la caja de la tipografía) y se centra el bloque
+      // número + puntos en el círculo, tanto en horizontal como en vertical.
+      var label = String(n), size = n >= 10 ? 74 : 88, m, w, maxW = 76;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.font = 'bold ' + size + 'px Georgia, "Times New Roman", serif'; m = ctx.measureText(label);
+      w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
+      if (w > maxW) { size = Math.floor(size * maxW / w); ctx.font = 'bold ' + size + 'px Georgia, "Times New Roman", serif'; m = ctx.measureText(label); w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight; }
+      var dots = 6 - Math.abs(7 - n), dotR = 6, dotStep = 15, gap = 9;
+      var numH = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent, top = 64 - (numH + gap + dotR * 2) / 2;
+      ctx.fillText(label, 64 - w / 2 + m.actualBoundingBoxLeft, top + m.actualBoundingBoxAscent);
+      var sx = 64 - (dots - 1) * dotStep / 2, dy = top + numH + gap + dotR;
+      for (var i = 0; i < dots; i++) { ctx.beginPath(); ctx.arc(sx + i * dotStep, dy, dotR, 0, 6.2832); ctx.fill(); }
       var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
       return t;
     }
     var tokenTexCache = {};
     function makeToken(n) {
       var g = new THREE.Group(); g.add(mesh(G.tokenBase, MAT.token)); g.children[0].position.y = 0.025;
-      if (!tokenTexCache[n]) tokenTexCache[n] = new THREE.MeshStandardMaterial({ map: tokenTexture(n), roughness: 0.5, metalness: 0, envMapIntensity: 0.2 });
+      if (!tokenTexCache[n]) { var tt = tokenTexture(n); tokenTexCache[n] = new THREE.MeshStandardMaterial({ map: tt, emissive: 0xffffff, emissiveMap: tt, emissiveIntensity: 0.4, roughness: 0.5, metalness: 0, envMapIntensity: 0.2 }); }
       var f = new THREE.Mesh(G.tokenFace, tokenTexCache[n]); f.rotation.x = -Math.PI / 2; f.position.y = 0.052; f.receiveShadow = true;
       g.add(f); g.position.y = TILE_TOP;
       return g;
@@ -662,8 +674,6 @@ export function initBoard() {
     });
     var btnPieces = document.getElementById('btnPieces');
     btnPieces.addEventListener('click', function () { showPieces = !showPieces; pressed(btnPieces, showPieces); if (piecesGroup) piecesGroup.visible = showPieces; });
-    var btnTilt = document.getElementById('btnTilt'), tilts = [document.getElementById('tiltTop'), document.getElementById('tiltBottom')];
-    btnTilt.addEventListener('click', function () { var on = btnTilt.getAttribute('aria-pressed') !== 'true'; pressed(btnTilt, on); tilts.forEach(function (t) { t.classList.toggle('off', !on); }); });
     var btnSpin = document.getElementById('btnSpin');
     btnSpin.addEventListener('click', function () { controls.autoRotate = !controls.autoRotate; pressed(btnSpin, controls.autoRotate); });
 
@@ -689,10 +699,10 @@ export function initBoard() {
       applyLight(1 - Math.exp(-dt * 3.5));
 
       for (var i = 0; i < tiles.length; i++) {
-        var t = tiles[i], target = t === hoverTile ? 0.14 : 0;
+        var t = tiles[i], target = t === hoverTile ? HOVER_LIFT : 0;
         t.lift += (target - t.lift) * (1 - Math.exp(-dt * 14));
         var bounce = 0, tokS = 1;
-        if (t.pulse > 0) { t.pulse = Math.max(0, t.pulse - dt / 1.8); bounce = Math.abs(Math.sin((1 - t.pulse) * Math.PI * 2.5)) * 0.24 * t.pulse; tokS = 1 + 0.35 * t.pulse; }
+        if (t.pulse > 0) { t.pulse = Math.max(0, t.pulse - dt / 1.8); bounce = Math.abs(Math.sin((1 - t.pulse) * Math.PI * 2.5)) * DICE_BOUNCE * t.pulse; tokS = 1 + 0.35 * t.pulse; }
         t.group.position.y = t.lift + bounce;
         if (t.token) t.token.scale.setScalar(tokS);
       }

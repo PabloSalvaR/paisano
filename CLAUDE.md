@@ -147,7 +147,7 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 - Pipeline en sRGB con tone mapping ACES Filmic, sombras suaves (PCF soft, 2048), mapa de entorno generado por gradiente, niebla que coincide con el fondo.
 - Tres iluminaciones con transición suave: **día**, **atardecer** (sol bajo y cálido) y **noche** (luna azulada y dos luces cálidas).
 - Cámara orbital con zoom y ángulo limitados, sin paneo; campo de visión mayor en pantallas verticales.
-- Extras deseados: casilla que se levanta al pasar el cursor, salto de casillas al tirar dados, barcos que se mecen, agua animada, efecto "maqueta" (desenfoque arriba y abajo) como opción.
+- Extras deseados: casilla que se levanta al pasar el cursor, salto de casillas al tirar dados, barcos que se mecen, agua animada. **Descartado:** efecto "maqueta" (desenfoque arriba y abajo); se probó y se quitó por no aportar.
 - Presupuesto orientativo del prototipo: ~35 mil triángulos y ~500 objetos. Si el rendimiento en móvil lo exige, usar instancing y fusionar geometrías estáticas.
 
 **Assets definitivos** (fase de pulido): modelos glTF (comprimidos con Draco/KTX2), texturas propias, HDRI y postprocesado (bloom, oclusión ambiental, corrección de color).
