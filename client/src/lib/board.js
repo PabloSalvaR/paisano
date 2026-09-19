@@ -88,7 +88,9 @@ export function initBoard() {
     scene.fog = new THREE.Fog(col(0xb9c9cf), 24, 70);
 
     var camera = new THREE.PerspectiveCamera(35, 1, 0.5, 200);
-    camera.position.set(0, 14.5, 12.5);
+    // Arranca casi cenital, con una leve inclinación (~20° respecto de la vertical, a distancia 20) para que se note el 3D
+    // antes de mover nada. El norte del tablero queda hacia arriba de la pantalla.
+    camera.position.set(0, 18.8, 6.85);
 
     var controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 0.2, 0);
@@ -97,7 +99,7 @@ export function initBoard() {
     controls.enablePan = false;
     controls.minDistance = 7;
     controls.maxDistance = 30;
-    controls.minPolarAngle = 0.25;
+    controls.minPolarAngle = 0; // permite volver a la vista cenital; se puede inclinar hasta maxPolarAngle
     controls.maxPolarAngle = 1.3;
     controls.autoRotateSpeed = 0.7;
 
