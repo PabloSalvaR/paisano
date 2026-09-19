@@ -374,6 +374,9 @@ export function initBoard() {
 
     // ------------------------------------------------------------------ decoración por terreno
     function insideHex(x, z, r) { return Math.abs(x) <= SQ3 / 2 * r && Math.abs(z) + Math.abs(x) / SQ3 <= r; }
+    // Distancia mínima al centro para que un objeto de radio `rad` no pise la ficha del número.
+    var TOKEN_R = 0.335;
+    function clear(rad) { return TOKEN_R + rad + 0.03; }
     function scatter(n, rmin, minDist, rnd) {
       var pts = [], tries = 0;
       while (pts.length < n && tries++ < 400) {
@@ -388,22 +391,22 @@ export function initBoard() {
     function decorate(kind, rnd) {
       var g = new THREE.Group(), i, p, pts, o;
       if (kind === 'forest') {
-        scatter(8, 0.42, 0.26, rnd).forEach(function (p) {
-          var t = new THREE.Group(), s = 0.8 + rnd() * 0.55, m = mesh(G.trunk, MAT.trunk); m.position.y = 0.07; t.add(m);
+        scatter(8, clear(0.18), 0.24, rnd).forEach(function (p) {
+          var t = new THREE.Group(), s = 0.6 + rnd() * 0.3, m = mesh(G.trunk, MAT.trunk); m.position.y = 0.07; t.add(m);
           for (var i = 0; i < 3; i++) { var c = mesh(G.cone[i], MAT.leaf[Math.floor(rnd() * 3)]); c.position.y = 0.16 + i * 0.13; t.add(c); }
           t.scale.setScalar(s); t.rotation.y = rnd() * 6.28; t.position.set(p.x, 0, p.z); g.add(t);
         });
       } else if (kind === 'pasture') {
-        scatter(6, 0.42, 0.3, rnd).forEach(function (p) {
+        scatter(6, clear(0.165), 0.3, rnd).forEach(function (p) {
           var s = new THREE.Group(), b = mesh(G.sheepBody, MAT.wool); b.scale.set(1.25, 1, 1); b.position.y = 0.1; s.add(b);
           var h = mesh(G.sheepHead, MAT.dark); h.position.set(0.12, 0.115, 0); s.add(h);
           [[-0.05, -0.05], [-0.05, 0.05], [0.05, -0.05], [0.05, 0.05]].forEach(function (l) { var leg = mesh(G.stalk, MAT.dark); leg.scale.set(2, 0.45, 2); leg.position.set(l[0], 0, l[1]); s.add(leg); });
-          s.rotation.y = rnd() * 6.28; s.position.set(p.x, 0, p.z); s.scale.setScalar(0.9 + rnd() * 0.3); g.add(s);
+          s.rotation.y = rnd() * 6.28; s.position.set(p.x, 0, p.z); s.scale.setScalar(0.8 + rnd() * 0.2); g.add(s);
         });
       } else if (kind === 'fields') {
         var mats = [], n = 0, tmpM = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), ps = new THREE.Vector3();
         for (var x = -0.66; x <= 0.67; x += 0.115) for (var z = -0.72; z <= 0.72; z += 0.085) {
-          if (!insideHex(x, z, 0.8) || Math.hypot(x, z) < 0.38) continue;
+          if (!insideHex(x, z, 0.8) || Math.hypot(x, z) < TOKEN_R + 0.07) continue;
           e.set((rnd() - 0.5) * 0.25, 0, (rnd() - 0.5) * 0.25); q.setFromEuler(e);
           var s = 0.85 + rnd() * 0.4; sc.set(1, s, 1); ps.set(x + (rnd() - 0.5) * 0.03, 0, z + (rnd() - 0.5) * 0.03);
           tmpM.compose(ps, q, sc); mats.push(tmpM.clone()); n++;
@@ -413,17 +416,17 @@ export function initBoard() {
         st.castShadow = false; ea.castShadow = false; st.receiveShadow = true; ea.receiveShadow = true;
         g.add(st); g.add(ea);
       } else if (kind === 'hills') {
-        scatter(3, 0.44, 0.4, rnd).forEach(function (p) {
+        scatter(3, clear(0.2), 0.4, rnd).forEach(function (p) {
           var pile = new THREE.Group(), rows = [3, 2, 1];
           rows.forEach(function (cnt, li) {
             for (var k = 0; k < cnt; k++) { var b = mesh(G.brick, MAT.brick); b.position.set((k - (cnt - 1) / 2) * 0.16, 0.035 + li * 0.07, 0); b.rotation.y = (rnd() - 0.5) * 0.15; pile.add(b); }
           });
-          pile.rotation.y = rnd() * 6.28; pile.position.set(p.x, 0, p.z); g.add(pile);
+          pile.rotation.y = rnd() * 6.28; pile.position.set(p.x, 0, p.z); pile.scale.setScalar(0.8); g.add(pile);
         });
-        scatter(3, 0.46, 0.35, rnd).forEach(function (p) { var m = mesh(G.mound, MAT.mound); m.position.set(p.x, 0, p.z); m.scale.setScalar(0.55 + rnd() * 0.4); g.add(m); });
+        scatter(3, clear(0.15), 0.35, rnd).forEach(function (p) { var m = mesh(G.mound, MAT.mound); m.position.set(p.x, 0, p.z); m.scale.setScalar(0.45 + rnd() * 0.3); g.add(m); });
       } else if (kind === 'mountains') {
-        scatter(4, 0.5, 0.42, rnd).forEach(function (p, idx) {
-          var R = 0.2 + rnd() * 0.1, H = 0.5 + rnd() * 0.28, cone = mesh(new THREE.ConeGeometry(R, H, 5), idx % 2 ? MAT.rock2 : MAT.rock);
+        scatter(4, clear(0.24), 0.42, rnd).forEach(function (p, idx) {
+          var R = 0.16 + rnd() * 0.08, H = 0.5 + rnd() * 0.28, cone = mesh(new THREE.ConeGeometry(R, H, 5), idx % 2 ? MAT.rock2 : MAT.rock);
           cone.position.set(p.x, H / 2, p.z); cone.rotation.y = rnd() * 6;
           // El casquete tiene la misma pendiente que la roca: si coinciden exactamente, las caras
           // se pelean por la profundidad (z-fighting) y la nieve titila. Se agranda un 8 % sobre el mismo ápice.
@@ -431,7 +434,7 @@ export function initBoard() {
           cap.position.set(p.x, H + 0.004 - Hc / 2, p.z); cap.rotation.y = cone.rotation.y;
           g.add(cone); g.add(cap);
         });
-        scatter(3, 0.45, 0.3, rnd).forEach(function (p) { var b = mesh(G.boulder, MAT.rock); b.position.set(p.x, 0.04, p.z); b.scale.setScalar(0.6 + rnd() * 0.7); g.add(b); });
+        scatter(3, clear(0.09), 0.3, rnd).forEach(function (p) { var b = mesh(G.boulder, MAT.rock); b.position.set(p.x, 0.04, p.z); b.scale.setScalar(0.6 + rnd() * 0.7); g.add(b); });
       } else if (kind === 'desert') {
         scatter(3, 0.42, 0.45, rnd).forEach(function (p) { var d = mesh(G.dune, MAT.dune); d.position.set(p.x, 0, p.z); d.scale.setScalar(0.7 + rnd() * 0.5); d.rotation.y = rnd() * 6; g.add(d); });
         scatter(2, 0.5, 0.5, rnd).forEach(function (p) {
