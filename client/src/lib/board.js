@@ -11,7 +11,7 @@ export const MARKUP = `
   <div class="vignette"></div>
 
   <header class="panel title">
-    <h1>Tablero 3D: prueba gráfica</h1>
+    <h1>Paisano</h1>
     <p>Arrastra para rotar, usa la rueda o el pellizco para acercar y pasa el cursor sobre una casilla.</p>
     <p class="stats" id="stats">Cargando escena…</p>
   </header>

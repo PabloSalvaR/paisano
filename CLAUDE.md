@@ -1,4 +1,4 @@
-# Proyecto: juego de tablero hexagonal por turnos (nombre por definir)
+# Proyecto: Paisano — «Hacé tu tierra.»
 
 Juego de estrategia multijugador en 3D para jugar con amigos en el navegador, inspirado en los juegos de colonización por recursos. Objetivo doble: divertirse con amigos y servir de proyecto de portfolio.
 
@@ -158,6 +158,7 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 - **Prototipo visual aprobado** (`docs/prototipos/tablero-3d.html`): el estilo, la paleta y la iluminación se mantienen en el cliente definitivo.
 - **Maven o Gradle:** se recomendó Maven por ser lo más estándar en Spring Boot; pendiente de confirmar (ver abajo).
 
+- **Nombre: Paisano** (lema «Hacé tu tierra.», voseo rioplatense). Elegido por no parecerse a Colonist ni a Catan. Pendiente: búsqueda rápida de marca y disponibilidad de URL.
 - **Replanteo (sept 2026): prueba gratis primero.** Sin hosts de pago ni backend propio hasta validar que el juego sirve. Cliente Next.js desplegado en Vercel Hobby (gratis, uso no comercial). Vercel no mantiene WebSockets, así que el multijugador por turnos usará API routes + base de datos gratuita (Upstash Redis o Neon) + polling cada 1-2 s. El motor de reglas pasa provisionalmente a **TypeScript** (servidor autoritativo dentro de Next); si la prueba funciona, puede portarse a Java/Spring. Alternativa descartada por ahora: P2P con WebRTC.
 - **Prototipo portado con three r128 fijo.** No actualizar three sin revisar el aspecto (cambian encodings y colores). Migrar a React Three Fiber cuando el estado del juego lo justifique.
 
@@ -179,6 +180,6 @@ Estado actual: **replanteo (sept 2026)**. Prioridad: prueba jugable y gratis con
 - Maven o Gradle (recomendado: Maven con wrapper).
 - **Separar el motor de reglas en un módulo propio** (por ejemplo, un módulo Maven `engine` sin dependencias de Spring, que `server` consuma). Así el compilador impide que el motor dependa de Spring. Proponer estructura en la fase 1.
 - Librería de tests (propuesta: JUnit 5 + AssertJ; evaluar tests basados en propiedades para las simulaciones).
-- Nombre definitivo del juego y de los paquetes (`com.<org>.<juego>`).
+- Nombre de paquetes Java (si se retoma el backend): `com.<org>.paisano`.
 - Login: solo nombre + token, o también Google/Discord.
 - Hosting de la demo (VPS pequeño, Railway o Fly.io).

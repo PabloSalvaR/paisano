@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Tablero 3D · prueba gráfica",
-  description: "Juego de tablero hexagonal por turnos",
+  title: "Paisano · Hacé tu tierra.",
+  description: "Juego de estrategia hexagonal por turnos con reglas libres.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
