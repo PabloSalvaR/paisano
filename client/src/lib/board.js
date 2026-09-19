@@ -52,8 +52,7 @@ export function initBoard() {
     var SQ3 = Math.sqrt(3);
     var TILE_TOP = 0.4;      // altura de la cara superior de las casillas
     var DECOR_HEIGHT = 0.5;  // escala vertical del decorado (para no tapar fichas ni piezas)
-    var HOVER_LIFT = 0.07;   // cuánto sube la casilla bajo el cursor
-    var DICE_BOUNCE = 0.12;  // altura del salto de las casillas al salir su número
+    var DICE_BOUNCE = 0.06;  // altura del salto de las casillas al salir su número
     var WATER_Y = 0.16;      // nivel del mar
     var RC = 6.4;            // radio del marco (hexágono grande, vértices en ±x)
     var stage = document.getElementById('stage');
@@ -534,7 +533,7 @@ export function initBoard() {
 
       // casillas
       makeMapData(rnd).forEach(function (d) {
-        var t = { q: d.q, r: d.r, kind: d.kind, num: d.num, x: SQ3 * (d.q + d.r / 2), z: 1.5 * d.r, lift: 0, pulse: 0 };
+        var t = { q: d.q, r: d.r, kind: d.kind, num: d.num, x: SQ3 * (d.q + d.r / 2), z: 1.5 * d.r, pulse: 0 };
         t.group = new THREE.Group(); t.group.position.set(t.x, 0, t.z);
         t.mesh = mesh(tileGeo, TERRAINS[d.kind].mats); t.group.add(t.mesh); t.mesh.userData.tile = t;
         t.group.add(decorate(d.kind, mulberry32(Math.floor(rnd() * 1e9))));
@@ -699,12 +698,9 @@ export function initBoard() {
       applyLight(1 - Math.exp(-dt * 3.5));
 
       for (var i = 0; i < tiles.length; i++) {
-        var t = tiles[i], target = t === hoverTile ? HOVER_LIFT : 0;
-        t.lift += (target - t.lift) * (1 - Math.exp(-dt * 14));
-        var bounce = 0, tokS = 1;
-        if (t.pulse > 0) { t.pulse = Math.max(0, t.pulse - dt / 1.8); bounce = Math.abs(Math.sin((1 - t.pulse) * Math.PI * 2.5)) * DICE_BOUNCE * t.pulse; tokS = 1 + 0.35 * t.pulse; }
-        t.group.position.y = t.lift + bounce;
-        if (t.token) t.token.scale.setScalar(tokS);
+        var t = tiles[i], bounce = 0;
+        if (t.pulse > 0) { t.pulse = Math.max(0, t.pulse - dt / 1.8); bounce = Math.abs(Math.sin((1 - t.pulse) * Math.PI * 2.5)) * DICE_BOUNCE * t.pulse; }
+        t.group.position.y = bounce;
       }
       if (robber) {
         if (robberPulse > 0) { robberPulse = Math.max(0, robberPulse - dt / 1.6); robber.position.y = robberBase + Math.abs(Math.sin((1 - robberPulse) * Math.PI * 3)) * 0.35 * robberPulse; }
