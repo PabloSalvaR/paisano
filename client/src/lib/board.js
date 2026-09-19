@@ -296,10 +296,10 @@ export function initBoard() {
 
     var TERRAINS = {
       forest:    { name: 'Bosque',    res: 'Madera',  ui: '#3f8f45' },
-      pasture:   { name: 'Pradera',   res: 'Lana',    ui: '#a7d15c' },
-      fields:    { name: 'Campo',     res: 'Trigo',   ui: '#e8bf45' },
+      pasture:   { name: 'Pradera',   res: 'Vaca',    ui: '#a7d15c' },
+      fields:    { name: 'Campo',     res: 'Maíz',    ui: '#e8bf45' },
       hills:     { name: 'Colina',    res: 'Ladrillo', ui: '#c96a3b' },
-      mountains: { name: 'Montaña',   res: 'Mineral', ui: '#8d949c' },
+      mountains: { name: 'Montaña',   res: 'Piedra',  ui: '#8d949c' },
       desert:    { name: 'Desierto',  res: 'Nada',    ui: '#e3c78d' }
     };
     var tileSideMat = M(0x8a6f4d, 0.8, 0, { env: 0.3 });
@@ -308,36 +308,91 @@ export function initBoard() {
       TERRAINS[k].mats = [M(0xffffff, 0.92, 0, { env: 0.25, map: t }), tileSideMat];
     });
 
+    // Cuerpo de vaca: elipsoide de pocos polígonos con las manchas pintadas por cara (color de vértice),
+    // así las manchas quedan a ras de la superficie y no sobresalen. `patches` = [dirX, dirY, dirZ, cosRadio].
+    function cowBodyGeo(patches) {
+      var g = new THREE.IcosahedronGeometry(1, 2), pos = g.attributes.position, n = pos.count, colors = new Float32Array(n * 3);
+      var white = col(0xf6f3ea), dark = col(0x2b2723), dirs = patches.map(function (p) { var v = new THREE.Vector3(p[0], p[1], p[2]).normalize(); return { v: v, c: p[3] }; });
+      var cen = new THREE.Vector3(), a = new THREE.Vector3();
+      for (var f = 0; f < n; f += 3) {
+        cen.set(0, 0, 0);
+        for (var k = 0; k < 3; k++) cen.add(a.fromBufferAttribute(pos, f + k));
+        cen.normalize();
+        var isDark = dirs.some(function (d) { return cen.dot(d.v) > d.c; }), c = isDark ? dark : white;
+        for (var k2 = 0; k2 < 3; k2++) { colors[(f + k2) * 3] = c.r; colors[(f + k2) * 3 + 1] = c.g; colors[(f + k2) * 3 + 2] = c.b; }
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      g.scale(0.125, 0.07, 0.068);
+      return g;
+    }
+
+    // Roca: icosaedro de pocos polígonos con cada vértice desplazado un poco hacia dentro o hacia fuera.
+    // El desplazamiento depende de la posición del vértice (no del orden), así los vértices compartidos
+    // se mueven igual y la roca no se abre. Queda algo achatada, como una piedra apoyada en el suelo.
+    function rockGeo(seed, radius) {
+      var g = new THREE.IcosahedronGeometry(radius, 1), pos = g.attributes.position, v = new THREE.Vector3();
+      function h(a, b, c) { var x = Math.sin(a * 127.1 + b * 311.7 + c * 74.7 + seed * 19.19) * 43758.5453; return x - Math.floor(x); }
+      for (var i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).normalize();
+        var k = h(Math.round(v.x * 20), Math.round(v.y * 20), Math.round(v.z * 20));
+        v.multiplyScalar(radius * (0.8 + 0.34 * k));
+        pos.setXYZ(i, v.x, v.y * 0.85, v.z);
+      }
+      g.computeVertexNormals();
+      return g;
+    }
+
     var G = {
-      trunk: new THREE.CylinderGeometry(0.035, 0.05, 0.14, 6),
-      cone: [new THREE.ConeGeometry(0.2, 0.27, 7), new THREE.ConeGeometry(0.16, 0.25, 7), new THREE.ConeGeometry(0.115, 0.23, 7)],
-      sheepBody: new THREE.IcosahedronGeometry(0.09, 1),
-      sheepHead: new THREE.IcosahedronGeometry(0.045, 0),
-      stalk: new THREE.CylinderGeometry(0.007, 0.013, 0.2, 4),
-      ear: new THREE.CylinderGeometry(0.02, 0.012, 0.08, 5),
+      // árbol de copa ancha (estilo ombú): tronco grueso y copa hecha de tres masas redondeadas
+      trunk: new THREE.CylinderGeometry(0.04, 0.06, 0.2, 6),
+      crown: [new THREE.IcosahedronGeometry(0.13, 1), new THREE.IcosahedronGeometry(0.095, 1), new THREE.IcosahedronGeometry(0.085, 1)],
+      // vaca
+      cowBody: [
+        cowBodyGeo([[-0.3, 0.8, 0.5, 0.8], [0.5, 0.6, -0.6, 0.82], [-0.8, 0.3, -0.4, 0.86]]),
+        cowBodyGeo([[0.1, 0.9, -0.4, 0.78], [-0.6, 0.4, 0.7, 0.84], [0.7, 0.2, 0.6, 0.88]]),
+        cowBodyGeo([[-0.2, 0.7, -0.7, 0.8], [0.6, 0.7, 0.4, 0.82], [-0.9, 0.1, 0.3, 0.88]])
+      ],
+      cowHead: new THREE.IcosahedronGeometry(0.052, 1),
+      cowMuzzle: new THREE.IcosahedronGeometry(0.034, 1),
+      cowLeg: new THREE.CylinderGeometry(0.017, 0.013, 0.07, 6),
+      cowEar: new THREE.IcosahedronGeometry(0.02, 0),
+      cowHorn: new THREE.ConeGeometry(0.009, 0.038, 4),
+      cowTail: new THREE.CylinderGeometry(0.008, 0.008, 0.075, 4),
+      cowTuft: new THREE.IcosahedronGeometry(0.016, 0),
+      // planta de maíz (se instancia): tallo, dos hojas, choclo y penacho
+      cornStalk: new THREE.CylinderGeometry(0.013, 0.02, 0.22, 5),
+      cornLeafA: new THREE.ConeGeometry(0.028, 0.15, 4),
+      cornLeafB: new THREE.ConeGeometry(0.028, 0.15, 4),
+      cornCob: new THREE.CylinderGeometry(0.022, 0.015, 0.09, 6),
+      cornTassel: new THREE.ConeGeometry(0.016, 0.06, 4),
       brick: new THREE.BoxGeometry(0.15, 0.07, 0.075),
       mound: new THREE.SphereGeometry(0.2, 12, 8),
-      rockCone: [], snow: [],
-      dune: new THREE.SphereGeometry(0.3, 14, 8),
-      cactus: new THREE.CylinderGeometry(0.045, 0.05, 0.28, 8),
-      arm: new THREE.CylinderGeometry(0.03, 0.03, 0.12, 8),
-      boulder: new THREE.DodecahedronGeometry(0.07, 0),
+      // rocas: masas irregulares de pocos polígonos (3 grandes + 2 chicas), no conos
+      rockBig: [rockGeo(1, 0.19), rockGeo(2, 0.19), rockGeo(3, 0.19)],
+      rockSmall: [rockGeo(4, 0.08), rockGeo(5, 0.08)],
       tokenBase: new THREE.CylinderGeometry(0.315, 0.335, 0.05, 32),
       tokenFace: new THREE.CircleGeometry(0.28, 32)
     };
-    G.stalk.translate(0, 0.1, 0); G.ear.translate(0, 0.235, 0);
-    G.mound.scale(1, 0.4, 1); G.dune.scale(1, 0.24, 1);
+    G.mound.scale(1, 0.4, 1);
+    G.cowHead.scale(1.15, 0.95, 0.9); G.cowMuzzle.scale(0.8, 0.85, 1.1); G.cowEar.scale(1, 0.5, 1.3);
+    G.cowLeg.translate(0, 0.035, 0); G.cowHorn.translate(0, 0.019, 0); G.cowTail.translate(0, -0.0375, 0);
+    // las partes del maíz se hornean en su posición para poder instanciarlas con la misma matriz
+    G.cornStalk.translate(0, 0.11, 0);
+    G.cornLeafA.translate(0, 0.075, 0); G.cornLeafA.rotateZ(-0.9); G.cornLeafA.translate(0, 0.1, 0);
+    G.cornLeafB.translate(0, 0.075, 0); G.cornLeafB.rotateZ(0.9); G.cornLeafB.rotateY(Math.PI / 2); G.cornLeafB.translate(0, 0.13, 0);
+    G.cornCob.translate(0, 0.045, 0); G.cornCob.rotateZ(-0.55); G.cornCob.translate(0.014, 0.14, 0);
+    G.cornTassel.translate(0, 0.25, 0);
     var MAT = {
-      trunk: M(0x6b4a2b, 0.9), leaf: [M(0x2f7d3a, 0.85, 0, { flat: true }), M(0x3b9046, 0.85, 0, { flat: true }), M(0x276c33, 0.85, 0, { flat: true })],
-      wool: M(0xf6f3ea, 0.95, 0, { flat: true }), dark: M(0x33302c, 0.6, 0, { flat: true }),
-      stalk: M(0xd8b13c, 0.85), ear: M(0xf0c94e, 0.7),
+      trunk: M(0x6b4a2b, 0.9), leaf: [M(0x2f7d3a, 0.85, 0, { flat: true }), M(0x3b9046, 0.85, 0, { flat: true }), M(0x4aa050, 0.85, 0, { flat: true })],
+      cowWhite: M(0xf6f3ea, 0.9, 0, { flat: true }), dark: M(0x2b2723, 0.7, 0, { flat: true }), cowMuzzle: M(0xe6a9a0, 0.8, 0, { flat: true }), cowHorn: M(0xe9dfc4, 0.7, 0, { flat: true }),
+      cowBody: M(0xffffff, 0.9, 0, { flat: true }),
+      cornStalk: M(0x5c9a3c, 0.85), cornLeaf: M(0x6fb04a, 0.8, 0, { flat: true }), cornCob: M(0xf2c53d, 0.6), cornTassel: M(0xc9a23a, 0.85),
       brick: M(0xb8452a, 0.75), mound: M(0xa9552d, 0.9),
-      rock: M(0x7d848c, 0.85, 0, { flat: true }), rock2: M(0x9aa1a9, 0.85, 0, { flat: true }), snow: M(0xf3f6fa, 0.7, 0, { flat: true }),
-      dune: M(0xd9bc82, 0.95), cactus: M(0x4d8f4a, 0.8),
+      rock: M(0x7d848c, 0.85, 0, { flat: true }), rock2: M(0x9aa1a9, 0.85, 0, { flat: true }),
       token: M(0xf3e6c4, 0.55), robber: M(0x24272d, 0.3, 0.35, { env: 0.8 }),
       dock: M(0x8a5a2b, 0.8), hull: M(0x8b5a34, 0.6), sail: M(0xf4ecd8, 0.85), road: null
     };
-    MAT.snow.polygonOffset = true; MAT.snow.polygonOffsetFactor = -2; MAT.snow.polygonOffsetUnits = -2;
+    MAT.cowBody.vertexColors = true; // las manchas van en el color de los vértices del cuerpo
     MAT.token.emissive = new THREE.Color(0xf3e6c4); MAT.token.emissiveIntensity = 0.35;
     var PLAYERS = [0xd94141, 0x3b6fd6, 0xf0932b, 0xf1eee6].map(function (h) { return M(h, 0.38, 0.05, { env: 0.6 }); });
 
@@ -377,13 +432,15 @@ export function initBoard() {
     // Distancia mínima al centro para que un objeto de radio `rad` no pise la ficha del número.
     var TOKEN_R = 0.335;
     function clear(rad) { return TOKEN_R + rad + 0.03; }
-    function scatter(n, rmin, minDist, rnd) {
+    // `avoid` (opcional): puntos ya ocupados por otros objetos, a los que hay que respetar `avoidDist`.
+    function scatter(n, rmin, minDist, rnd, avoid, avoidDist) {
       var pts = [], tries = 0;
       while (pts.length < n && tries++ < 400) {
         var a = rnd() * 6.2832, r = rmin + rnd() * (0.85 - rmin), x = Math.cos(a) * r, z = Math.sin(a) * r;
         if (!insideHex(x, z, 0.78)) continue;
         var ok = true;
         for (var i = 0; i < pts.length; i++) if (Math.hypot(pts[i].x - x, pts[i].z - z) < minDist) { ok = false; break; }
+        if (ok && avoid) for (var j = 0; j < avoid.length; j++) if (Math.hypot(avoid[j].x - x, avoid[j].z - z) < avoidDist) { ok = false; break; }
         if (ok) pts.push({ x: x, z: z });
       }
       return pts;
@@ -392,58 +449,66 @@ export function initBoard() {
       var g = new THREE.Group(), i, p, pts, o;
       if (kind === 'forest') {
         scatter(8, clear(0.18), 0.24, rnd).forEach(function (p) {
-          var t = new THREE.Group(), s = 0.6 + rnd() * 0.3, m = mesh(G.trunk, MAT.trunk); m.position.y = 0.07; t.add(m);
-          for (var i = 0; i < 3; i++) { var c = mesh(G.cone[i], MAT.leaf[Math.floor(rnd() * 3)]); c.position.y = 0.16 + i * 0.13; t.add(c); }
+          // tronco + copa ancha de tres masas redondeadas (se lee como árbol, no como cono/montaña)
+          var t = new THREE.Group(), s = 0.7 + rnd() * 0.3, m = mesh(G.trunk, MAT.trunk); m.position.y = 0.1; t.add(m);
+          [[0, 0.27, 0, 0], [0.085, 0.23, 0.02, 1], [-0.06, 0.25, -0.06, 2]].forEach(function (c) {
+            var b = mesh(G.crown[c[3]], MAT.leaf[Math.floor(rnd() * 3)]); b.position.set(c[0], c[1], c[2]); b.rotation.y = rnd() * 6; t.add(b);
+          });
           t.scale.setScalar(s); t.rotation.y = rnd() * 6.28; t.position.set(p.x, 0, p.z); g.add(t);
         });
       } else if (kind === 'pasture') {
-        scatter(6, clear(0.165), 0.3, rnd).forEach(function (p) {
-          var s = new THREE.Group(), b = mesh(G.sheepBody, MAT.wool); b.scale.set(1.25, 1, 1); b.position.y = 0.1; s.add(b);
-          var h = mesh(G.sheepHead, MAT.dark); h.position.set(0.12, 0.115, 0); s.add(h);
-          [[-0.05, -0.05], [-0.05, 0.05], [0.05, -0.05], [0.05, 0.05]].forEach(function (l) { var leg = mesh(G.stalk, MAT.dark); leg.scale.set(2, 0.45, 2); leg.position.set(l[0], 0, l[1]); s.add(leg); });
-          s.rotation.y = rnd() * 6.28; s.position.set(p.x, 0, p.z); s.scale.setScalar(0.8 + rnd() * 0.2); g.add(s);
+        scatter(5, clear(0.26), 0.44, rnd).forEach(function (p) {
+          // vaca redondeada y robusta: cuerpo con manchas pintadas (3 variantes), cabeza al frente (+x), hocico, orejas, cuernos, patas y cola
+          var s = new THREE.Group(), b = mesh(G.cowBody[Math.floor(rnd() * 3)], MAT.cowBody); b.position.y = 0.11; s.add(b);
+          var h = mesh(G.cowHead, MAT.cowWhite); h.position.set(0.14, 0.14, 0); s.add(h);
+          var mz = mesh(G.cowMuzzle, MAT.cowMuzzle); mz.position.set(0.185, 0.125, 0); s.add(mz);
+          [-1, 1].forEach(function (sd) {
+            var ear = mesh(G.cowEar, MAT.dark); ear.position.set(0.125, 0.172, sd * 0.058); s.add(ear);
+            var horn = mesh(G.cowHorn, MAT.cowHorn); horn.position.set(0.135, 0.19, sd * 0.03); horn.rotation.x = sd * 0.5; s.add(horn);
+          });
+          [[-0.075, -0.04], [-0.075, 0.04], [0.075, -0.04], [0.075, 0.04]].forEach(function (l) { var leg = mesh(G.cowLeg, MAT.cowWhite); leg.position.set(l[0], 0, l[1]); s.add(leg); });
+          var tail = mesh(G.cowTail, MAT.dark); tail.position.set(-0.128, 0.15, 0); tail.rotation.z = 0.2; s.add(tail);
+          var tuft = mesh(G.cowTuft, MAT.dark); tuft.position.set(-0.136, 0.07, 0); s.add(tuft);
+          s.rotation.y = rnd() * 6.28; s.position.set(p.x, 0, p.z); s.scale.setScalar(1 + rnd() * 0.2); g.add(s);
         });
       } else if (kind === 'fields') {
         var mats = [], n = 0, tmpM = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), ps = new THREE.Vector3();
-        for (var x = -0.66; x <= 0.67; x += 0.115) for (var z = -0.72; z <= 0.72; z += 0.085) {
-          if (!insideHex(x, z, 0.8) || Math.hypot(x, z) < TOKEN_R + 0.07) continue;
-          e.set((rnd() - 0.5) * 0.25, 0, (rnd() - 0.5) * 0.25); q.setFromEuler(e);
-          var s = 0.85 + rnd() * 0.4; sc.set(1, s, 1); ps.set(x + (rnd() - 0.5) * 0.03, 0, z + (rnd() - 0.5) * 0.03);
+        // plantas de maíz en filas; cada una gira al azar para que los choclos miren a distintos lados
+        for (var x = -0.66; x <= 0.67; x += 0.14) for (var z = -0.72; z <= 0.72; z += 0.115) {
+          if (!insideHex(x, z, 0.8) || Math.hypot(x, z) < TOKEN_R + 0.09) continue;
+          e.set((rnd() - 0.5) * 0.12, rnd() * 6.28, (rnd() - 0.5) * 0.12); q.setFromEuler(e);
+          var s = 0.85 + rnd() * 0.3; sc.set(s, s, s); ps.set(x + (rnd() - 0.5) * 0.03, 0, z + (rnd() - 0.5) * 0.03);
           tmpM.compose(ps, q, sc); mats.push(tmpM.clone()); n++;
         }
-        var st = new THREE.InstancedMesh(G.stalk, MAT.stalk, n), ea = new THREE.InstancedMesh(G.ear, MAT.ear, n);
-        for (i = 0; i < n; i++) { st.setMatrixAt(i, mats[i]); ea.setMatrixAt(i, mats[i]); }
-        st.castShadow = false; ea.castShadow = false; st.receiveShadow = true; ea.receiveShadow = true;
-        g.add(st); g.add(ea);
+        [[G.cornStalk, MAT.cornStalk], [G.cornLeafA, MAT.cornLeaf], [G.cornLeafB, MAT.cornLeaf], [G.cornCob, MAT.cornCob], [G.cornTassel, MAT.cornTassel]].forEach(function (pair) {
+          var im = new THREE.InstancedMesh(pair[0], pair[1], n);
+          for (i = 0; i < n; i++) im.setMatrixAt(i, mats[i]);
+          im.castShadow = false; im.receiveShadow = true; g.add(im);
+        });
       } else if (kind === 'hills') {
-        scatter(3, clear(0.2), 0.4, rnd).forEach(function (p) {
+        var piles = scatter(3, clear(0.2), 0.42, rnd);
+        piles.forEach(function (p) {
           var pile = new THREE.Group(), rows = [3, 2, 1];
           rows.forEach(function (cnt, li) {
             for (var k = 0; k < cnt; k++) { var b = mesh(G.brick, MAT.brick); b.position.set((k - (cnt - 1) / 2) * 0.16, 0.035 + li * 0.07, 0); b.rotation.y = (rnd() - 0.5) * 0.15; pile.add(b); }
           });
           pile.rotation.y = rnd() * 6.28; pile.position.set(p.x, 0, p.z); pile.scale.setScalar(0.8); g.add(pile);
         });
-        scatter(3, clear(0.15), 0.35, rnd).forEach(function (p) { var m = mesh(G.mound, MAT.mound); m.position.set(p.x, 0, p.z); m.scale.setScalar(0.45 + rnd() * 0.3); g.add(m); });
+        // los montículos esquivan las pilas para no pisarse
+        scatter(3, clear(0.15), 0.35, rnd, piles, 0.36).forEach(function (p) { var m = mesh(G.mound, MAT.mound); m.position.set(p.x, 0, p.z); m.scale.setScalar(0.45 + rnd() * 0.3); g.add(m); });
       } else if (kind === 'mountains') {
-        scatter(4, clear(0.24), 0.42, rnd).forEach(function (p, idx) {
-          var R = 0.16 + rnd() * 0.08, H = 0.5 + rnd() * 0.28, cone = mesh(new THREE.ConeGeometry(R, H, 5), idx % 2 ? MAT.rock2 : MAT.rock);
-          cone.position.set(p.x, H / 2, p.z); cone.rotation.y = rnd() * 6;
-          // El casquete tiene la misma pendiente que la roca: si coinciden exactamente, las caras
-          // se pelean por la profundidad (z-fighting) y la nieve titila. Se agranda un 8 % sobre el mismo ápice.
-          var Hc = H * 0.35 * 1.08, cap = mesh(new THREE.ConeGeometry(R * 0.35 * 1.08, Hc, 5), MAT.snow);
-          cap.position.set(p.x, H + 0.004 - Hc / 2, p.z); cap.rotation.y = cone.rotation.y;
-          g.add(cone); g.add(cap);
+        // rocas grandes irregulares y, entre ellas, rocas chicas; ninguna pisa la ficha ni se pisan entre sí
+        var bigs = scatter(3, clear(0.24), 0.5, rnd);
+        bigs.forEach(function (p, idx) {
+          var s = 0.8 + rnd() * 0.25, b = mesh(G.rockBig[Math.floor(rnd() * 3)], idx % 2 ? MAT.rock2 : MAT.rock);
+          b.position.set(p.x, 0.11 * s, p.z); b.rotation.y = rnd() * 6.28; b.scale.set(s, s * (0.9 + rnd() * 0.3), s); g.add(b);
         });
-        scatter(3, clear(0.09), 0.3, rnd).forEach(function (p) { var b = mesh(G.boulder, MAT.rock); b.position.set(p.x, 0.04, p.z); b.scale.setScalar(0.6 + rnd() * 0.7); g.add(b); });
-      } else if (kind === 'desert') {
-        scatter(3, 0.42, 0.45, rnd).forEach(function (p) { var d = mesh(G.dune, MAT.dune); d.position.set(p.x, 0, p.z); d.scale.setScalar(0.7 + rnd() * 0.5); d.rotation.y = rnd() * 6; g.add(d); });
-        scatter(2, 0.5, 0.5, rnd).forEach(function (p) {
-          var c = new THREE.Group(), b = mesh(G.cactus, MAT.cactus); b.position.y = 0.14; c.add(b);
-          var a1 = mesh(G.arm, MAT.cactus); a1.position.set(-0.07, 0.17, 0); a1.rotation.z = 0.6; c.add(a1);
-          var a2 = mesh(G.arm, MAT.cactus); a2.position.set(0.07, 0.13, 0); a2.rotation.z = -0.6; c.add(a2);
-          c.position.set(p.x, 0, p.z); c.rotation.y = rnd() * 6; g.add(c);
+        scatter(4, clear(0.11), 0.28, rnd, bigs, 0.34).forEach(function (p) {
+          var s = 0.6 + rnd() * 0.6, b = mesh(G.rockSmall[Math.floor(rnd() * 2)], rnd() > 0.5 ? MAT.rock : MAT.rock2);
+          b.position.set(p.x, 0.045 * s, p.z); b.rotation.y = rnd() * 6.28; b.scale.setScalar(s); g.add(b);
         });
       }
+      // El desierto no lleva decorado: solo el ladrón, que arranca ahí.
       g.scale.y = DECOR_HEIGHT;
       g.position.y = TILE_TOP;
       return g;
@@ -489,7 +554,7 @@ export function initBoard() {
     var SAIL = new THREE.ExtrudeGeometry(sailShape, { depth: 0.012, bevelEnabled: false });
     var MAST = new THREE.CylinderGeometry(0.014, 0.014, 0.55, 6);
 
-    var PORT_RES = { forest: 'Madera', hills: 'Ladrillo', pasture: 'Lana', fields: 'Trigo', mountains: 'Mineral' };
+    var PORT_RES = { forest: 'Madera', hills: 'Ladrillo', pasture: 'Vaca', fields: 'Maíz', mountains: 'Piedra' };
     function portLabel(kind) {
       var c = makeCanvas(256, 128), ctx = c.getContext('2d');
       var strip = kind ? TERRAINS[kind].ui : '#d9d2c3', txt = kind ? PORT_RES[kind] : 'Cualquiera';
