@@ -789,8 +789,10 @@ export function initBoard() {
     function buildDie() {
       var el = document.createElement('div'), cube = document.createElement('div');
       el.className = 'die'; el.setAttribute('aria-hidden', 'true'); cube.className = 'cube'; el.appendChild(cube);
+      // núcleo rojo liso: tapa los huecos de los vértices (las caras tienen esquinas redondeadas)
+      DIE_LAYOUT.forEach(function (f) { var core = document.createElement('div'); core.className = 'core ' + f[1]; cube.appendChild(core); });
       DIE_LAYOUT.forEach(function (f) {
-        var face = document.createElement('div'); face.className = 'face ' + f[1] + (f[0] === 1 ? ' one' : '');
+        var face = document.createElement('div'); face.className = 'face ' + f[1];
         for (var i = 0; i < 9; i++) { var c = document.createElement('span'); if (DIE_PIPS[f[0]].indexOf(i) >= 0) c.className = 'on'; face.appendChild(c); }
         cube.appendChild(face);
       });
