@@ -134,8 +134,8 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 | Bosque | `#3f8f45` | árboles de copa ancha (tronco + 3 masas redondeadas, estilo ombú) |
 | Pradera | `#a7d15c` | vacas blancas con manchas negras (recurso: Vaca) |
 | Campo | `#e8bf45` | plantas de maíz instanciadas en filas (recurso: Maíz) |
-| Colina | `#c96a3b` | pilas de ladrillos y montículos (recurso: Ladrillo) |
-| Montaña | `#8d949c` | rocas irregulares grandes y chicas (sin picos ni nieve; recurso: Piedra) |
+| Barro (antes Colina) | `#c96a3b` | pilas de ladrillos y montículos (recurso: Ladrillo) |
+| Cantera (antes Montaña) | `#8d949c` | rocas irregulares grandes y chicas (sin picos ni nieve; recurso: Piedra) |
 | Desierto | `#e3c78d` | dunas y cactus |
 
 - Fichas de número crema, con **6 y 8 en rojo** y puntos de probabilidad.
@@ -146,7 +146,7 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 **Render**
 - Pipeline en sRGB con tone mapping ACES Filmic, sombras suaves (PCF soft, 2048), mapa de entorno generado por gradiente, niebla que coincide con el fondo.
 - Tres iluminaciones con transición suave: **día**, **atardecer** (sol bajo y cálido) y **noche** (luna azulada y dos luces cálidas).
-- Cámara orbital con zoom y ángulo limitados, sin paneo; campo de visión mayor en pantallas verticales.
+- Cámara orbital con zoom y ángulo limitados, sin paneo; campo de visión mayor en pantallas verticales. **Arranca en vista cenital (90°, mirando recto hacia abajo)** y se puede inclinar desde ahí.
 - Extras deseados: casilla que se levanta al pasar el cursor, salto de casillas al tirar dados, barcos que se mecen, agua animada. **Descartado:** efecto "maqueta" (desenfoque arriba y abajo); se probó y se quitó por no aportar.
 - Presupuesto orientativo del prototipo: ~35 mil triángulos y ~500 objetos. Si el rendimiento en móvil lo exige, usar instancing y fusionar geometrías estáticas.
 
@@ -164,7 +164,7 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 - **Nombre: Paisano** (lema «Hacé tu tierra.», voseo rioplatense). Elegido por no parecerse a Colonist ni a Catan. Pendiente: búsqueda rápida de marca y disponibilidad de URL.
 - **Replanteo (sept 2026): prueba gratis primero.** Sin hosts de pago ni backend propio hasta validar que el juego sirve. Cliente Next.js desplegado en Vercel Hobby (gratis, uso no comercial). Vercel no mantiene WebSockets, así que el multijugador por turnos usará API routes + base de datos gratuita (Upstash Redis o Neon) + polling cada 1-2 s. El motor de reglas pasa provisionalmente a **TypeScript** (servidor autoritativo dentro de Next); si la prueba funciona, puede portarse a Java/Spring. Alternativa descartada por ahora: P2P con WebRTC.
 - **Repo y deploy (sept 2026):** monorepo en GitHub con `git` y auth por navegador (sin `gh` CLI, no hace falta). Vercel importa el repo con Root Directory `client`; no se instaló el plugin de Vercel para agentes.
-- **Identidad argentina (sept 2026):** recursos y decorado con sabor local: Pradera produce **Vaca** (no oveja/lana), Campo produce **Maíz** (no trigo), Montaña produce **Piedra** (no mineral), bosque con árboles de copa ancha tipo ombú, montañas de rocas irregulares sin nieve. Se probó **Adobe** en lugar de Ladrillo (con hornos de barro) y se descartó: la Colina sigue produciendo **Ladrillo**. Mantener el resto de nombres y arte propios (ver "Propiedad intelectual").
+- **Identidad argentina (sept 2026):** recursos y decorado con sabor local: Pradera produce **Vaca** (no oveja/lana), Campo produce **Maíz** (no trigo), los terrenos pasan a llamarse **Cantera** (antes Montaña, produce **Piedra**, no mineral) y **Barro** (antes Colina, produce **Ladrillo**), bosque con árboles de copa ancha tipo ombú, cantera con rocas irregulares sin nieve. Se probó **Adobe** en lugar de Ladrillo (con hornos de barro) y se descartó. Mantener el resto de nombres y arte propios (ver "Propiedad intelectual").
 - **Prototipo portado con three r128 fijo.** No actualizar three sin revisar el aspecto (cambian encodings y colores). Migrar a React Three Fiber cuando el estado del juego lo justifique.
 
 ## Hoja de ruta
