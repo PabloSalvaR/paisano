@@ -300,8 +300,8 @@ export function initBoard() {
       forest:    { name: 'Bosque',    res: 'Madera',  ui: '#3f8f45' },
       pasture:   { name: 'Pradera',   res: 'Vaca',    ui: '#a7d15c' },
       fields:    { name: 'Campo',     res: 'Maíz',    ui: '#e8bf45' },
-      hills:     { name: 'Colina',    res: 'Ladrillo', ui: '#c96a3b' },
-      mountains: { name: 'Montaña',   res: 'Piedra',  ui: '#8d949c' },
+      hills:     { name: 'Barro',     res: 'Ladrillo', ui: '#c96a3b' },
+      mountains: { name: 'Cantera',   res: 'Piedra',  ui: '#8d949c' },
       desert:    { name: 'Desierto',  res: 'Nada',    ui: '#e3c78d' }
     };
     var tileSideMat = M(0x8a6f4d, 0.8, 0, { env: 0.3 });
