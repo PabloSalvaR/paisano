@@ -160,6 +160,7 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 
 - **Nombre: Paisano** (lema «Hacé tu tierra.», voseo rioplatense). Elegido por no parecerse a Colonist ni a Catan. Pendiente: búsqueda rápida de marca y disponibilidad de URL.
 - **Replanteo (sept 2026): prueba gratis primero.** Sin hosts de pago ni backend propio hasta validar que el juego sirve. Cliente Next.js desplegado en Vercel Hobby (gratis, uso no comercial). Vercel no mantiene WebSockets, así que el multijugador por turnos usará API routes + base de datos gratuita (Upstash Redis o Neon) + polling cada 1-2 s. El motor de reglas pasa provisionalmente a **TypeScript** (servidor autoritativo dentro de Next); si la prueba funciona, puede portarse a Java/Spring. Alternativa descartada por ahora: P2P con WebRTC.
+- **Repo y deploy (sept 2026):** monorepo en GitHub con `git` y auth por navegador (sin `gh` CLI, no hace falta). Vercel importa el repo con Root Directory `client`; no se instaló el plugin de Vercel para agentes.
 - **Prototipo portado con three r128 fijo.** No actualizar three sin revisar el aspecto (cambian encodings y colores). Migrar a React Three Fiber cuando el estado del juego lo justifique.
 
 ## Hoja de ruta
@@ -173,7 +174,7 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 7. **Arte y pulido:** modelos, iluminación, animaciones y sonido.
 8. **Deploy y portfolio:** Docker Compose, CI, demo online, README con diagramas y un video o GIF.
 
-Estado actual: **replanteo (sept 2026)**. Prioridad: prueba jugable y gratis con amigos, sin backend Java ni cuentas por ahora. Hecho: Node 24 instalado; `/client` (Next.js + TypeScript, npm) con el prototipo 3D portado (three r128 exacto desde npm, JS plano en `client/src/lib/board.js`) y corriendo en localhost (`cd client; npm run dev`). **Siguiente:** crear el repo en GitHub, conectarlo a Vercel (plan Hobby, gratis) y tener un link público; después motor de reglas en TypeScript y multijugador. Las fases 1-4 originales (Java/Spring) quedan pospuestas.
+Estado actual: **replanteo (sept 2026)**. Prioridad: prueba jugable y gratis con amigos, sin backend Java ni cuentas por ahora. Hecho: Node 24 instalado; `/client` (Next.js + TypeScript, npm) con el prototipo 3D portado (three r128 exacto desde npm, JS plano en `client/src/lib/board.js`) y corriendo en localhost (`cd client; npm run dev`). Repo en GitHub (`PabloSalvaR/paisano`, remoto `origin`) y desplegado en Vercel Hobby (Root Directory = `client`); cada push a `main` despliega solo y el tablero 3D se ve bien en el link público. **Siguiente:** motor de reglas en TypeScript (proponer primero el diseño) y después multijugador. Las fases 1-4 originales (Java/Spring) quedan pospuestas.
 
 ## Decisiones pendientes
 
