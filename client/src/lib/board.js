@@ -396,7 +396,23 @@ export function initBoard() {
     };
     MAT.cowBody.vertexColors = true; // las manchas van en el color de los vértices del cuerpo
     MAT.token.emissive = new THREE.Color(0xf3e6c4); MAT.token.emissiveIntensity = 0.35;
-    var PLAYERS = [0xd94141, 0x3b6fd6, 0xf0932b, 0xf1eee6].map(function (h) { return M(h, 0.38, 0.05, { env: 0.6 }); });
+    var PLAYERS = [0xd94141, 0x3b6fd6, 0xf0932b, 0xf1eee6].map(function (h) {
+      var m = M(h, 0.38, 0.05, { env: 0.6 });
+      m.emissive = m.color.clone(); m.emissiveIntensity = 0.12; // leve brillo propio: las piezas no se apagan en sombra ni de noche
+      return m;
+    });
+    // Contorno oscuro de las piezas: copia apenas más grande dibujada solo por las caras traseras, que asoma
+    // como un borde fino alrededor de la silueta. Separa la pieza de cualquier terreno (el naranja contra el barro,
+    // el blanco contra el desierto...). Si se cambia el grosor, revisar EDGE_CLEAR y VERT_CLEAR del decorado.
+    var OUTLINE_T = 0.009;
+    var OUTLINE_MAT = new THREE.MeshBasicMaterial({ color: col(0x1a120a), side: THREE.BackSide });
+    function outlineFor(geo, x) {
+      geo.computeBoundingBox();
+      var b = geo.boundingBox, o = new THREE.Mesh(geo, OUTLINE_MAT);
+      o.scale.set(1 + 2 * OUTLINE_T / (b.max.x - b.min.x), 1 + 2 * OUTLINE_T / (b.max.y - b.min.y), 1 + 2 * OUTLINE_T / (b.max.z - b.min.z));
+      o.position.set(x || 0, -OUTLINE_T, 0);
+      return o;
+    }
 
     // ------------------------------------------------------------------ piezas (casas, ciudades, caminos, ladrón)
     function houseGeo(w, h, d, roof) {
@@ -408,10 +424,11 @@ export function initBoard() {
     }
     var HOUSE = houseGeo(0.24, 0.16, 0.2, 0.12);
     var CITY_HALL = houseGeo(0.3, 0.13, 0.22, 0.09), CITY_TOWER = houseGeo(0.15, 0.27, 0.17, 0.1);
-    function makeSettlement(mat) { var g = new THREE.Group(); g.add(mesh(HOUSE, mat)); return g; }
+    function makeSettlement(mat) { var g = new THREE.Group(); g.add(mesh(HOUSE, mat)); g.add(outlineFor(HOUSE)); return g; }
     function makeCity(mat) {
       var g = new THREE.Group(), a = mesh(CITY_HALL, mat), b = mesh(CITY_TOWER, mat);
       a.position.x = -0.07; b.position.x = 0.14; g.add(a); g.add(b);
+      g.add(outlineFor(CITY_HALL, -0.07)); g.add(outlineFor(CITY_TOWER, 0.14));
       return g;
     }
     var robberGeo = new THREE.LatheGeometry([[0, 0], [0.13, 0], [0.13, 0.03], [0.09, 0.06], [0.055, 0.13], [0.05, 0.22], [0.075, 0.25], [0, 0.25]].map(function (p) { return new THREE.Vector2(p[0], p[1]); }), 20);
@@ -711,6 +728,8 @@ export function initBoard() {
     }
     renderer.domElement.addEventListener('pointermove', function (e) {
       if (e.buttons) { setHover(null); return; }
+        var edgeLine = segment(a, b, TILE_TOP + 0.045, 0.085 + 2 * OUTLINE_T, 0.07 + 2 * OUTLINE_T, OUTLINE_MAT);
+        edgeLine.castShadow = false; edgeLine.receiveShadow = false; piecesGroup.add(edgeLine);
       var r = renderer.domElement.getBoundingClientRect();
       pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       raycaster.setFromCamera(pointer, camera);
