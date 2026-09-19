@@ -9,7 +9,7 @@ export const MARKUP = `
   <div class="vignette"></div>
 
   <header class="panel title">
-    <h1>Paisano</h1>
+    <h1 class="logo"><span class="sr-only">Paisano</span></h1>
     <p class="tagline">Hacé tu tierra.</p>
   </header>
 
@@ -164,23 +164,33 @@ export function initBoard() {
     scene.add(lampA); scene.add(lampB);
 
     var PRESETS = {
-      day:   { bg: 0xb9c9cf, sun: 0xfff2dc, sunI: 1.25, sunPos: [7, 13, 6],    sky: 0xdcecff, ground: 0x8f7a5c, hemiI: 0.62, env: 1.0,  exp: 1.05, lamps: 0 },
-      dusk:  { bg: 0x4a3040, sun: 0xff9a55, sunI: 1.55, sunPos: [-11, 4.6, 6], sky: 0xffb98a, ground: 0x4a3350, hemiI: 0.45, env: 0.6,  exp: 1.05, lamps: 0.35 },
-      night: { bg: 0x090e1d, sun: 0x9fb6ff, sunI: 0.6,  sunPos: [-6, 12, 4],   sky: 0x3a4a8a, ground: 0x1a1a2a, hemiI: 0.4,  env: 0.28, exp: 1.0,  lamps: 1.25 }
+      // Piezas de jugador: pieceK = luminosidad (1 = color pleno), pieceS = saturación (1 = la del color pleno),
+      // pieceEm = brillo propio (emisivo). De día son más intensas y profundas, de noche se iluminan, para que
+      // siempre contrasten con el tablero.
+      day:   { bg: 0xb9c9cf, sun: 0xfff2dc, sunI: 1.25, sunPos: [7, 13, 6],    sky: 0xdcecff, ground: 0x8f7a5c, hemiI: 0.62, env: 1.0,  exp: 1.05, lamps: 0,    pieceK: 0.72, pieceS: 1.3,  pieceEm: 0 },
+      dusk:  { bg: 0x4a3040, sun: 0xff9a55, sunI: 1.55, sunPos: [-11, 4.6, 6], sky: 0xffb98a, ground: 0x4a3350, hemiI: 0.45, env: 0.6,  exp: 1.05, lamps: 0.35, pieceK: 0.9,  pieceS: 1.12, pieceEm: 0.22 },
+      night: { bg: 0x090e1d, sun: 0x9fb6ff, sunI: 0.6,  sunPos: [-6, 12, 4],   sky: 0x3a4a8a, ground: 0x1a1a2a, hemiI: 0.4,  env: 0.28, exp: 1.0,  lamps: 1.25, pieceK: 1.0,  pieceS: 1.0,  pieceEm: 0.65 }
     };
     function presetState(p) {
       return {
         bg: col(p.bg), sun: col(p.sun), sunI: p.sunI, sunPos: new THREE.Vector3(p.sunPos[0], p.sunPos[1], p.sunPos[2]),
-        sky: col(p.sky), ground: col(p.ground), hemiI: p.hemiI, env: p.env, exp: p.exp, lamps: p.lamps
+        sky: col(p.sky), ground: col(p.ground), hemiI: p.hemiI, env: p.env, exp: p.exp, lamps: p.lamps, pieceK: p.pieceK, pieceS: p.pieceS, pieceEm: p.pieceEm
       };
     }
     var cur = presetState(PRESETS.day), tar = presetState(PRESETS.day);
-    var lastEnv = -1;
+    var lastEnv = -1, pieceHSL = { h: 0, s: 0, l: 0 };
     function applyLight(k) {
       cur.bg.lerp(tar.bg, k); cur.sun.lerp(tar.sun, k); cur.sky.lerp(tar.sky, k); cur.ground.lerp(tar.ground, k);
       cur.sunPos.lerp(tar.sunPos, k);
       cur.sunI += (tar.sunI - cur.sunI) * k; cur.hemiI += (tar.hemiI - cur.hemiI) * k;
       cur.env += (tar.env - cur.env) * k; cur.exp += (tar.exp - cur.exp) * k; cur.lamps += (tar.lamps - cur.lamps) * k;
+      cur.pieceK += (tar.pieceK - cur.pieceK) * k; cur.pieceS += (tar.pieceS - cur.pieceS) * k; cur.pieceEm += (tar.pieceEm - cur.pieceEm) * k;
+      for (var pi = 0; pi < PLAYERS.length; pi++) {
+        var pm = PLAYERS[pi];
+        pm.userData.base.getHSL(pieceHSL);
+        pm.color.setHSL(pieceHSL.h, Math.min(1, pieceHSL.s * cur.pieceS), pieceHSL.l * cur.pieceK);
+        pm.emissive.copy(pm.userData.base); pm.emissiveIntensity = cur.pieceEm;
+      }
       scene.background.copy(cur.bg); scene.fog.color.copy(cur.bg);
       sun.color.copy(cur.sun); sun.intensity = cur.sunI; sun.position.copy(cur.sunPos);
       hemi.color.copy(cur.sky); hemi.groundColor.copy(cur.ground); hemi.intensity = cur.hemiI;
@@ -397,18 +407,21 @@ export function initBoard() {
     MAT.cowBody.vertexColors = true; // las manchas van en el color de los vértices del cuerpo
     MAT.token.emissive = new THREE.Color(0xf3e6c4); MAT.token.emissiveIntensity = 0.35;
     var PLAYERS = [0xd94141, 0x3b6fd6, 0xf0932b, 0xf1eee6].map(function (h) {
-      var m = M(h, 0.38, 0.05, { env: 0.6 });
-      m.emissive = m.color.clone(); m.emissiveIntensity = 0.12; // leve brillo propio: las piezas no se apagan en sombra ni de noche
+      var m = M(h, 0.38, 0.05, { env: 0.6 }), hsl = { h: 0, s: 0, l: 0 };
+      // color base guardado: applyLight() lo ajusta (intensidad y brillo propio) según día/atardecer/noche
+      m.userData.base = m.color.clone(); m.emissive = new THREE.Color(); m.emissiveIntensity = 0;
+      // contorno: tono muy oscuro del propio color del jugador (no negro puro, que se ve como calcomanía)
+      m.userData.base.getHSL(hsl);
+      m.userData.outline = new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(hsl.h, hsl.s * 0.9, hsl.l * 0.08), side: THREE.BackSide });
       return m;
     });
-    // Contorno oscuro de las piezas: copia apenas más grande dibujada solo por las caras traseras, que asoma
-    // como un borde fino alrededor de la silueta. Separa la pieza de cualquier terreno (el naranja contra el barro,
-    // el blanco contra el desierto...). Si se cambia el grosor, revisar EDGE_CLEAR y VERT_CLEAR del decorado.
-    var OUTLINE_T = 0.009;
-    var OUTLINE_MAT = new THREE.MeshBasicMaterial({ color: col(0x1a120a), side: THREE.BackSide });
-    function outlineFor(geo, x) {
+    // Contorno de las piezas: copia apenas más grande dibujada solo por las caras traseras, que asoma como un borde
+    // fino alrededor de la silueta y separa la pieza de cualquier terreno. Si se cambia el grosor, revisar
+    // EDGE_CLEAR y VERT_CLEAR del decorado (espacio reservado alrededor de caminos y esquinas).
+    var OUTLINE_T = 0.008;
+    function outlineFor(geo, x, mat) {
       geo.computeBoundingBox();
-      var b = geo.boundingBox, o = new THREE.Mesh(geo, OUTLINE_MAT);
+      var b = geo.boundingBox, o = new THREE.Mesh(geo, mat);
       o.scale.set(1 + 2 * OUTLINE_T / (b.max.x - b.min.x), 1 + 2 * OUTLINE_T / (b.max.y - b.min.y), 1 + 2 * OUTLINE_T / (b.max.z - b.min.z));
       o.position.set(x || 0, -OUTLINE_T, 0);
       return o;
@@ -424,11 +437,11 @@ export function initBoard() {
     }
     var HOUSE = houseGeo(0.24, 0.16, 0.2, 0.12);
     var CITY_HALL = houseGeo(0.3, 0.13, 0.22, 0.09), CITY_TOWER = houseGeo(0.15, 0.27, 0.17, 0.1);
-    function makeSettlement(mat) { var g = new THREE.Group(); g.add(mesh(HOUSE, mat)); g.add(outlineFor(HOUSE)); return g; }
+    function makeSettlement(mat) { var g = new THREE.Group(); g.add(mesh(HOUSE, mat)); g.add(outlineFor(HOUSE, 0, mat.userData.outline)); return g; }
     function makeCity(mat) {
       var g = new THREE.Group(), a = mesh(CITY_HALL, mat), b = mesh(CITY_TOWER, mat);
       a.position.x = -0.07; b.position.x = 0.14; g.add(a); g.add(b);
-      g.add(outlineFor(CITY_HALL, -0.07)); g.add(outlineFor(CITY_TOWER, 0.14));
+      g.add(outlineFor(CITY_HALL, -0.07, mat.userData.outline)); g.add(outlineFor(CITY_TOWER, 0.14, mat.userData.outline));
       return g;
     }
     var robberGeo = new THREE.LatheGeometry([[0, 0], [0.13, 0], [0.13, 0.03], [0.09, 0.06], [0.055, 0.13], [0.05, 0.22], [0.075, 0.25], [0, 0.25]].map(function (p) { return new THREE.Vector2(p[0], p[1]); }), 20);
@@ -728,7 +741,7 @@ export function initBoard() {
         var A = vertices[r[0]], B = vertices[r[1]], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz);
         var ux = dx / L, uz = dz / L, a = { x: A.x + ux * 0.2, z: A.z + uz * 0.2 }, b = { x: B.x - ux * 0.2, z: B.z - uz * 0.2 };
         piecesGroup.add(segment(a, b, TILE_TOP + 0.045, 0.085, 0.07, PLAYERS[p]));
-        var edgeLine = segment(a, b, TILE_TOP + 0.045, 0.085 + 2 * OUTLINE_T, 0.07 + 2 * OUTLINE_T, OUTLINE_MAT);
+        var edgeLine = segment(a, b, TILE_TOP + 0.045, 0.085 + 2 * OUTLINE_T, 0.07 + 2 * OUTLINE_T, PLAYERS[p].userData.outline);
         edgeLine.castShadow = false; edgeLine.receiveShadow = false; piecesGroup.add(edgeLine);
       });
       Object.keys(occ).forEach(function (vi) {
