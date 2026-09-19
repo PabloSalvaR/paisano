@@ -306,7 +306,7 @@ export function initBoard() {
 
     var TERRAINS = {
       forest:    { name: 'Bosque',    res: 'Madera',  ui: '#3f8f45' },
-      pasture:   { name: 'Pradera',   res: 'Vaca',    ui: '#a7d15c' },
+      pasture:   { name: 'Llano',     res: 'Vaca',   ui: '#a7d15c' },
       fields:    { name: 'Campo',     res: 'Maíz',    ui: '#e8bf45' },
       hills:     { name: 'Barro',     res: 'Ladrillo', ui: '#c96a3b' },
       mountains: { name: 'Cantera',   res: 'Piedra',  ui: '#8d949c' },

@@ -9,7 +9,7 @@ Juego de estrategia por turnos para jugar con amigos en el navegador, en 3D. Se 
 Prueba de concepto en desarrollo. Por ahora está el **tablero 3D** con su estilo visual; el motor de reglas y el multijugador vienen después.
 
 - Tablero hexagonal de 19 casillas generado al azar, con puertos, fichas de número y piezas de ejemplo.
-- Cinco terrenos con recursos de sabor local: **Bosque** (madera), **Pradera** (vaca), **Campo** (maíz), **Barro** (ladrillo) y **Cantera** (piedra), más el **Desierto**.
+- Cinco terrenos con recursos de sabor local: **Bosque** (madera), **Llano** (vaca), **Campo** (maíz), **Barro** (ladrillo) y **Cantera** (piedra), más el **Desierto**.
 - Tres iluminaciones: día, atardecer y noche.
 
 ## Cómo correrlo
