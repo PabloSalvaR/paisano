@@ -240,8 +240,9 @@ export function initBoard() {
     }
     function waterCanvas() {
       var w = 512, c = makeCanvas(w, w), ctx = c.getContext('2d'), r = mulberry32(4242), i, x;
-      var g = ctx.createLinearGradient(0, 0, w, w); g.addColorStop(0, '#2d8bbd'); g.addColorStop(1, '#2377a8');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, w);
+      // Fondo de un solo color (el promedio del degradado anterior). La textura se repite cada 4.2 unidades sobre el mar:
+      // un degradado no encaja consigo mismo y dejaba costuras visibles en forma de "bloques".
+      ctx.fillStyle = '#2881b3'; ctx.fillRect(0, 0, w, w);
       for (i = 0; i < 110; i++) {
         var y0 = r() * w, amp = 3 + r() * 7, f = Math.floor(2 + r() * 3), ph = r() * 6, len = 90 + r() * 200, x0 = r() * w;
         ctx.strokeStyle = r() > 0.45 ? '#a6dcf0' : '#1c6494';
