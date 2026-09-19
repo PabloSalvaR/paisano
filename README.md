@@ -2,6 +2,8 @@
 
 Juego de estrategia por turnos para jugar con amigos en el navegador, en 3D. Se construye, se comercia con recursos y gana quien arma mejor su tierra.
 
+**Demo:** https://paisano-three.vercel.app
+
 La idea central: **quien crea la sala configura las reglas libremente**. Las variantes y expansiones son módulos que se activan por sala, sin contenido bloqueado.
 
 ## Estado
