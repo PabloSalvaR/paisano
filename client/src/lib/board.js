@@ -538,17 +538,29 @@ export function initBoard() {
       ctx.fillStyle = '#fff3d2'; ctx.fillRect(0, 0, 128, 128);
       ctx.strokeStyle = '#3b2a18'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(64, 64, 60, 0, 6.2832); ctx.stroke();
       ctx.fillStyle = red ? '#b3261e' : '#2b2118';
-      // Se mide el trazo real del número (no la caja de la tipografía) y se centra el bloque
-      // número + puntos en el círculo, tanto en horizontal como en vertical.
-      var label = String(n), size = n >= 10 ? 62 : 78, m, w, maxW = 62;
-      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-      ctx.font = 'bold ' + size + 'px Georgia, "Times New Roman", serif'; m = ctx.measureText(label);
+      // Mismo tamaño de letra y misma altura de bloque para todos los números; solo cambia el centrado horizontal
+      // (según el trazo real del número) y la cantidad de puntos, que se centran en el círculo.
+      var label = String(n), size = tokenFontSize(ctx), m, w, capH;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = 'bold ' + size + 'px ' + TOKEN_FONT;
+      capH = ctx.measureText('0').actualBoundingBoxAscent; m = ctx.measureText(label);
       w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
-      if (w > maxW) { size = Math.floor(size * maxW / w); ctx.font = 'bold ' + size + 'px Georgia, "Times New Roman", serif'; m = ctx.measureText(label); w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight; }
-      var dots = 6 - Math.abs(7 - n), dotR = 5.2, dotStep = 13.5, gap = 8;
-      var numH = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent, top = 64 - (numH + gap + dotR * 2) / 2;
-      ctx.fillText(label, 64 - w / 2 + m.actualBoundingBoxLeft, top + m.actualBoundingBoxAscent);
-      var sx = 64 - (dots - 1) * dotStep / 2, dy = top + numH + gap + dotR;
+    // Cifras "de altura de mayúscula" (lining): todos los números miden lo mismo de alto. Georgia usa cifras
+    // old-style donde el 0, 1 y 2 son bajitos y el 6 y 8 altos, y por eso 10, 11 y 12 se veían mucho más chicos.
+    var TOKEN_FONT = '"Times New Roman", Times, "Liberation Serif", serif', TOKEN_MAX_W = 66, tokenSize = 0;
+    function tokenFontSize(ctx) {
+      // un solo tamaño para TODAS las fichas: el que hace que entre el número más ancho (10, 11, 12) en TOKEN_MAX_W
+      if (!tokenSize) {
+        var wmax = 1;
+        ctx.font = 'bold 100px ' + TOKEN_FONT;
+        for (var n = 2; n <= 12; n++) { var m = ctx.measureText(String(n)); wmax = Math.max(wmax, m.actualBoundingBoxLeft + m.actualBoundingBoxRight); }
+        tokenSize = Math.min(84, Math.floor(100 * TOKEN_MAX_W / wmax));
+      }
+      return tokenSize;
+    }
+      var dots = 6 - Math.abs(7 - n), dotR = 5.6, dotStep = 14, gap = 8;
+      var top = 64 - (capH + gap + dotR * 2) / 2;
+      ctx.fillText(label, 64 - w / 2 + m.actualBoundingBoxLeft, top + capH);
+      var sx = 64 - (dots - 1) * dotStep / 2, dy = top + capH + gap + dotR;
       for (var i = 0; i < dots; i++) { ctx.beginPath(); ctx.arc(sx + i * dotStep, dy, dotR, 0, 6.2832); ctx.fill(); }
       var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
       return t;
