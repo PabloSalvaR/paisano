@@ -447,16 +447,25 @@ export function initBoard() {
     }
 
     // ------------------------------------------------------------------ decoración por terreno
-    function insideHex(x, z, r) { return Math.abs(x) <= SQ3 / 2 * r && Math.abs(z) + Math.abs(x) / SQ3 <= r; }
-    // Distancia mínima al centro para que un objeto de radio `rad` no pise la ficha del número.
-    var TOKEN_R = 0.335;
-    function clear(rad) { return TOKEN_R + rad + 0.03; }
+    // Cada objeto se trata como un círculo de radio `rad` que debe caber en la casilla sin pisar:
+    //  - la ficha del número (centro),
+    //  - los caminos (van sobre las aristas; mitad de su ancho = 0.0425, más 0.02 de aire),
+    //  - los poblados y ciudades (van en los vértices; la ciudad ocupa ~0.26, más 0.02 de aire).
+    var TOKEN_R = 0.335, EDGE_CLEAR = 0.0625, VERT_CLEAR = 0.28;
+    var TILE_VERTS = [[0, 1], [0, -1], [SQ3 / 2, 0.5], [SQ3 / 2, -0.5], [-SQ3 / 2, 0.5], [-SQ3 / 2, -0.5]];
+    function fitsTile(x, z, rad) {
+      // distancia del punto al borde de la casilla (apotema = √3/2 con circunradio 1)
+      var edge = Math.min(SQ3 / 2 - Math.abs(x), (1 - (Math.abs(z) + Math.abs(x) / SQ3)) / 1.1547);
+      if (edge < rad + EDGE_CLEAR) return false;
+      for (var i = 0; i < 6; i++) if (Math.hypot(x - TILE_VERTS[i][0], z - TILE_VERTS[i][1]) < rad + VERT_CLEAR) return false;
+      return Math.hypot(x, z) >= TOKEN_R + rad + 0.03;
+    }
     // `avoid` (opcional): puntos ya ocupados por otros objetos, a los que hay que respetar `avoidDist`.
-    function scatter(n, rmin, minDist, rnd, avoid, avoidDist) {
-      var pts = [], tries = 0;
+    function scatter(n, rad, minDist, rnd, avoid, avoidDist) {
+      var pts = [], tries = 0, rmin = TOKEN_R + rad + 0.03;
       while (pts.length < n && tries++ < 400) {
-        var a = rnd() * 6.2832, r = rmin + rnd() * (0.85 - rmin), x = Math.cos(a) * r, z = Math.sin(a) * r;
-        if (!insideHex(x, z, 0.78)) continue;
+        var a = rnd() * 6.2832, r = rmin + rnd() * (1 - rmin), x = Math.cos(a) * r, z = Math.sin(a) * r;
+        if (!fitsTile(x, z, rad)) continue;
         var ok = true;
         for (var i = 0; i < pts.length; i++) if (Math.hypot(pts[i].x - x, pts[i].z - z) < minDist) { ok = false; break; }
         if (ok && avoid) for (var j = 0; j < avoid.length; j++) if (Math.hypot(avoid[j].x - x, avoid[j].z - z) < avoidDist) { ok = false; break; }
@@ -467,34 +476,36 @@ export function initBoard() {
     function decorate(kind, rnd) {
       var g = new THREE.Group(), i, p, pts, o;
       if (kind === 'forest') {
-        scatter(8, clear(0.18), 0.24, rnd).forEach(function (p) {
+        scatter(8, 0.15, 0.22, rnd).forEach(function (p) {
           // tronco + copa ancha de tres masas redondeadas (se lee como árbol, no como cono/montaña)
-          var t = new THREE.Group(), s = 0.7 + rnd() * 0.3, m = mesh(G.trunk, MAT.trunk); m.position.y = 0.1; t.add(m);
+          var t = new THREE.Group(), s = 0.6 + rnd() * 0.22, m = mesh(G.trunk, MAT.trunk); m.position.y = 0.1; t.add(m);
           [[0, 0.27, 0, 0], [0.085, 0.23, 0.02, 1], [-0.06, 0.25, -0.06, 2]].forEach(function (c) {
             var b = mesh(G.crown[c[3]], MAT.leaf[Math.floor(rnd() * 3)]); b.position.set(c[0], c[1], c[2]); b.rotation.y = rnd() * 6; t.add(b);
           });
           t.scale.setScalar(s); t.rotation.y = rnd() * 6.28; t.position.set(p.x, 0, p.z); g.add(t);
         });
       } else if (kind === 'pasture') {
-        scatter(5, clear(0.26), 0.44, rnd).forEach(function (p) {
-          // vaca redondeada y robusta: cuerpo con manchas pintadas (3 variantes), cabeza al frente (+x), hocico, orejas, cuernos, patas y cola
-          var s = new THREE.Group(), b = mesh(G.cowBody[Math.floor(rnd() * 3)], MAT.cowBody); b.position.y = 0.11; s.add(b);
-          var h = mesh(G.cowHead, MAT.cowWhite); h.position.set(0.14, 0.14, 0); s.add(h);
-          var mz = mesh(G.cowMuzzle, MAT.cowMuzzle); mz.position.set(0.185, 0.125, 0); s.add(mz);
+        scatter(4, 0.19, 0.36, rnd).forEach(function (p) {
+          // vaca redondeada y robusta: cuerpo con manchas pintadas (3 variantes), cabeza al frente (+x), hocico, orejas, cuernos, patas y cola.
+          // `c` desplaza la vaca 0.03 hacia atrás para que el pivote quede en el centro de su silueta (~0.18 de radio).
+          var s = new THREE.Group(), c = new THREE.Group(); c.position.x = -0.03; s.add(c);
+          var b = mesh(G.cowBody[Math.floor(rnd() * 3)], MAT.cowBody); b.position.y = 0.11; c.add(b);
+          var h = mesh(G.cowHead, MAT.cowWhite); h.position.set(0.14, 0.14, 0); c.add(h);
+          var mz = mesh(G.cowMuzzle, MAT.cowMuzzle); mz.position.set(0.185, 0.125, 0); c.add(mz);
           [-1, 1].forEach(function (sd) {
-            var ear = mesh(G.cowEar, MAT.dark); ear.position.set(0.125, 0.172, sd * 0.058); s.add(ear);
-            var horn = mesh(G.cowHorn, MAT.cowHorn); horn.position.set(0.135, 0.19, sd * 0.03); horn.rotation.x = sd * 0.5; s.add(horn);
+            var ear = mesh(G.cowEar, MAT.dark); ear.position.set(0.125, 0.172, sd * 0.058); c.add(ear);
+            var horn = mesh(G.cowHorn, MAT.cowHorn); horn.position.set(0.135, 0.19, sd * 0.03); horn.rotation.x = sd * 0.5; c.add(horn);
           });
-          [[-0.075, -0.04], [-0.075, 0.04], [0.075, -0.04], [0.075, 0.04]].forEach(function (l) { var leg = mesh(G.cowLeg, MAT.cowWhite); leg.position.set(l[0], 0, l[1]); s.add(leg); });
-          var tail = mesh(G.cowTail, MAT.dark); tail.position.set(-0.128, 0.15, 0); tail.rotation.z = 0.2; s.add(tail);
-          var tuft = mesh(G.cowTuft, MAT.dark); tuft.position.set(-0.136, 0.07, 0); s.add(tuft);
-          s.rotation.y = rnd() * 6.28; s.position.set(p.x, 0, p.z); s.scale.setScalar(1 + rnd() * 0.2); g.add(s);
+          [[-0.075, -0.04], [-0.075, 0.04], [0.075, -0.04], [0.075, 0.04]].forEach(function (l) { var leg = mesh(G.cowLeg, MAT.cowWhite); leg.position.set(l[0], 0, l[1]); c.add(leg); });
+          var tail = mesh(G.cowTail, MAT.dark); tail.position.set(-0.128, 0.15, 0); tail.rotation.z = 0.2; c.add(tail);
+          var tuft = mesh(G.cowTuft, MAT.dark); tuft.position.set(-0.136, 0.07, 0); c.add(tuft);
+          s.rotation.y = rnd() * 6.28; s.position.set(p.x, 0, p.z); s.scale.setScalar(0.85 + rnd() * 0.15); g.add(s);
         });
       } else if (kind === 'fields') {
         var mats = [], n = 0, tmpM = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), ps = new THREE.Vector3();
         // plantas de maíz en filas; cada una gira al azar para que los choclos miren a distintos lados
-        for (var x = -0.66; x <= 0.67; x += 0.14) for (var z = -0.72; z <= 0.72; z += 0.115) {
-          if (!insideHex(x, z, 0.8) || Math.hypot(x, z) < TOKEN_R + 0.09) continue;
+        for (var x = -0.66; x <= 0.67; x += 0.12) for (var z = -0.72; z <= 0.72; z += 0.1) {
+          if (!fitsTile(x, z, 0.14)) continue; // 0.14 = alcance de las hojas de una planta
           e.set((rnd() - 0.5) * 0.12, rnd() * 6.28, (rnd() - 0.5) * 0.12); q.setFromEuler(e);
           var s = 0.85 + rnd() * 0.3; sc.set(s, s, s); ps.set(x + (rnd() - 0.5) * 0.03, 0, z + (rnd() - 0.5) * 0.03);
           tmpM.compose(ps, q, sc); mats.push(tmpM.clone()); n++;
@@ -505,25 +516,25 @@ export function initBoard() {
           im.castShadow = false; im.receiveShadow = true; g.add(im);
         });
       } else if (kind === 'hills') {
-        var piles = scatter(3, clear(0.2), 0.42, rnd);
+        var piles = scatter(3, 0.175, 0.4, rnd);
         piles.forEach(function (p) {
           var pile = new THREE.Group(), rows = [3, 2, 1];
           rows.forEach(function (cnt, li) {
             for (var k = 0; k < cnt; k++) { var b = mesh(G.brick, MAT.brick); b.position.set((k - (cnt - 1) / 2) * 0.16, 0.035 + li * 0.07, 0); b.rotation.y = (rnd() - 0.5) * 0.15; pile.add(b); }
           });
-          pile.rotation.y = rnd() * 6.28; pile.position.set(p.x, 0, p.z); pile.scale.setScalar(0.8); g.add(pile);
+          pile.rotation.y = rnd() * 6.28; pile.position.set(p.x, 0, p.z); pile.scale.setScalar(0.7); g.add(pile);
         });
         // los montículos esquivan las pilas para no pisarse
-        scatter(3, clear(0.15), 0.35, rnd, piles, 0.36).forEach(function (p) { var m = mesh(G.mound, MAT.mound); m.position.set(p.x, 0, p.z); m.scale.setScalar(0.45 + rnd() * 0.3); g.add(m); });
+        scatter(3, 0.13, 0.3, rnd, piles, 0.32).forEach(function (p) { var m = mesh(G.mound, MAT.mound); m.position.set(p.x, 0, p.z); m.scale.setScalar(0.4 + rnd() * 0.25); g.add(m); });
       } else if (kind === 'mountains') {
         // rocas grandes irregulares y, entre ellas, rocas chicas; ninguna pisa la ficha ni se pisan entre sí
-        var bigs = scatter(3, clear(0.24), 0.5, rnd);
+        var bigs = scatter(3, 0.185, 0.45, rnd);
         bigs.forEach(function (p, idx) {
-          var s = 0.8 + rnd() * 0.25, b = mesh(G.rockBig[Math.floor(rnd() * 3)], idx % 2 ? MAT.rock2 : MAT.rock);
+          var s = 0.65 + rnd() * 0.2, b = mesh(G.rockBig[Math.floor(rnd() * 3)], idx % 2 ? MAT.rock2 : MAT.rock);
           b.position.set(p.x, 0.11 * s, p.z); b.rotation.y = rnd() * 6.28; b.scale.set(s, s * (0.9 + rnd() * 0.3), s); g.add(b);
         });
-        scatter(4, clear(0.11), 0.28, rnd, bigs, 0.34).forEach(function (p) {
-          var s = 0.6 + rnd() * 0.6, b = mesh(G.rockSmall[Math.floor(rnd() * 2)], rnd() > 0.5 ? MAT.rock : MAT.rock2);
+        scatter(4, 0.09, 0.22, rnd, bigs, 0.28).forEach(function (p) {
+          var s = 0.5 + rnd() * 0.4, b = mesh(G.rockSmall[Math.floor(rnd() * 2)], rnd() > 0.5 ? MAT.rock : MAT.rock2);
           b.position.set(p.x, 0.045 * s, p.z); b.rotation.y = rnd() * 6.28; b.scale.setScalar(s); g.add(b);
         });
       }
@@ -533,17 +544,6 @@ export function initBoard() {
       return g;
     }
 
-    function tokenTexture(n) {
-      var c = makeCanvas(128, 128), ctx = c.getContext('2d'), red = (n === 6 || n === 8);
-      ctx.fillStyle = '#fff3d2'; ctx.fillRect(0, 0, 128, 128);
-      ctx.strokeStyle = '#3b2a18'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(64, 64, 60, 0, 6.2832); ctx.stroke();
-      ctx.fillStyle = red ? '#b3261e' : '#2b2118';
-      // Mismo tamaño de letra y misma altura de bloque para todos los números; solo cambia el centrado horizontal
-      // (según el trazo real del número) y la cantidad de puntos, que se centran en el círculo.
-      var label = String(n), size = tokenFontSize(ctx), m, w, capH;
-      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = 'bold ' + size + 'px ' + TOKEN_FONT;
-      capH = ctx.measureText('0').actualBoundingBoxAscent; m = ctx.measureText(label);
-      w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
     // Cifras "de altura de mayúscula" (lining): todos los números miden lo mismo de alto. Georgia usa cifras
     // old-style donde el 0, 1 y 2 son bajitos y el 6 y 8 altos, y por eso 10, 11 y 12 se veían mucho más chicos.
     var TOKEN_FONT = '"Times New Roman", Times, "Liberation Serif", serif', TOKEN_MAX_W = 66, tokenSize = 0;
@@ -557,6 +557,17 @@ export function initBoard() {
       }
       return tokenSize;
     }
+    function tokenTexture(n) {
+      var c = makeCanvas(128, 128), ctx = c.getContext('2d'), red = (n === 6 || n === 8);
+      ctx.fillStyle = '#fff3d2'; ctx.fillRect(0, 0, 128, 128);
+      ctx.strokeStyle = '#3b2a18'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(64, 64, 60, 0, 6.2832); ctx.stroke();
+      ctx.fillStyle = red ? '#b3261e' : '#2b2118';
+      // Mismo tamaño de letra y misma altura de bloque para todos los números; solo cambia el centrado horizontal
+      // (según el trazo real del número) y la cantidad de puntos, que se centran en el círculo.
+      var label = String(n), size = tokenFontSize(ctx), m, w, capH;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.font = 'bold ' + size + 'px ' + TOKEN_FONT;
+      capH = ctx.measureText('0').actualBoundingBoxAscent; m = ctx.measureText(label);
+      w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
       var dots = 6 - Math.abs(7 - n), dotR = 5.6, dotStep = 14, gap = 8;
       var top = 64 - (capH + gap + dotR * 2) / 2;
       ctx.fillText(label, 64 - w / 2 + m.actualBoundingBoxLeft, top + capH);
@@ -717,6 +728,8 @@ export function initBoard() {
         var A = vertices[r[0]], B = vertices[r[1]], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz);
         var ux = dx / L, uz = dz / L, a = { x: A.x + ux * 0.2, z: A.z + uz * 0.2 }, b = { x: B.x - ux * 0.2, z: B.z - uz * 0.2 };
         piecesGroup.add(segment(a, b, TILE_TOP + 0.045, 0.085, 0.07, PLAYERS[p]));
+        var edgeLine = segment(a, b, TILE_TOP + 0.045, 0.085 + 2 * OUTLINE_T, 0.07 + 2 * OUTLINE_T, OUTLINE_MAT);
+        edgeLine.castShadow = false; edgeLine.receiveShadow = false; piecesGroup.add(edgeLine);
       });
       Object.keys(occ).forEach(function (vi) {
         var o = occ[vi], v = vertices[vi], m = o.city ? makeCity(PLAYERS[o.p]) : makeSettlement(PLAYERS[o.p]);
@@ -740,8 +753,6 @@ export function initBoard() {
     }
     renderer.domElement.addEventListener('pointermove', function (e) {
       if (e.buttons) { setHover(null); return; }
-        var edgeLine = segment(a, b, TILE_TOP + 0.045, 0.085 + 2 * OUTLINE_T, 0.07 + 2 * OUTLINE_T, OUTLINE_MAT);
-        edgeLine.castShadow = false; edgeLine.receiveShadow = false; piecesGroup.add(edgeLine);
       var r = renderer.domElement.getBoundingClientRect();
       pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       raycaster.setFromCamera(pointer, camera);
