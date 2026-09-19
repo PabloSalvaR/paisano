@@ -107,7 +107,7 @@ Mapa hexagonal de casillas con la punta hacia arriba (*pointy-top*), coordenadas
 
 - Terrenos: 4 bosque, 4 pradera, 4 campo, 3 colina, 3 montaña, 1 desierto (mezclados).
 - Números de ficha: 2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12 (el desierto no lleva).
-- Los números 6 y 8 **no pueden estar en casillas adyacentes**.
+- Los números 6 y 8 **no pueden estar en casillas adyacentes**, y **dos casillas vecinas nunca llevan el mismo número** (regla añadida sept 2026: el método oficial de colocación en espiral tampoco los junta; con azar puro ~81 % de los mapas los juntaban). Se genera con azar + reintento hasta cumplir ambas.
 - 9 puertos en la costa, separados por 3, 3 y 4 aristas de forma cíclica: 4 genéricos (3:1) y 5 específicos (2:1, uno por recurso). Reparto aleatorio.
 
 ## Verificación y tests
@@ -165,6 +165,7 @@ La referencia visual es el propio tablero del cliente: `client/src/lib/board.js`
 - **Repo y deploy (sept 2026):** demo pública en https://paisano-three.vercel.app. Monorepo en GitHub con `git` y auth por navegador (sin `gh` CLI, no hace falta). Vercel importa el repo con Root Directory `client`; no se instaló el plugin de Vercel para agentes.
 - **Identidad argentina (sept 2026):** recursos y decorado con sabor local: Pradera produce **Vaca** (no oveja/lana), Campo produce **Maíz** (no trigo), los terrenos pasan a llamarse **Cantera** (antes Montaña, produce **Piedra**, no mineral) y **Barro** (antes Colina, produce **Ladrillo**), bosque con árboles de copa ancha tipo ombú, cantera con rocas irregulares sin nieve. Se probó **Adobe** en lugar de Ladrillo (con hornos de barro) y se descartó. Mantener el resto de nombres y arte propios (ver "Propiedad intelectual").
 - **Logo (sept 2026):** wordmark "PAISANO" de imprenta antigua, arte propio aportado por el desarrollador. Se usa como `client/public/logo-paisano.png` (900×297, solo tinta con fondo transparente, 110 KB), dibujado como máscara CSS con el color del tema en el panel del título. El original (2048×768, 3 MB, sobre papel) no se versiona; sigue en la carpeta de descargas del desarrollador.
+- **Reparto de números (sept 2026):** se queda con azar + reintento (6 y 8 no vecinos, y ningún número igual al de una casilla vecina). La colocación oficial en espiral (secuencia fija de 18 fichas) se descartó por ahora por dar menos variedad; podría ofrecerse más adelante como opción de sala (`GameConfig`).
 - **Prototipo portado con three r128 fijo.** No actualizar three sin revisar el aspecto (cambian encodings y colores). Migrar a React Three Fiber cuando el estado del juego lo justifique.
 
 ## Hoja de ruta
