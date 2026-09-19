@@ -28,7 +28,6 @@ export const MARKUP = `
     </div>
     <div class="group">
       <button type="button" id="btnPieces" aria-pressed="true">Piezas</button>
-      <button type="button" id="btnSpin" aria-pressed="false">Girar solo</button>
     </div>
   </nav>
 
@@ -101,7 +100,6 @@ export function initBoard() {
     controls.maxDistance = 30;
     controls.minPolarAngle = 0; // permite volver a la vista cenital; se puede inclinar hasta maxPolarAngle
     controls.maxPolarAngle = 1.3;
-    controls.autoRotateSpeed = 0.7;
 
     // ------------------------------------------------------------------ materiales
     var allMats = [];
@@ -800,8 +798,6 @@ export function initBoard() {
     });
     var btnPieces = document.getElementById('btnPieces');
     btnPieces.addEventListener('click', function () { showPieces = !showPieces; pressed(btnPieces, showPieces); if (piecesGroup) piecesGroup.visible = showPieces; });
-    var btnSpin = document.getElementById('btnSpin');
-    btnSpin.addEventListener('click', function () { controls.autoRotate = !controls.autoRotate; pressed(btnSpin, controls.autoRotate); });
 
     // ------------------------------------------------------------------ tamaño
     function resize() {
