@@ -17,6 +17,32 @@ export const MARKUP = `
   <div class="panel hover" id="hover" hidden></div>
   <div class="dice" id="dice" role="status" aria-live="polite" hidden></div>
 
+  <!-- Recursos del jugador (por ahora solo maqueta con cifras fijas; después se conecta al estado de la partida) -->
+  <aside class="panel seats" id="seats" aria-label="Jugadores"></aside>
+  <section class="panel hand" aria-label="Recursos del jugador en turno">
+    <div class="who" id="who"></div>
+    <div class="res" style="--c:#3f8f45" title="Madera" data-res="forest">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="21" y="28" width="6" height="14" fill="#7a4e2a"/><circle cx="14" cy="26" r="8" fill="#3f8f45"/><circle cx="34" cy="26" r="8" fill="#3f8f45"/><circle cx="24" cy="17" r="11" fill="#3f8f45"/></svg>
+      <b>3</b>
+    </div>
+    <div class="res" style="--c:#c96a3b" title="Ladrillo" data-res="hills">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><g fill="#c96a3b"><rect x="4" y="27" width="20" height="10"/><rect x="24" y="27" width="20" height="10"/><rect x="14" y="16" width="20" height="10"/></g></svg>
+      <b>2</b>
+    </div>
+    <div class="res" style="--c:#a7d15c" title="Vaca" data-res="pasture">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="9" cy="14" rx="5" ry="2.8" transform="rotate(-15 9 14)" fill="#fff"/><ellipse cx="39" cy="14" rx="5" ry="2.8" transform="rotate(15 39 14)" fill="#fff"/><g fill="#f3b8b0" stroke="none"><ellipse cx="9" cy="14" rx="2.6" ry="1.2" transform="rotate(-15 9 14)"/><ellipse cx="39" cy="14" rx="2.6" ry="1.2" transform="rotate(15 39 14)"/></g><path d="M13 9 Q24 5 35 9 Q38 20 33 32 Q30 38 24 38 Q18 38 15 32 Q10 20 13 9Z" fill="#fff"/><ellipse cx="29.5" cy="14" rx="5" ry="5.5" fill="#2b2118" stroke="none"/><ellipse cx="24" cy="32" rx="9.5" ry="7" fill="#f3b8b0"/><g fill="#2b2118" stroke="none"><circle cx="18" cy="21" r="2.2"/><circle cx="30" cy="21" r="2.2"/><ellipse cx="20" cy="32" rx="1.4" ry="2"/><ellipse cx="28" cy="32" rx="1.4" ry="2"/></g></svg>
+      <b>0</b>
+    </div>
+    <div class="res" style="--c:#e8bf45" title="Maíz" data-res="fields">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><g fill="#4c9a3f"><path d="M24 43 L8 21 L20 32Z"/><path d="M24 43 L40 21 L28 32Z"/></g><ellipse cx="24" cy="22" rx="7" ry="16" fill="#f2c230"/></svg>
+      <b>4</b>
+    </div>
+    <div class="res" style="--c:#8d949c" title="Piedra" data-res="mountains">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><polygon points="4,41 10,20 22,11 32,20 35,41" fill="#8d949c"/><polygon points="20,41 25,28 37,25 45,32 44,41" fill="#a9b0b8"/></svg>
+      <b>1</b>
+    </div>
+  </section>
+
   <nav class="panel bar" aria-label="Controles del tablero">
     <div class="group">
       <button type="button" id="btnNew" class="primary">Nuevo mapa</button>
@@ -68,8 +94,8 @@ export function initBoard() {
     // ------------------------------------------------------------------ constantes
     var SQ3 = Math.sqrt(3);
     var TILE_TOP = 0.4;      // altura de la cara superior de las casillas
-    var DECOR_HEIGHT = 0.5;  // escala vertical del decorado (para no tapar fichas ni piezas)
-    var DICE_BOUNCE = 0.06;  // altura del salto de las casillas al salir su número
+    var DECOR_HEIGHT = 0.38; // escala vertical del decorado (para no tapar fichas ni piezas)
+    var DICE_BOUNCE = 0.12;  // altura del salto de la ficha al salir su número
     var WATER_Y = 0.16;      // nivel del mar
     var RC = 6.4;            // radio del marco (hexágono grande, vértices en ±x)
     var stage = document.getElementById('stage');
@@ -184,7 +210,7 @@ export function initBoard() {
       // Piezas de jugador: pieceK = luminosidad (1 = color pleno), pieceS = saturación (1 = la del color pleno),
       // pieceEm = brillo propio (emisivo). De día son más intensas y profundas, de noche se iluminan, para que
       // siempre contrasten con el tablero.
-      day:   { bg: 0xb9c9cf, sun: 0xfff2dc, sunI: 1.25, sunPos: [7, 13, 6],    sky: 0xdcecff, ground: 0x8f7a5c, hemiI: 0.62, env: 1.0,  exp: 1.05, lamps: 0,    pieceK: 0.72, pieceS: 1.3,  pieceEm: 0 },
+      day:   { bg: 0xb9c9cf, sun: 0xfff2dc, sunI: 1.05, sunPos: [7, 13, 6],    sky: 0xdcecff, ground: 0x8f7a5c, hemiI: 0.52, env: 0.9,  exp: 0.9, lamps: 0,    pieceK: 0.72, pieceS: 1.3,  pieceEm: 0 },
       dusk:  { bg: 0x4a3040, sun: 0xff9a55, sunI: 1.55, sunPos: [-11, 4.6, 6], sky: 0xffb98a, ground: 0x4a3350, hemiI: 0.45, env: 0.6,  exp: 1.05, lamps: 0.35, pieceK: 0.9,  pieceS: 1.12, pieceEm: 0.22 },
       night: { bg: 0x090e1d, sun: 0x9fb6ff, sunI: 0.6,  sunPos: [-6, 12, 4],   sky: 0x3a4a8a, ground: 0x1a1a2a, hemiI: 0.4,  env: 0.28, exp: 1.0,  lamps: 1.25, pieceK: 1.0,  pieceS: 1.0,  pieceEm: 0.65 }
     };
@@ -617,6 +643,18 @@ export function initBoard() {
       return g;
     }
 
+    // Brillo de los bordes interiores del hexágono (se desvanece hacia el centro), para las casillas que salen en los dados.
+    var GLOW_GEO = new THREE.PlaneGeometry(2, 2), glowTex = null;
+    function glowTexture() {
+      if (glowTex) return glowTex;
+      var c = makeCanvas(256, 256), ctx = c.getContext('2d'), k, w;
+      function hexPath() { ctx.beginPath(); for (k = 0; k < 6; k++) { var a = Math.PI / 2 + k * Math.PI / 3; ctx[k ? 'lineTo' : 'moveTo'](128 + 118 * Math.cos(a), 128 - 118 * Math.sin(a)); } ctx.closePath(); }
+      hexPath(); ctx.clip(); ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(255,214,120,0.085)';
+      for (w = 70; w >= 4; w -= 3) { ctx.lineWidth = w; hexPath(); ctx.stroke(); }
+      glowTex = new THREE.CanvasTexture(c); glowTex.encoding = THREE.sRGBEncoding;
+      return glowTex;
+    }
+
     // ------------------------------------------------------------------ puertos
     var hullShape = new THREE.Shape();
     hullShape.moveTo(-0.34, 0.16); hullShape.lineTo(-0.24, 0); hullShape.lineTo(0.24, 0); hullShape.lineTo(0.42, 0.16); hullShape.closePath();
@@ -625,18 +663,59 @@ export function initBoard() {
     var sailShape = new THREE.Shape(); sailShape.moveTo(0, 0); sailShape.lineTo(0.3, 0); sailShape.lineTo(0, 0.44); sailShape.closePath();
     var SAIL = new THREE.ExtrudeGeometry(sailShape, { depth: 0.012, bevelEnabled: false });
     var MAST = new THREE.CylinderGeometry(0.014, 0.014, 0.55, 6);
+    var POST = new THREE.CylinderGeometry(0.025, 0.03, 0.6, 6);
 
-    var PORT_RES = { forest: 'Madera', hills: 'Ladrillo', pasture: 'Vaca', fields: 'Maíz', mountains: 'Piedra' };
+    // Dibujos de los recursos para los carteles de puerto (legibles de lejos, sin texto).
+    var PORT_ICONS = {
+      forest: function (ctx, x, y) {
+        ctx.fillStyle = '#7a4e2a'; ctx.fillRect(x - 9, y + 8, 18, 40); ctx.strokeRect(x - 9, y + 8, 18, 40);
+        ctx.fillStyle = '#3f8f45';
+        [[-26, 6, 26], [26, 6, 26], [0, -16, 32]].forEach(function (c) { ctx.beginPath(); ctx.arc(x + c[0], y + c[1], c[2], 0, 6.2832); ctx.fill(); ctx.stroke(); });
+      },
+      hills: function (ctx, x, y) {
+        ctx.fillStyle = '#c96a3b';
+        [[-56, 6], [0, 6], [-28, -30]].forEach(function (b) { ctx.fillRect(x + b[0], y + b[1], 56, 34); ctx.strokeRect(x + b[0], y + b[1], 56, 34); });
+      },
+      pasture: function (ctx, x, y) {
+        // misma cara que el banner de recursos (caja de 48 px, ×2.4, centrada en x,y)
+        function el(cx, cy, rx, ry, rot, fill, line) { ctx.fillStyle = fill; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, rot * Math.PI / 180, 0, 6.2832); ctx.fill(); if (line) ctx.stroke(); }
+        ctx.save(); ctx.translate(x - 57.6, y - 57.6); ctx.scale(2.4, 2.4); ctx.lineWidth = 2.3;
+        ctx.strokeStyle = '#3b2a18';
+        el(9, 14, 5, 2.8, -15, '#ffffff', true); el(39, 14, 5, 2.8, 15, '#ffffff', true);
+        el(9, 14, 2.6, 1.2, -15, '#f3b8b0'); el(39, 14, 2.6, 1.2, 15, '#f3b8b0');
+        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(13, 9); ctx.quadraticCurveTo(24, 5, 35, 9); ctx.quadraticCurveTo(38, 20, 33, 32); ctx.quadraticCurveTo(30, 38, 24, 38); ctx.quadraticCurveTo(18, 38, 15, 32); ctx.quadraticCurveTo(10, 20, 13, 9); ctx.closePath(); ctx.fill(); ctx.stroke();
+        el(29.5, 14, 5, 5.5, 0, '#2b2118');
+        el(24, 32, 9.5, 7, 0, '#f3b8b0', true);
+        el(18, 21, 2.2, 2.2, 0, '#2b2118'); el(30, 21, 2.2, 2.2, 0, '#2b2118'); el(20, 32, 1.4, 2, 0, '#2b2118'); el(28, 32, 1.4, 2, 0, '#2b2118');
+        ctx.restore();
+      },
+      fields: function (ctx, x, y) {
+        ctx.fillStyle = '#4c9a3f'; ctx.beginPath(); ctx.moveTo(x, y + 50); ctx.lineTo(x - 40, y - 8); ctx.lineTo(x - 8, y + 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, y + 50); ctx.lineTo(x + 40, y - 8); ctx.lineTo(x + 8, y + 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#f2c230'; ctx.beginPath(); ctx.ellipse(x, y - 8, 20, 46, 0, 0, 6.2832); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#d19a1a'; for (var i = -1; i <= 1; i++) for (var j = -2; j <= 1; j++) { ctx.beginPath(); ctx.arc(x + i * 10, y - 4 + j * 16, 3.5, 0, 6.2832); ctx.fill(); }
+      },
+      mountains: function (ctx, x, y) {
+        ctx.fillStyle = '#8d949c';
+        ctx.beginPath(); ctx.moveTo(x - 56, y + 44); ctx.lineTo(x - 44, y - 6); ctx.lineTo(x - 8, y - 22); ctx.lineTo(x + 20, y - 4); ctx.lineTo(x + 28, y + 44); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#a9b0b8'; ctx.beginPath(); ctx.moveTo(x + 6, y + 44); ctx.lineTo(x + 14, y + 12); ctx.lineTo(x + 40, y + 4); ctx.lineTo(x + 58, y + 26); ctx.lineTo(x + 56, y + 44); ctx.closePath(); ctx.fill(); ctx.stroke();
+      }
+    };
     function portLabel(kind) {
-      var c = makeCanvas(256, 128), ctx = c.getContext('2d');
-      var strip = kind ? TERRAINS[kind].ui : '#d9d2c3', txt = kind ? PORT_RES[kind] : 'Cualquiera';
-      ctx.fillStyle = '#f6ecd4'; ctx.strokeStyle = '#5b4630'; ctx.lineWidth = 6;
-      ctx.beginPath(); ctx.moveTo(18, 4); ctx.lineTo(238, 4); ctx.quadraticCurveTo(252, 4, 252, 18); ctx.lineTo(252, 110); ctx.quadraticCurveTo(252, 124, 238, 124); ctx.lineTo(18, 124); ctx.quadraticCurveTo(4, 124, 4, 110); ctx.lineTo(4, 18); ctx.quadraticCurveTo(4, 4, 18, 4); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = strip; ctx.fillRect(10, 82, 236, 36);
+      var c = makeCanvas(256, 256), ctx = c.getContext('2d');
+      ctx.fillStyle = '#f6ecd4'; ctx.strokeStyle = '#5b4630'; ctx.lineWidth = 8; ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.arc(128, 128, 122, 0, 6.2832); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#2b2118'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = 'bold 56px Georgia, "Times New Roman", serif'; ctx.fillText(kind ? '2:1' : '3:1', 128, 40);
-      ctx.font = 'bold 24px "Nunito Sans", Arial, sans-serif'; ctx.fillStyle = (kind === 'forest' || kind === 'hills' || kind === 'mountains') ? '#ffffff' : '#2b2118';
-      ctx.fillText(txt, 128, 101);
+      if (!kind) {
+        // Centrado según el trazo real del texto (no según la caja de la fuente).
+        ctx.font = 'bold 110px Georgia, "Times New Roman", serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        var m = ctx.measureText('3:1');
+        ctx.fillText('3:1', 128 - (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2,128 + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
+      }
+      else {
+        ctx.font = 'bold 68px Georgia, "Times New Roman", serif'; ctx.fillText('2:1', 128, 74);
+        ctx.strokeStyle = '#3b2a18'; ctx.lineWidth = 5; ctx.save(); ctx.translate(128, 166); ctx.scale(0.85, 0.85); PORT_ICONS[kind](ctx, 0, 0); ctx.restore();
+      }
       var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
       return t;
     }
@@ -686,7 +765,11 @@ export function initBoard() {
         t.group = new THREE.Group(); t.group.position.set(t.x, 0, t.z);
         t.mesh = mesh(tileGeo, TERRAINS[d.kind].mats); t.group.add(t.mesh); t.mesh.userData.tile = t;
         t.group.add(decorate(d.kind, mulberry32(Math.floor(rnd() * 1e9))));
-        if (d.num) { t.token = makeToken(d.num); t.group.add(t.token); }
+        if (d.num) {
+          t.token = makeToken(d.num); t.tokenBase = t.token.position.y; t.group.add(t.token);
+          t.glow = new THREE.Mesh(GLOW_GEO, new THREE.MeshBasicMaterial({ map: glowTexture(), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+          t.glow.rotation.x = -Math.PI / 2; t.glow.position.y = TILE_TOP + 0.004; t.glow.visible = false; t.glow.renderOrder = 2; t.group.add(t.glow);
+        }
         board.add(t.group); tiles.push(t); tileMeshes.push(t.mesh);
       });
 
@@ -720,8 +803,11 @@ export function initBoard() {
         var ship = new THREE.Group(); ship.add(mesh(HULL, MAT.hull));
         var mast = mesh(MAST, MAT.dock); mast.position.set(0.02, 0.43, 0); ship.add(mast);
         var sail = mesh(SAIL, MAT.sail); sail.position.set(0.035, 0.2, -0.006); ship.add(sail);
+        ship.scale.setScalar(0.7);
+        // El cartel va fijo en un poste del muelle (no en el barco), para que no se mueva con las olas.
+        var post = mesh(POST, MAT.dock); post.position.set(D.x, WATER_Y + 0.3, D.z); board.add(post);
         var lab = new THREE.Sprite(new THREE.SpriteMaterial({ map: portLabel(kinds[i]), transparent: true }));
-        lab.scale.set(0.95, 0.475, 1); lab.position.set(0, 1.02, 0); ship.add(lab);
+        lab.scale.set(0.62, 0.62, 1); lab.position.set(D.x, WATER_Y + 0.68, D.z); board.add(lab);
         ship.position.set(P.x, WATER_Y, P.z); ship.rotation.y = -Math.atan2(B.z - A.z, B.x - A.x);
         ship.userData.phase = i * 1.3; ship.userData.baseY = WATER_Y - 0.02;
         board.add(ship); ships.push(ship);
@@ -735,6 +821,7 @@ export function initBoard() {
       // piezas de ejemplo
       piecesGroup = new THREE.Group(); piecesGroup.visible = showPieces; board.add(piecesGroup);
       placePieces(vertices, edges, rnd);
+      resetPlayers();
     }
 
     function placePieces(vertices, edges, rnd) {
@@ -760,6 +847,15 @@ export function initBoard() {
       }
       if (settl[0].length) occ[settl[0][0]].city = true;
       if (settl[1].length > 1) occ[settl[1][1]].city = true;
+
+      // quién cobra en cada casilla: 1 por poblado y 2 por ciudad en cualquiera de sus vértices
+      tiles.forEach(function (t) { t.owners = []; });
+      Object.keys(occ).forEach(function (vi) {
+        vertices[vi].tiles.forEach(function (t) {
+          var n = occ[vi].city ? 2 : 1, own = t.owners.filter(function (o) { return o.p === occ[vi].p; })[0];
+          if (own) own.n += n; else t.owners.push({ p: occ[vi].p, n: n });
+        });
+      });
 
       for (p = 0; p < 4; p++) roads[p].forEach(function (r) {
         var A = vertices[r[0]], B = vertices[r[1]], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz);
@@ -844,11 +940,91 @@ export function initBoard() {
       // el resultado (solo el total) y el efecto sobre el tablero aparecen cuando los dados terminan de caer
       diceTimer = setTimeout(function () {
         diceSum.textContent = s;
+        var dur = 0;
         if (s === 7) robberPulse = 1;
-        else tiles.forEach(function (t) { if (t.num === s) t.pulse = 1; });
-        diceBusy = false; btnDice.disabled = false;
+        else { tiles.forEach(function (t) { if (t.num === s) t.pulse = 1; }); dur = flyResources(s, animate); }
+        // el botón se libera y pasa el turno cuando terminan de llegar los recursos
+        setTimeout(function () { nextTurn(); diceBusy = false; btnDice.disabled = false; }, animate ? Math.max(dur, 1200) : 0);
         diceTimer = setTimeout(function () { diceBox.hidden = true; }, 3200);
       }, animate ? 1250 : 0);
+    }
+
+    // ------------------------------------------------------------------ jugadores simulados
+    // SIMULACIÓN: 4 jugadores ficticios (el 1.º es el rojo). El banner de recursos muestra la mano del jugador al que le toca
+    // el turno y toma su color; el turno pasa al siguiente después de cada tirada. Al salir un número, cada casilla le da
+    // recursos a los jugadores que tienen poblado (1) o ciudad (2) en alguno de sus vértices (t.owners, ver placePieces).
+    // Provisorio: cuando exista el motor de reglas, todo esto vendrá del servidor.
+    var HAND_KINDS = ['forest', 'hills', 'pasture', 'fields', 'mountains'];
+    var PLAYER_INFO = [
+      { name: 'Tomás', css: '#d94141', text: '#ffffff', skin: '#f1c9a5', hair: '#5a3a22', hat: true },
+      { name: 'Lucía', css: '#3b6fd6', text: '#ffffff', skin: '#c98f66', hair: '#2b2118', hat: false },
+      { name: 'Mateo', css: '#f0932b', text: '#2b1a05', skin: '#8d5a3b', hair: '#2b2118', hat: true },
+      { name: 'Sofía', css: '#f1eee6', text: '#2b2216', skin: '#f4d3b5', hair: '#a3402b', hat: false }
+    ];
+    function avatarSVG(p) {
+      var i = PLAYER_INFO[p];
+      return '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#e7dfcc"/>' +
+        '<path d="M5 40 Q8 28 20 28 Q32 28 35 40Z" fill="' + i.css + '" stroke="#3b2a18" stroke-width="1.5"/>' +
+        '<circle cx="20" cy="18" r="8" fill="' + i.skin + '" stroke="#3b2a18" stroke-width="1.5"/>' +
+        '<path d="M11.5 17 Q12 8 20 8 Q28 8 28.5 17 Q24 12 20 12 Q16 12 11.5 17Z" fill="' + i.hair + '"/>' +
+        (i.hat ? '<ellipse cx="20" cy="10.5" rx="13" ry="3" fill="#2b2118"/><path d="M13 10.5 Q13 3 20 3 Q27 3 27 10.5Z" fill="#2b2118"/>' : '') +
+        '<circle cx="17" cy="19" r="1" fill="#2b2118"/><circle cx="23" cy="19" r="1" fill="#2b2118"/></svg>';
+    }
+    var handEl = stage.querySelector('.hand'), whoEl = document.getElementById('who'), seatsEl = document.getElementById('seats');
+    var hands = [], turn = 0;
+    seatsEl.innerHTML = PLAYER_INFO.map(function (pl, p) {
+      return '<div class="seat" data-p="' + p + '" style="--pc:' + pl.css + '"><div class="av">' + avatarSVG(p) + '</div><span class="nm">' + pl.name + '</span>' +
+        '<span class="cnt"><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#f6ecd4" stroke="#5b4630" stroke-width="1.6"/></svg><b>0</b></span></div>';
+    }).join('');
+    function handTotal(p) { return HAND_KINDS.reduce(function (a, k) { return a + hands[p][k]; }, 0); }
+    function renderHand() {
+      var pl = PLAYER_INFO[turn];
+      handEl.style.setProperty('--pc', pl.css); handEl.style.setProperty('--pt', pl.text);
+      whoEl.innerHTML = '<div class="av">' + avatarSVG(turn) + '</div><span class="nm">' + pl.name + '</span>';
+      HAND_KINDS.forEach(function (k) { handEl.querySelector('[data-res="' + k + '"] b').textContent = hands[turn][k]; });
+    }
+    function renderSeats() {
+      Array.prototype.forEach.call(seatsEl.children, function (s, p) { s.classList.toggle('on', p === turn); s.querySelector('b').textContent = handTotal(p); });
+    }
+    function resetPlayers() {
+      hands = PLAYER_INFO.map(function () { var h = {}; HAND_KINDS.forEach(function (k) { h[k] = Math.floor(Math.random() * 3); }); return h; });
+      turn = 0; renderHand(); renderSeats();
+    }
+    function nextTurn() { turn = (turn + 1) % PLAYER_INFO.length; renderHand(); renderSeats(); }
+    function pop(el, color) {
+      el.animate([{ transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }, { transform: 'scale(1.2)', boxShadow: '0 0 18px 5px ' + color, offset: 0.35 }, { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }], { duration: 520, easing: 'ease-out' });
+    }
+
+    // Por cada (casilla, jugador con poblado en ella) sale un icono de la casilla, con una insignia del color del jugador, y vuela
+    // hasta su destino: la tarjeta del banner si le toca el turno, o su puesto (avatar) si no. Devuelve la duración total (ms).
+    function flyResources(sum, animate) {
+      var jobs = [], sr = stage.getBoundingClientRect(), w = stage.clientWidth, h = stage.clientHeight;
+      tiles.forEach(function (t) { if (t.num === sum && t.owners) t.owners.forEach(function (o) { jobs.push({ t: t, o: o }); }); });
+      jobs.forEach(function (j, n) {
+        var p = j.o.p, k = j.t.kind, amount = j.o.n, mine = p === turn, pl = PLAYER_INFO[p];
+        var card = handEl.querySelector('[data-res="' + k + '"]'), seat = seatsEl.children[p];
+        var target = mine ? card : seat, glow = mine ? card.style.getPropertyValue('--c') : pl.css;
+        var gain = function () {
+          hands[p][k] += amount;
+          if (mine) card.querySelector('b').textContent = hands[p][k]; else seat.querySelector('b').textContent = handTotal(p);
+          if (!animate) return;
+          pop(target, glow);
+          var plus = document.createElement('span'); plus.className = 'plus'; plus.textContent = '+' + amount; plus.style.color = mine ? card.style.getPropertyValue('--c') : pl.css; target.appendChild(plus);
+          plus.animate([{ transform: 'translateY(0)', opacity: 1 }, { transform: 'translateY(-26px)', opacity: 0 }], { duration: 800, easing: 'ease-out' }).onfinish = function () { plus.remove(); };
+        };
+        if (!animate) { gain(); return; }
+        var v = new THREE.Vector3(j.t.x, TILE_TOP + 0.35, j.t.z).project(camera), sx = (v.x * 0.5 + 0.5) * w, sy = (0.5 - v.y * 0.5) * h;
+        var ar = (mine ? card.querySelector('svg') : seat.querySelector('.av')).getBoundingClientRect(), tx = ar.left - sr.left + ar.width / 2, ty = ar.top - sr.top + ar.height / 2;
+        var fly = document.createElement('div'); fly.className = 'fly'; fly.style.background = pl.css; fly.appendChild(card.querySelector('svg').cloneNode(true)); stage.appendChild(fly);
+        var at = function (x, y, sc) { return 'translate(' + (x - 20) + 'px,' + (y - 20) + 'px) scale(' + sc + ')'; };
+        fly.animate([
+          { transform: at(sx, sy, 0.4), opacity: 0 },
+          { transform: at(sx, sy - 26, 1.3), opacity: 1, offset: 0.2 },
+          { transform: at((sx + tx) / 2, Math.min(sy, ty) - 60, 1.1), opacity: 1, offset: 0.55 },
+          { transform: at(tx, ty, 0.75), opacity: 1 }
+        ], { duration: 1000, delay: 450 + n * 260, easing: 'ease-in-out', fill: 'both' }).onfinish = function () { fly.remove(); gain(); };
+      });
+      return animate && jobs.length ? 450 + (jobs.length - 1) * 260 + 1000 + 600 : 0;
     }
 
     function pressed(btn, on) { btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
@@ -878,6 +1054,11 @@ export function initBoard() {
       renderer.setSize(w, h, false);
       camera.aspect = aspect;
       camera.fov = aspect < 0.75 ? 58 : aspect < 1.1 ? 46 : 35;
+      // El banner de recursos tapa la parte baja: se corre la imagen hacia arriba para que el tablero quede
+      // centrado en el espacio libre sobre el banner (el cliente sigue viendo el mismo tablero, solo desplazado).
+      var hand = stage.querySelector('.hand'), shift = 0;
+      if (hand) shift = Math.max(0, Math.round((h - (hand.getBoundingClientRect().top - stage.getBoundingClientRect().top)) / 2));
+      camera.setViewOffset(w, h, 0, shift, w, h);
       camera.updateProjectionMatrix();
     }
     if (typeof ResizeObserver !== "undefined") { ro = new ResizeObserver(resize); ro.observe(stage); } else window.addEventListener('resize', resize);
@@ -896,7 +1077,8 @@ export function initBoard() {
       for (var i = 0; i < tiles.length; i++) {
         var t = tiles[i], bounce = 0;
         if (t.pulse > 0) { t.pulse = Math.max(0, t.pulse - dt / 1.8); bounce = Math.abs(Math.sin((1 - t.pulse) * Math.PI * 2.5)) * DICE_BOUNCE * t.pulse; }
-        t.group.position.y = bounce;
+        if (t.token) t.token.position.y = t.tokenBase + bounce;
+        if (t.glow) { t.glow.visible = t.pulse > 0; t.glow.material.opacity = Math.min(1, t.pulse * 2.5) * 0.5; }
       }
       if (robber) {
         if (robberPulse > 0) { robberPulse = Math.max(0, robberPulse - dt / 1.6); robber.position.y = robberBase + Math.abs(Math.sin((1 - robberPulse) * Math.PI * 3)) * 0.35 * robberPulse; }

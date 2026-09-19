@@ -108,6 +108,39 @@ body{
 .face.top,.core.top{transform:rotateX(90deg) translateZ(var(--d))}
 .face.bottom,.core.bottom{transform:rotateX(-90deg) translateZ(var(--d))}
 
+/* Recursos del jugador en turno: banner centrado abajo. El fondo toma el color del jugador (--pc, lo pone board.js) y las
+   tarjetas son claras fijas para que se lean igual sobre rojo, azul, naranja o blanco, de día o de noche. */
+.hand{left:50%;bottom:14px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:10px 14px;max-width:calc(100% - 28px);
+  background-color:var(--pc,#d94141);background-image:linear-gradient(180deg,rgba(255,255,255,.2),rgba(0,0,0,.2));
+  border:2px solid rgba(0,0,0,.35);transition:background-color .45s}
+.who{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:58px;color:var(--pt,#fff)}
+.who .av,.seat .av{width:44px;height:44px;border-radius:50%;box-shadow:0 0 0 3px rgba(255,255,255,.85),0 2px 6px rgba(0,0,0,.35);overflow:hidden}
+.av svg{display:block;width:100%;height:100%}
+.who .nm{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:.95rem;line-height:1.1}
+.res{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:58px;padding:6px 8px 4px;
+  background:rgba(255,255,255,.9);border:1px solid rgba(0,0,0,.2);border-bottom:4px solid var(--c);border-radius:10px}
+.res .plus{position:absolute;top:-6px;left:50%;margin-left:-14px;font-weight:800;font-size:1rem;color:var(--c);z-index:2;
+  text-shadow:0 0 3px #fff,0 0 3px #fff,0 1px 2px rgba(0,0,0,.4);pointer-events:none}
+.res svg{width:40px;height:40px;stroke:#3b2a18;stroke-width:2.2;stroke-linejoin:round}
+.res b{font-family:'Fraunces',Georgia,serif;font-size:1.5rem;line-height:1.1;font-weight:700;color:#2b2216}
+/* icono que vuela de la casilla a su destino: insignia con el color del dueño (posición con transform desde board.js) */
+.fly{position:absolute;z-index:4;left:0;top:0;width:40px;height:40px;border-radius:50%;border:2px solid #fff;
+  display:flex;align-items:center;justify-content:center;pointer-events:none;box-shadow:0 3px 8px rgba(0,0,0,.45)}
+.fly svg{width:28px;height:28px;stroke:#3b2a18;stroke-width:2.2;stroke-linejoin:round;background:rgba(255,255,255,.85);border-radius:50%;padding:2px}
+
+/* Puestos de los jugadores (a la izquierda, bajo el título): avatar, nombre y cantidad de cartas. El que tiene el turno resalta. */
+.seats{top:150px;left:14px;display:flex;flex-direction:column;gap:6px;padding:8px}
+.seat{position:relative;display:flex;align-items:center;gap:9px;padding:4px 12px 4px 5px;border-radius:999px;
+  background:var(--btn);border:2px solid transparent;transition:border-color .3s,box-shadow .3s,background-color .3s}
+.seat .av{width:38px;height:38px;flex:none;box-shadow:0 0 0 3px var(--pc)}
+.seat .nm{font-weight:700;font-size:.86rem;color:var(--text);min-width:42px}
+.seat .cnt{display:flex;align-items:center;gap:3px;margin-left:auto}
+.seat .cnt svg{width:13px;height:16px}
+.seat .cnt b{font-size:.95rem;color:var(--text)}
+.seat.on{border-color:var(--pc);background:var(--btn-hover);box-shadow:0 0 14px var(--pc)}
+.seat .plus{position:absolute;top:-4px;left:14px;font-weight:800;font-size:1rem;z-index:2;
+  text-shadow:0 0 3px #fff,0 0 3px #fff,0 1px 2px rgba(0,0,0,.4);pointer-events:none}
+
 .bar{
   right:14px;top:50%;transform:translateY(-50%);
   display:flex;flex-direction:column;gap:12px;align-items:stretch;
@@ -153,7 +186,19 @@ body{
   .group + .group{padding-top:0;border-top:none;padding-left:10px;border-left:1px solid var(--border)}
   .bar button{padding:7px 10px;font-size:.8rem}
   .vol{width:130px}
-  .hover{top:auto;bottom:112px;right:10px;left:10px;max-width:none}
+  /* los recursos suben sobre la barra de controles (que ocupa el borde inferior) y el cartel de casilla sobre ellos */
+  .hand{bottom:112px;gap:6px;padding:8px 10px}
+  .who{min-width:0}
+  .who .nm{display:none}
+  .who .av{width:32px;height:32px}
+  .seats{top:100px;left:10px;padding:5px;gap:4px}
+  .seat .nm{display:none}
+  .seat{padding:3px 8px 3px 4px;gap:5px}
+  .seat .av{width:30px;height:30px}
+  .res{min-width:48px;padding:4px 5px 3px}
+  .res svg{width:30px;height:30px}
+  .res b{font-size:1.2rem}
+  .hover{top:auto;bottom:190px;right:10px;left:10px;max-width:none}
   /* el modal de dados se hace más chico para convivir con el título (arriba a la izquierda) */
   .dice{top:10px;right:10px;padding:10px 12px 9px;width:calc(100% - 214px)}
   .dice-row{gap:14px;margin:2px 0 8px}
