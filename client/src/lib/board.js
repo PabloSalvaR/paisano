@@ -19,7 +19,7 @@ export const MARKUP = `
 
   <!-- Recursos del jugador (por ahora solo maqueta con cifras fijas; después se conecta al estado de la partida) -->
   <aside class="panel seats" id="seats" aria-label="Jugadores"></aside>
-  <section class="panel hand" aria-label="Recursos del jugador en turno">
+  <section class="panel hand" aria-label="Recursos del jugador 1">
     <div class="who" id="who"></div>
     <div class="res" style="--c:#3f8f45" title="Madera" data-res="forest">
       <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="21" y="28" width="6" height="14" fill="#7a4e2a"/><circle cx="14" cy="26" r="8" fill="#3f8f45"/><circle cx="34" cy="26" r="8" fill="#3f8f45"/><circle cx="24" cy="17" r="11" fill="#3f8f45"/></svg>
@@ -950,8 +950,8 @@ export function initBoard() {
     }
 
     // ------------------------------------------------------------------ jugadores simulados
-    // SIMULACIÓN: 4 jugadores ficticios (el 1.º es el rojo). El banner de recursos muestra la mano del jugador al que le toca
-    // el turno y toma su color; el turno pasa al siguiente después de cada tirada. Al salir un número, cada casilla le da
+    // SIMULACIÓN: 4 jugadores ficticios (el 1.º es el rojo). El banner de recursos es siempre el del jugador 1 (rojo, VIEWER) y toma su color;
+    // el turno pasa al siguiente después de cada tirada y solo resalta su puesto. Al salir un número, cada casilla le da
     // recursos a los jugadores que tienen poblado (1) o ciudad (2) en alguno de sus vértices (t.owners, ver placePieces).
     // Provisorio: cuando exista el motor de reglas, todo esto vendrá del servidor.
     var HAND_KINDS = ['forest', 'hills', 'pasture', 'fields', 'mountains'];
@@ -971,46 +971,49 @@ export function initBoard() {
         '<circle cx="17" cy="19" r="1" fill="#2b2118"/><circle cx="23" cy="19" r="1" fill="#2b2118"/></svg>';
     }
     var handEl = stage.querySelector('.hand'), whoEl = document.getElementById('who'), seatsEl = document.getElementById('seats');
-    var hands = [], turn = 0;
+    var STAR = '<svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="10,1.5 12.6,7.2 18.8,7.8 14.1,12 15.5,18.2 10,15 4.5,18.2 5.9,12 1.2,7.8 7.4,7.2" fill="#f2c230" stroke="#7a5a10" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+    var vps = [0, 0, 0, 0]; // puntos de victoria (0 a 10); por ahora siempre 0: falta el motor de reglas
+    var hands = [], turn = 0, VIEWER = 0; // VIEWER: el jugador desde cuyo punto de vista se juega (el rojo); el banner es siempre el suyo
     seatsEl.innerHTML = PLAYER_INFO.map(function (pl, p) {
       return '<div class="seat" data-p="' + p + '" style="--pc:' + pl.css + '"><div class="av">' + avatarSVG(p) + '</div><span class="nm">' + pl.name + '</span>' +
+        '<span class="vp" title="Puntos de victoria">' + STAR + '<b>0</b></span>' +
         '<span class="cnt"><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#f6ecd4" stroke="#5b4630" stroke-width="1.6"/></svg><b>0</b></span></div>';
     }).join('');
     function handTotal(p) { return HAND_KINDS.reduce(function (a, k) { return a + hands[p][k]; }, 0); }
     function renderHand() {
-      var pl = PLAYER_INFO[turn];
+      var pl = PLAYER_INFO[VIEWER];
       handEl.style.setProperty('--pc', pl.css); handEl.style.setProperty('--pt', pl.text);
-      whoEl.innerHTML = '<div class="av">' + avatarSVG(turn) + '</div><span class="nm">' + pl.name + '</span>';
-      HAND_KINDS.forEach(function (k) { handEl.querySelector('[data-res="' + k + '"] b').textContent = hands[turn][k]; });
+      whoEl.innerHTML = '<div class="av">' + avatarSVG(VIEWER) + '</div><span class="nm">' + pl.name + '</span><span class="vp" title="Puntos de victoria">' + STAR + '<b>' + vps[VIEWER] + '</b></span>';
+      HAND_KINDS.forEach(function (k) { handEl.querySelector('[data-res="' + k + '"] b').textContent = hands[VIEWER][k]; });
     }
     function renderSeats() {
-      Array.prototype.forEach.call(seatsEl.children, function (s, p) { s.classList.toggle('on', p === turn); s.querySelector('b').textContent = handTotal(p); });
+      Array.prototype.forEach.call(seatsEl.children, function (s, p) { s.classList.toggle('on', p === turn); s.querySelector('.cnt b').textContent = handTotal(p); s.querySelector('.vp b').textContent = vps[p]; });
     }
     function resetPlayers() {
-      hands = PLAYER_INFO.map(function () { var h = {}; HAND_KINDS.forEach(function (k) { h[k] = Math.floor(Math.random() * 3); }); return h; });
+      hands = PLAYER_INFO.map(function () { var h = {}; HAND_KINDS.forEach(function (k) { h[k] = 0; }); return h; });
       turn = 0; renderHand(); renderSeats();
     }
-    function nextTurn() { turn = (turn + 1) % PLAYER_INFO.length; renderHand(); renderSeats(); }
+    function nextTurn() { turn = (turn + 1) % PLAYER_INFO.length; renderSeats(); }
     function pop(el, color) {
       el.animate([{ transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }, { transform: 'scale(1.2)', boxShadow: '0 0 18px 5px ' + color, offset: 0.35 }, { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }], { duration: 520, easing: 'ease-out' });
     }
 
     // Por cada (casilla, jugador con poblado en ella) sale un icono de la casilla, con una insignia del color del jugador, y vuela
-    // hasta su destino: la tarjeta del banner si le toca el turno, o su puesto (avatar) si no. Devuelve la duración total (ms).
+    // hasta su destino: la tarjeta del banner si es el jugador 1, o su puesto (avatar) si es otro. Devuelve la duración total (ms).
     function flyResources(sum, animate) {
       var jobs = [], sr = stage.getBoundingClientRect(), w = stage.clientWidth, h = stage.clientHeight;
       tiles.forEach(function (t) { if (t.num === sum && t.owners) t.owners.forEach(function (o) { jobs.push({ t: t, o: o }); }); });
       jobs.forEach(function (j, n) {
-        var p = j.o.p, k = j.t.kind, amount = j.o.n, mine = p === turn, pl = PLAYER_INFO[p];
+        var p = j.o.p, k = j.t.kind, amount = j.o.n, mine = p === VIEWER, pl = PLAYER_INFO[p];
         var card = handEl.querySelector('[data-res="' + k + '"]'), seat = seatsEl.children[p];
         var target = mine ? card : seat, glow = mine ? card.style.getPropertyValue('--c') : pl.css;
         var gain = function () {
           hands[p][k] += amount;
-          if (mine) card.querySelector('b').textContent = hands[p][k]; else seat.querySelector('b').textContent = handTotal(p);
+          if (mine) card.querySelector('b').textContent = hands[p][k]; else seat.querySelector('.cnt b').textContent = handTotal(p);
           if (!animate) return;
           pop(target, glow);
           var plus = document.createElement('span'); plus.className = 'plus'; plus.textContent = '+' + amount; plus.style.color = mine ? card.style.getPropertyValue('--c') : pl.css; target.appendChild(plus);
-          plus.animate([{ transform: 'translateY(0)', opacity: 1 }, { transform: 'translateY(-26px)', opacity: 0 }], { duration: 800, easing: 'ease-out' }).onfinish = function () { plus.remove(); };
+          plus.animate([{ transform: 'translateY(6px) scale(.6)', opacity: 0 }, { transform: 'translateY(-4px) scale(1.25)', opacity: 1, offset: 0.12 }, { transform: 'translateY(-10px) scale(1)', opacity: 1, offset: 0.7 }, { transform: 'translateY(-28px) scale(1)', opacity: 0 }], { duration: 2200, easing: 'ease-out' }).onfinish = function () { plus.remove(); };
         };
         if (!animate) { gain(); return; }
         var v = new THREE.Vector3(j.t.x, TILE_TOP + 0.35, j.t.z).project(camera), sx = (v.x * 0.5 + 0.5) * w, sy = (0.5 - v.y * 0.5) * h;
