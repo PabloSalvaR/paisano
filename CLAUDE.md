@@ -131,11 +131,11 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 
 | Terreno | Color base | Decorado |
 |---|---|---|
-| Bosque | `#3f8f45` | abetos de 3 conos |
-| Pradera | `#a7d15c` | ovejas |
-| Campo | `#e8bf45` | espigas instanciadas en filas |
-| Colina | `#c96a3b` | pilas de ladrillos y montículos |
-| Montaña | `#8d949c` | picos con nieve y rocas |
+| Bosque | `#3f8f45` | árboles de copa ancha (tronco + 3 masas redondeadas, estilo ombú) |
+| Pradera | `#a7d15c` | vacas blancas con manchas negras (recurso: Vaca) |
+| Campo | `#e8bf45` | plantas de maíz instanciadas en filas (recurso: Maíz) |
+| Colina | `#c96a3b` | pilas de ladrillos y montículos (recurso: Ladrillo) |
+| Montaña | `#8d949c` | rocas irregulares grandes y chicas (sin picos ni nieve; recurso: Piedra) |
 | Desierto | `#e3c78d` | dunas y cactus |
 
 - Fichas de número crema, con **6 y 8 en rojo** y puntos de probabilidad.
@@ -164,6 +164,7 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 - **Nombre: Paisano** (lema «Hacé tu tierra.», voseo rioplatense). Elegido por no parecerse a Colonist ni a Catan. Pendiente: búsqueda rápida de marca y disponibilidad de URL.
 - **Replanteo (sept 2026): prueba gratis primero.** Sin hosts de pago ni backend propio hasta validar que el juego sirve. Cliente Next.js desplegado en Vercel Hobby (gratis, uso no comercial). Vercel no mantiene WebSockets, así que el multijugador por turnos usará API routes + base de datos gratuita (Upstash Redis o Neon) + polling cada 1-2 s. El motor de reglas pasa provisionalmente a **TypeScript** (servidor autoritativo dentro de Next); si la prueba funciona, puede portarse a Java/Spring. Alternativa descartada por ahora: P2P con WebRTC.
 - **Repo y deploy (sept 2026):** monorepo en GitHub con `git` y auth por navegador (sin `gh` CLI, no hace falta). Vercel importa el repo con Root Directory `client`; no se instaló el plugin de Vercel para agentes.
+- **Identidad argentina (sept 2026):** recursos y decorado con sabor local: Pradera produce **Vaca** (no oveja/lana), Campo produce **Maíz** (no trigo), Montaña produce **Piedra** (no mineral), bosque con árboles de copa ancha tipo ombú, montañas de rocas irregulares sin nieve. Se probó **Adobe** en lugar de Ladrillo (con hornos de barro) y se descartó: la Colina sigue produciendo **Ladrillo**. Mantener el resto de nombres y arte propios (ver "Propiedad intelectual").
 - **Prototipo portado con three r128 fijo.** No actualizar three sin revisar el aspecto (cambian encodings y colores). Migrar a React Three Fiber cuando el estado del juego lo justifique.
 
 ## Hoja de ruta
