@@ -8,9 +8,10 @@ Diferenciador principal: **el anfitrión configura las reglas libremente** (vari
 
 - Desarrollador **fullstack** (Next.js y Spring Boot). Quiere **entender y revisar** el diseño: explicar las decisiones importantes de forma breve y clara, sin volcar código enorme sin contexto.
 - Motivación del proyecto: el juego digital de referencia resulta restrictivo con sus expansiones (contenido bloqueado por compra). Aquí todo debe poder activarse libremente. Meta visual: acercarse a la calidad de ese juego (colores vivos, iluminación cuidada, animaciones).
-- Sistema: **Windows 11**. Los comandos se dan en **PowerShell** (rutas con `\`, varias carpetas con `mkdir a, b`). Instalación de herramientas con `winget`.
-- Ya instalado: JDK 21 (Temurin), Git, IntelliJ IDEA (para `/server`) y VS Code (para `/client`).
-- Aún **no** instalado: Node.js LTS (se necesita en la fase 5) y Docker Desktop (fases 4 y 8). Avisar antes de necesitarlos.
+- Sistema: **Windows 11**. Los comandos se dan en **PowerShell** (rutas con `\`, varias carpetas con `mkdir a, b`). Instalación de herramientas con `winget`. El desarrollador corre el servidor de desarrollo desde **Git Bash** (en PowerShell `npm.ps1` está bloqueado por la política de ejecución; alternativa: `npm.cmd`). Preferir comandos que funcionen en ambos shells (por ejemplo `cd client; npm run dev`).
+- Sin `gh` CLI: el repo se maneja con `git` y autenticación por navegador. `git push` lo corre el desarrollador en su terminal (desde Claude Code no hay interacción para autenticar).
+- Ya instalado: Node 24 + npm (`/client`), JDK 21 (Temurin), Git, IntelliJ IDEA (por si se retoma `/server`) y VS Code (para `/client`).
+- Aún **no** instalado: Docker Desktop (solo si se retoma el backend Java). Avisar antes de necesitarlo.
 - Al usar Maven o Gradle, usar siempre el **wrapper** (`mvnw` / `gradlew`), sin exigir instalación global.
 
 ## Reglas de trabajo con Claude Code
@@ -33,6 +34,8 @@ Las mecánicas no están protegidas, pero el nombre, el arte, los textos y la ma
 
 ## Stack
 
+**Vigente hoy (prueba gratis):** Next.js + TypeScript en Vercel Hobby, three r128 fijo, motor de reglas en TypeScript dentro de Next (API routes), y para multijugador Upstash Redis o Neon + polling cada 1-2 s. La tabla siguiente es el **stack objetivo original** (Java/Spring), pospuesto hasta validar el juego.
+
 | Capa | Tecnología |
 |---|---|
 | Servidor | Java 21 + Spring Boot (virtual threads) |
@@ -50,13 +53,13 @@ Alcance deliberadamente recortado: **sin** matchmaking, rankings, anti-trampas a
 ## Estructura del repositorio (monorepo)
 
 ```
-/server      Spring Boot (motor de reglas + red)
-/client      Next.js (lobby, UI, tablero 3D)
+/server      (pospuesto, aún no existe) Spring Boot: motor de reglas + red
+/client      Next.js (lobby, UI, tablero 3D) — es lo único activo hoy
 /docs        Diagramas, decisiones (ADR) y prototipos
   /prototipos/tablero-3d.html   Referencia visual (ver abajo)
 ```
 
-El **motor de reglas** vive en un paquete de Java puro, **sin dependencias de Spring, red ni base de datos**, para poder testearlo aislado.
+El **motor de reglas** debe vivir en un módulo aislado, **sin dependencias de UI, red ni base de datos**, para poder testearlo por separado. Hoy será TypeScript puro dentro de `/client` (carpeta propia, sin imports de React/Next); si se porta a Java, el diseño es un paquete/módulo Java puro.
 
 ## Arquitectura
 
@@ -113,7 +116,7 @@ Mapa hexagonal de casillas con la punta hacia arriba (*pointy-top*), coordenadas
 - **Unitarios** del tablero (invariantes de arriba) y de cada regla (construcción, distancia mínima entre poblados, producción, ladrón, comercio, victoria).
 - **Simulación masiva:** miles de partidas de bots aleatorios de punta a punta, comprobando invariantes en cada paso (los recursos no se crean ni se pierden, no hay estados inválidos, las partidas terminan). Es la mejor forma de encontrar bugs de reglas.
 - Los comandos ilegales deben devolver un error claro, nunca lanzar excepciones no controladas.
-- Comandos de build/test: **completar cuando exista el proyecto** (`./mvnw test` o `./gradlew test`; `npm run dev`, `npm run build`, `npm test`).
+- Comandos (desde `client/`): `npm run dev` (localhost:3000), `npm run build`, `npm run lint`. Aún no hay runner de tests: elegirlo al empezar el motor de reglas. Backend Java (pospuesto): `./mvnw test` o `./gradlew test`.
 
 ## Referencia visual (cliente 3D)
 
@@ -174,7 +177,7 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 7. **Arte y pulido:** modelos, iluminación, animaciones y sonido.
 8. **Deploy y portfolio:** Docker Compose, CI, demo online, README con diagramas y un video o GIF.
 
-Estado actual: **replanteo (sept 2026)**. Prioridad: prueba jugable y gratis con amigos, sin backend Java ni cuentas por ahora. Hecho: Node 24 instalado; `/client` (Next.js + TypeScript, npm) con el prototipo 3D portado (three r128 exacto desde npm, JS plano en `client/src/lib/board.js`) y corriendo en localhost (`cd client; npm run dev`). Repo en GitHub (`PabloSalvaR/paisano`, remoto `origin`) y desplegado en Vercel Hobby (Root Directory = `client`); cada push a `main` despliega solo y el tablero 3D se ve bien en el link público. **Siguiente:** motor de reglas en TypeScript (proponer primero el diseño) y después multijugador. Las fases 1-4 originales (Java/Spring) quedan pospuestas.
+Estado actual: **replanteo (sept 2026)**. Prioridad: prueba jugable y gratis con amigos, sin backend Java ni cuentas por ahora. Hecho: Node 24 instalado; `/client` (Next.js + TypeScript, npm) con el prototipo 3D portado (three r128 exacto desde npm, JS plano en `client/src/lib/board.js`) y corriendo en localhost (`cd client; npm run dev`). Repo en GitHub (`PabloSalvaR/paisano`, remoto `origin`) y desplegado en Vercel Hobby (Root Directory = `client`); cada push a `main` despliega solo y el tablero 3D se ve bien en el link público. **Ahora:** pulido visual del prototipo 3D (aspecto) antes de avanzar. **Después:** motor de reglas en TypeScript (proponer primero el diseño) y multijugador. Las fases 1-4 originales (Java/Spring) quedan pospuestas.
 
 ## Decisiones pendientes
 
