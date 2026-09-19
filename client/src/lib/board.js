@@ -3,6 +3,7 @@
 // Tablero 3D (three r128, JS plano). Nació de un prototipo HTML ya retirado del repo.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { createAudio } from './audio.js';
 
 export const MARKUP = `
 <div id="stage">
@@ -20,6 +21,18 @@ export const MARKUP = `
     <div class="group">
       <button type="button" id="btnNew" class="primary">Nuevo mapa</button>
       <button type="button" id="btnDice" class="primary">Tirar dados</button>
+    </div>
+    <div class="group" role="group" aria-label="Sonido">
+      <div class="vol">
+        <svg id="volIcon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+          <path class="w1" d="M16 9.5a3.5 3.5 0 0 1 0 5"/>
+          <path class="w2" d="M18.5 7a7 7 0 0 1 0 10"/>
+          <path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/>
+        </svg>
+        <input type="range" id="volume" min="0" max="100" step="1" aria-label="Volumen">
+      </div>
+      <button type="button" id="btnAmbient" aria-pressed="true">Ambiente</button>
     </div>
     <div class="group" role="group" aria-label="Luz">
       <button type="button" data-light="day" aria-pressed="true">Día</button>
@@ -39,9 +52,15 @@ export function initBoard() {
   var errBox = document.getElementById('err');
   function fail(msg) { errBox.textContent = msg; errBox.hidden = false; }
   var raf = 0, ro = null, renderer = null, disposed = false;
+  var audio = createAudio();
+  function unlockAudio() { audio.unlock(); }
+  // el navegador solo deja sonar tras un gesto: el primer clic o tecla arranca el ambiente
+  var UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'click', 'touchend', 'keydown']; // según el navegador, cuenta uno u otro como gesto
+  UNLOCK_EVENTS.forEach(function (e) { document.addEventListener(e, unlockAudio, true); });
   try { main(); } catch (e) { console.error(e); fail('No se pudo iniciar la escena 3D: ' + e.message); }
   return function dispose() {
     disposed = true; cancelAnimationFrame(raf); if (ro) ro.disconnect();
+    audio.dispose(); UNLOCK_EVENTS.forEach(function (e) { document.removeEventListener(e, unlockAudio, true); });
     if (renderer) { renderer.dispose(); renderer.domElement.remove(); }
   };
 
@@ -821,6 +840,7 @@ export function initBoard() {
       diceSum.textContent = '';
       diceBox.hidden = false;
       spinDie(dieA, a, animate); spinDie(dieB, b, animate);
+      if (animate) audio.rollDice();
       // el resultado (solo el total) y el efecto sobre el tablero aparecen cuando los dados terminan de caer
       diceTimer = setTimeout(function () {
         diceSum.textContent = s;
@@ -839,8 +859,16 @@ export function initBoard() {
       b.addEventListener('click', function () {
         tar = presetState(PRESETS[b.getAttribute('data-light')]);
         lightBtns.forEach(function (o) { pressed(o, o === b); });
+        audio.setAmbient(b.getAttribute('data-light'));
       });
     });
+    var volume = document.getElementById('volume'), volIcon = document.getElementById('volIcon');
+    function showVolume() { volIcon.setAttribute('data-level', volume.value == 0 ? 0 : volume.value < 50 ? 1 : 2); }
+    volume.value = Math.round(audio.getVolume() * 100); showVolume();
+    volume.addEventListener('input', function () { audio.setVolume(volume.value / 100); showVolume(); });
+    var btnAmbient = document.getElementById('btnAmbient');
+    pressed(btnAmbient, audio.isAmbientOn());
+    btnAmbient.addEventListener('click', function () { audio.setAmbientOn(!audio.isAmbientOn()); pressed(btnAmbient, audio.isAmbientOn()); });
     var btnPieces = document.getElementById('btnPieces');
     btnPieces.addEventListener('click', function () { showPieces = !showPieces; pressed(btnPieces, showPieces); if (piecesGroup) piecesGroup.visible = showPieces; });
 
