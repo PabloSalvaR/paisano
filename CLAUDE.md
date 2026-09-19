@@ -158,6 +158,9 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 - **Prototipo visual aprobado** (`docs/prototipos/tablero-3d.html`): el estilo, la paleta y la iluminación se mantienen en el cliente definitivo.
 - **Maven o Gradle:** se recomendó Maven por ser lo más estándar en Spring Boot; pendiente de confirmar (ver abajo).
 
+- **Replanteo (sept 2026): prueba gratis primero.** Sin hosts de pago ni backend propio hasta validar que el juego sirve. Cliente Next.js desplegado en Vercel Hobby (gratis, uso no comercial). Vercel no mantiene WebSockets, así que el multijugador por turnos usará API routes + base de datos gratuita (Upstash Redis o Neon) + polling cada 1-2 s. El motor de reglas pasa provisionalmente a **TypeScript** (servidor autoritativo dentro de Next); si la prueba funciona, puede portarse a Java/Spring. Alternativa descartada por ahora: P2P con WebRTC.
+- **Prototipo portado con three r128 fijo.** No actualizar three sin revisar el aspecto (cambian encodings y colores). Migrar a React Three Fiber cuando el estado del juego lo justifique.
+
 ## Hoja de ruta
 
 1. **Modelo del tablero** con tests de invariantes.
@@ -169,7 +172,7 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 7. **Arte y pulido:** modelos, iluminación, animaciones y sonido.
 8. **Deploy y portfolio:** Docker Compose, CI, demo online, README con diagramas y un video o GIF.
 
-Estado actual: entorno instalado (JDK 21, Git, IntelliJ), repositorio local creado con este archivo y el prototipo visual, aún sin código de servidor ni cliente. **Siguiente paso: fase 1** (modelo del tablero), empezando por proponer el diseño de clases.
+Estado actual: **replanteo (sept 2026)**. Prioridad: prueba jugable y gratis con amigos, sin backend Java ni cuentas por ahora. Hecho: Node 24 instalado; `/client` (Next.js + TypeScript, npm) con el prototipo 3D portado (three r128 exacto desde npm, JS plano en `client/src/lib/board.js`) y corriendo en localhost (`cd client; npm run dev`). **Siguiente:** crear el repo en GitHub, conectarlo a Vercel (plan Hobby, gratis) y tener un link público; después motor de reglas en TypeScript y multijugador. Las fases 1-4 originales (Java/Spring) quedan pospuestas.
 
 ## Decisiones pendientes
 
