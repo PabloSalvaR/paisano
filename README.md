@@ -38,7 +38,6 @@ Otros comandos, siempre desde `client/`: `npm run build` (compilar) y `npm run l
 
 ```
 client/   Aplicación web (Next.js) y tablero 3D
-docs/     Documentación y prototipos de referencia
 ```
 
 ## Próximos pasos

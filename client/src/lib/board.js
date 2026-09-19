@@ -1,6 +1,6 @@
 // @ts-nocheck
 /* eslint-disable */
-// Portado del prototipo docs/prototipos/tablero-3d.html (three r128, JS plano).
+// Tablero 3D (three r128, JS plano). Nació de un prototipo HTML ya retirado del repo.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 

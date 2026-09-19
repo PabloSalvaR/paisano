@@ -55,8 +55,7 @@ Alcance deliberadamente recortado: **sin** matchmaking, rankings, anti-trampas a
 ```
 /server      (pospuesto, aún no existe) Spring Boot: motor de reglas + red
 /client      Next.js (lobby, UI, tablero 3D) — es lo único activo hoy
-/docs        Diagramas, decisiones (ADR) y prototipos
-  /prototipos/tablero-3d.html   Referencia visual (ver abajo)
+/docs        (por ahora no existe) diagramas y decisiones (ADR) cuando hagan falta
 ```
 
 El **motor de reglas** debe vivir en un módulo aislado, **sin dependencias de UI, red ni base de datos**, para poder testearlo por separado. Hoy será TypeScript puro dentro de `/client` (carpeta propia, sin imports de React/Next); si se porta a Java, el diseño es un paquete/módulo Java puro.
@@ -120,7 +119,7 @@ Mapa hexagonal de casillas con la punta hacia arriba (*pointy-top*), coordenadas
 
 ## Referencia visual (cliente 3D)
 
-Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r128, JavaScript plano, geometría procedural). **Es la referencia de estilo, no código a copiar.** El cliente definitivo lo reimplementa con React Three Fiber, conservando lo siguiente:
+La referencia visual es el propio tablero del cliente: `client/src/lib/board.js` (three.js r128, JavaScript plano, geometría procedural). Nació de un prototipo HTML (`docs/prototipos/tablero-3d.html`) que se **eliminó** por estar superado; sigue en el historial de git (commit `48ef43f`). Al migrar a React Three Fiber hay que conservar lo siguiente (las medidas de esta sección son la especificación de partida; el código manda si difiere):
 
 **Escala y capas** (circunradio de casilla = 1)
 - Casilla: extrusión hexagonal biselada, cara superior a `y = 0.4`, separación entre casillas ≈ 0.12.
@@ -158,7 +157,7 @@ Existe un prototipo funcional en `docs/prototipos/tablero-3d.html` (three.js r12
 - **Alcance:** jugar con amigos y portfolio. Sin monetización, cuentas complejas ni matchmaking.
 - **Cliente web (Next.js + React Three Fiber) y no Unity.** Motivos: se juega abriendo un link, sin instalar nada; encaja con el stack del desarrollador; una demo online luce más en un portfolio. Como el servidor es autoritativo, el cliente es intercambiable: si algún día se quiere publicar en Steam, se puede hacer un cliente Unity contra el mismo backend.
 - **Spring Boot como servidor de reglas** (no Node), con estado en memoria y snapshots en Postgres.
-- **Prototipo visual aprobado** (`docs/prototipos/tablero-3d.html`): el estilo, la paleta y la iluminación se mantienen en el cliente definitivo.
+- **Estilo visual aprobado** (originado en un prototipo HTML, ya eliminado y superado por `client/src/lib/board.js`): el estilo, la paleta y la iluminación se mantienen en el cliente definitivo.
 - **Maven o Gradle:** se recomendó Maven por ser lo más estándar en Spring Boot; pendiente de confirmar (ver abajo).
 
 - **Nombre: Paisano** (lema «Hacé tu tierra.», voseo rioplatense). Elegido por no parecerse a Colonist ni a Catan. Pendiente: búsqueda rápida de marca y disponibilidad de URL.
