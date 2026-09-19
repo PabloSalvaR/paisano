@@ -10,8 +10,7 @@ export const MARKUP = `
 
   <header class="panel title">
     <h1>Paisano</h1>
-    <p>Arrastra para rotar, usa la rueda o el pellizco para acercar y pasa el cursor sobre una casilla.</p>
-    <p class="stats" id="stats">Cargando escena…</p>
+    <p class="tagline">Hacé tu tierra.</p>
   </header>
 
   <div class="panel hover" id="hover" hidden></div>
@@ -760,7 +759,7 @@ export function initBoard() {
     // ------------------------------------------------------------------ bucle
     buildBoard((Date.now() & 0xffffff) | 1);
     applyLight(1);
-    var clock = new THREE.Clock(), time = 0, frames = 0, acc = 0, statsEl = document.getElementById('stats');
+    var clock = new THREE.Clock(), time = 0;
     function frame() {
       if (disposed) return; raf = requestAnimationFrame(frame);
       var dt = Math.min(clock.getDelta(), 0.05); time += dt;
@@ -784,12 +783,6 @@ export function initBoard() {
       waterTex.offset.x = (time * 0.006) % 1; waterTex.offset.y = (time * 0.004) % 1;
 
       renderer.render(scene, camera);
-      frames++; acc += dt;
-      if (acc >= 0.6) {
-        var inf = renderer.info.render;
-        statsEl.textContent = Math.round(frames / acc) + ' FPS · ' + inf.calls + ' draw calls · ' + Math.round(inf.triangles / 1000) + 'k triángulos';
-        frames = 0; acc = 0;
-      }
     }
     frame();
   }
