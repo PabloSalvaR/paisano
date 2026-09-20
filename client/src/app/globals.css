@@ -306,7 +306,7 @@ body{
 .dialog .yesno .no:hover:not(:disabled){background:#e85a5a}
 
 /* Botón único de turno (abajo a la derecha): dados antes de tirar; flecha del color de quien sigue después de tirar */
-.turn-btn{right:14px;bottom:14px;width:78px;height:78px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;
+.turn-btn{right:14px;bottom:30px;width:78px;height:78px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;
   cursor:pointer;background:#f6ecd4;border:3px solid var(--accent);color:#2b2216;transition:background-color .3s,box-shadow .15s}
 .turn-btn[hidden]{display:none}
 /* Es opaco: sin el desenfoque heredado de .panel. Con backdrop-filter + animación de transform, Chrome lo dibuja cuadrado hasta que termina. */
