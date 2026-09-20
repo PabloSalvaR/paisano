@@ -305,19 +305,21 @@ body{
 
 /* Botón único de turno (abajo a la derecha): dados antes de tirar; flecha del color de quien sigue después de tirar */
 .turn-btn{right:14px;bottom:14px;width:78px;height:78px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  cursor:pointer;background:#f6ecd4;border:3px solid var(--accent);color:#2b2216;transition:transform .15s,background-color .3s,opacity .15s}
+  cursor:pointer;background:#f6ecd4;border:3px solid var(--accent);color:#2b2216;transition:background-color .3s,box-shadow .15s}
 .turn-btn[hidden]{display:none}
 /* Es opaco: sin el desenfoque heredado de .panel. Con backdrop-filter + animación de transform, Chrome lo dibuja cuadrado hasta que termina. */
 .turn-btn{-webkit-backdrop-filter:none;backdrop-filter:none}
-.turn-btn:hover:not(:disabled){transform:scale(1.07)}
-.turn-btn:active:not(:disabled){transform:scale(.95)}
+.turn-btn:hover:not(:disabled){box-shadow:var(--shadow),0 0 0 4px rgba(255,255,255,.4)}
+.turn-btn:active:not(:disabled){box-shadow:var(--shadow),0 0 0 2px rgba(255,255,255,.4)}
 .turn-btn:disabled{opacity:.55;cursor:default}
 .turn-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .turn-btn svg{width:54px;height:54px;display:block}
 .turn-btn[data-mode="main"]{background:var(--pc);color:var(--pt);border-color:rgba(0,0,0,.35)}
 .turn-btn[data-mode="main"] svg{width:50px;height:50px}
-.turn-btn.swap{animation:turnSwap .35s ease-out}
-.turn-btn[data-mode="roll"]:not(:disabled) svg{animation:diceWiggle 2.6s ease-in-out infinite}
+/* El círculo no se anima (transform sobre un elemento con border-radius se dibujaba cuadrado): solo el ícono. Al cambiar de estado
+   el <svg> es nuevo, así que la animación arranca sola. */
+.turn-btn[data-mode="main"] svg{animation:turnSwap .35s ease-out}
+.turn-btn[data-mode="roll"] svg{animation:turnSwap .35s ease-out,diceWiggle 2.6s ease-in-out .35s infinite}
 @keyframes turnSwap{0%{transform:scale(.6) rotate(-25deg)}70%{transform:scale(1.1)}100%{transform:none}}
 @keyframes diceWiggle{0%,78%,100%{transform:rotate(0)}84%{transform:rotate(-9deg)}92%{transform:rotate(9deg)}}
 
@@ -327,7 +329,7 @@ body{
   .turn-btn[data-mode="main"] svg{width:36px;height:36px}
 }
 @media (prefers-reduced-motion: reduce){
-  .turn-btn.swap,.turn-btn[data-mode="roll"] svg{animation:none}
+  .turn-btn svg{animation:none!important}
 }
 #stage[data-confirm] .status{opacity:0}
 

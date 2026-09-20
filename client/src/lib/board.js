@@ -1210,7 +1210,6 @@ export function initBoard() {
         btnTurn.innerHTML = TURN_ARROW; label = 'Pasar el turno a ' + n.name;
       }
       btnTurn.setAttribute('aria-label', label); btnTurn.title = label;
-      btnTurn.classList.remove('swap'); void btnTurn.offsetWidth; btnTurn.classList.add('swap'); // pequeña animación al cambiar de función
     }
     // Carta de desarrollo: un botón más de la bandeja; se habilita en fase main si la mano alcanza para pagarla.
     function updateDevButton() {
