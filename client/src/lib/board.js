@@ -1240,20 +1240,21 @@ export function initBoard() {
     }
 
     function statusText() {
-      var ph = game.phase, name = PLAYER_INFO[game.turn].name;
+      // Si el que juega es quien mira (VIEWER) se le habla de vos; si no, se nombra a esa persona.
+      var ph = game.phase, name = PLAYER_INFO[game.turn].name, me = game.turn === VIEWER;
       switch (ph.kind) {
         case 'setup': {
           var round = ph.step < game.players.length ? 1 : 2;
-          return name + ' · ronda ' + round + ' de 2: ' + (ph.part === 'settlement' ? 'tocá un punto para colocar tu poblado' : 'tocá un camino junto a tu poblado');
+          return (me ? 'Tu turno' : name) + ' · ronda ' + round + ' de 2: ' + (ph.part === 'settlement' ? (me ? 'tocá un punto para colocar tu poblado' : 'coloca su poblado') : (me ? 'tocá un camino junto a tu poblado' : 'coloca su camino'));
         }
-        case 'roll': return 'Turno de ' + name + ': tirá los dados';
+        case 'roll': return me ? 'Tu turno: jugá los dados' : 'Turno de ' + name;
         case 'main':
-          if (buildMode) return name + ': ' + { road: 'elegí dónde va el camino', settlement: 'elegí dónde va el poblado', city: 'elegí qué poblado mejorar' }[buildMode];
-          return 'Turno de ' + name;
-        case 'discard': return name + ': salió un 7, descartá ' + ph.queue[0].count + ' cartas';
-        case 'moveRobber': return name + ': mové el ladrón (tocá una casilla)';
-        case 'steal': return name + ': elegí a quién robarle una carta';
-        default: return '¡' + PLAYER_INFO[ph.winner].name + ' ganó la partida con ' + vps[ph.winner] + ' puntos!';
+          if (buildMode) return me ? { road: 'Elegí dónde va el camino', settlement: 'Elegí dónde va el poblado', city: 'Elegí qué poblado mejorar' }[buildMode] : 'Turno de ' + name;
+          return me ? 'Tu turno' : 'Turno de ' + name;
+        case 'discard': return me ? 'Salió un 7: descartá ' + ph.queue[0].count + ' cartas' : name + ' descarta ' + ph.queue[0].count + ' cartas';
+        case 'moveRobber': return me ? 'Mové el ladrón: tocá una casilla' : name + ' mueve el ladrón';
+        case 'steal': return me ? 'Elegí a quién robarle una carta' : name + ' elige a quién robarle';
+        default: return ph.winner === VIEWER ? '¡Ganaste la partida con ' + vps[ph.winner] + ' puntos!' : '¡' + PLAYER_INFO[ph.winner].name + ' ganó la partida con ' + vps[ph.winner] + ' puntos!';
       }
     }
     var statusEl = document.getElementById('status'), statusTimer = null;
@@ -1270,7 +1271,7 @@ export function initBoard() {
     var dialogEl = document.getElementById('dialog'), buildEl = document.getElementById('build');
     function resIcon(k) { return handEl.querySelector('[data-res="' + k + '"] svg').outerHTML; }
     function renderDialog() {
-      var ph = game.phase, name = PLAYER_INFO[game.turn].name;
+      var ph = game.phase;
       if (pendingCmd && (busy || pendingCmd.player !== game.turn)) pendingCmd = null;
       stage.toggleAttribute('data-confirm', !!pendingCmd); // con una confirmación abierta, el texto de estado se oculta para no quedar debajo
       if (pendingCmd) {
@@ -1302,7 +1303,7 @@ export function initBoard() {
         }).join('') + '</div>';
       }
       dialogEl.innerHTML = html;
-      dialogEl.querySelector('h3').textContent = ph.kind === 'discard' ? name + ': descartá ' + ph.queue[0].count + ' cartas' : name + ': ¿a quién le robás?';
+      dialogEl.querySelector('h3').textContent = ph.kind === 'discard' ? 'Descartá ' + ph.queue[0].count + ' cartas' : '¿A quién le robás?';
       dialogEl.hidden = false;
     }
     // Comerciar con el banco: dos filas de fichas (doy / recibo). Lo que se puede entregar, la tasa y lo que se puede pedir salen de
@@ -1396,7 +1397,7 @@ export function initBoard() {
       else applyView();
       var traded = r.events.filter(function (e) { return e.type === 'BankTraded'; })[0];
       if (traded) { audio.trade(); tradeFx(traded); }
-      if (stolen) showStatus(PLAYER_INFO[stolen.thief].name + ' le robó ' + TERRAINS[stolen.resource].res.toLowerCase() + ' a ' + PLAYER_INFO[stolen.victim].name, false, true);
+      if (stolen) showStatus((stolen.thief === VIEWER ? 'Le robaste ' : PLAYER_INFO[stolen.thief].name + ' le robó ') + TERRAINS[stolen.resource].res.toLowerCase() + ' a ' + PLAYER_INFO[stolen.victim].name, false, true);
     }
     function commandFromMarker(m) {
       var p = game.turn, setup = game.phase.kind === 'setup';
