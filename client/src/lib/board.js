@@ -1270,6 +1270,8 @@ export function initBoard() {
       var r = applyCommand(game, cmd);
       if (!r.ok) { showStatus(r.error.message, true); renderDialog(); return; }
       var thief = game.turn;
+      var landed = { placeRoad: 'road', buildRoad: 'road', placeSettlement: 'settlement', buildSettlement: 'settlement', buildCity: 'city' }[cmd.type];
+      if (landed) audio.land(landed); // la pieza toca el tablero
       game = r.state;
       buildMode = null;
       syncPieces();

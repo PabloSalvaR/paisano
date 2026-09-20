@@ -102,6 +102,21 @@ export function createAudio() {
     click(tl, 0.3, 480);
   }
 
+  // ---------------------------------------------------------------- piezas
+  // Una pieza de madera que cae sobre el tablero: golpe grave con toc seco. El camino es liviano; el poblado, más lleno;
+  // la ciudad pesa más y rebota con un segundo toquecito.
+  var LAND = { road: [230, 0.3, 0.12], settlement: [170, 0.42, 0.16], city: [125, 0.55, 0.2] }; // [frecuencia, volumen, duración]
+  function land(kind) {
+    if (!ctx) return;
+    var p = LAND[kind] || LAND.settlement, t = ctx.currentTime + 0.005;
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(p[0], t); o.frequency.exponentialRampToValueAtTime(p[0] * 0.4, t + p[2]);
+    g.gain.setValueAtTime(p[1], t); g.gain.exponentialRampToValueAtTime(0.0001, t + p[2] + 0.05);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + p[2] + 0.06);
+    click(t, p[1] * 0.7, p[0] * 2.6);
+    if (kind === 'city') click(t + 0.11, 0.2, 420);
+  }
+
   // ---------------------------------------------------------------- control
   function applyGain() { if (master) fade(master.gain, volume, 0.05); }
   // Llamar desde un gesto del usuario: crea el contexto (una sola vez) y lo reanuda.
@@ -137,6 +152,7 @@ export function createAudio() {
     setAmbientOn: setAmbientOn,
     setAmbient: setAmbient,
     rollDice: rollDice,
+    land: land,
     dispose: function () {
       disposed = true; clearTimeout(birdTimer);
       document.removeEventListener('visibilitychange', onVisibility);
