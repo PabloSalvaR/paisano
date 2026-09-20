@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createAudio } from './audio.js';
 // Motor de reglas (TypeScript puro): decide todo. Este archivo solo dibuja el estado y envía comandos.
-import { createGame, applyCommand, legalActions, topology } from '../engine';
+import { createGame, applyCommand, legalActions, topology, victoryPoints } from '../engine';
 
 export const MARKUP = `
 <div id="stage">
@@ -13,7 +13,7 @@ export const MARKUP = `
 
   <header class="panel title">
     <h1 class="logo"><span class="sr-only">Paisano</span></h1>
-    <p class="tagline">Hacé tu tierra.</p>
+    <p class="tagline">"Es mi destino, piedra y camino."</p>
   </header>
 
   <div class="panel hover" id="hover" hidden></div>
@@ -21,6 +21,25 @@ export const MARKUP = `
 
   <!-- Qué toca hacer ahora (y errores de jugada) -->
   <div class="panel status" id="status" role="status" aria-live="polite"></div>
+
+  <!-- Construir: cada botón activa el modo y muestra en el tablero dónde se puede. Costos como puntos de color del recurso. -->
+  <section class="panel build" id="build" aria-label="Construir" hidden>
+    <button type="button" data-build="road" title="Camino: 1 madera + 1 ladrillo">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="12" width="26" height="8" rx="2" transform="rotate(-25 16 16)" fill="currentColor"/></svg>
+      <span>Camino</span><span class="cost"><i style="--c:#3f8f45"></i><i style="--c:#c96a3b"></i></span>
+    </button>
+    <button type="button" data-build="settlement" title="Poblado: 1 madera + 1 ladrillo + 1 vaca + 1 maíz">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 28V15L16 5l10 10v13z" fill="currentColor"/></svg>
+      <span>Poblado</span><span class="cost"><i style="--c:#3f8f45"></i><i style="--c:#c96a3b"></i><i style="--c:#a7d15c"></i><i style="--c:#e8bf45"></i></span>
+    </button>
+    <button type="button" data-build="city" title="Ciudad: 2 maíz + 3 piedras (mejora un poblado)">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 28V17l7-6 7 6v11zM17 28V12l6-8 6 8v16z" fill="currentColor"/></svg>
+      <span>Ciudad</span><span class="cost"><i style="--c:#e8bf45"></i><i style="--c:#e8bf45"></i><i style="--c:#8d949c"></i><i style="--c:#8d949c"></i><i style="--c:#8d949c"></i></span>
+    </button>
+  </section>
+
+  <!-- Descartar (con un 7) o elegir a quién robarle: se arma desde board.js -->
+  <section class="panel dialog" id="dialog" role="dialog" aria-live="polite" hidden></section>
 
   <!-- Estadística de tiradas: una barra vertical por total (2 a 12) con la cantidad de veces que salió -->
   <section class="panel stats" id="stats" aria-label="Estadística de tiradas" hidden>
@@ -744,6 +763,8 @@ export function initBoard() {
     // ------------------------------------------------------------------ tablero
     var board = null, tiles = [], tileMeshes = [], ships = [], robber = null, robberBase = 0, robberPulse = 0, piecesGroup = null, markersGroup = null;
     var game = null; // estado de la partida (lo maneja el motor); el tablero 3D es solo su reflejo
+    var buildMode = null; // 'road' | 'settlement' | 'city' | null: qué se está por construir (en el turno normal)
+    var robberTile = -1, discardSel = {}, dialogKey = ''; // casilla donde está dibujado el ladrón; selección del descarte
     var busy = false; // true mientras corre una animación (dados, recursos volando): no se aceptan jugadas ni botones
     var vertices = []; // vértices del motor con su posición 3D; el id es el del motor
 
@@ -796,7 +817,7 @@ export function initBoard() {
 
       // ladrón en el desierto
       robber = makeRobber(); robber.position.set(0.05, TILE_TOP, 0.03); robberBase = TILE_TOP; robberPulse = 0;
-      tiles[game.robber].group.add(robber);
+      tiles[game.robber].group.add(robber); robberTile = game.robber;
 
       // el tablero arranca vacío: las piezas aparecen a medida que se juega
       piecesGroup = new THREE.Group(); board.add(piecesGroup);
@@ -848,22 +869,34 @@ export function initBoard() {
       var acts = legalActions(game, game.turn), topo = topology(), y = TILE_TOP + 0.05;
       markerMat = new THREE.MeshBasicMaterial({ color: col(PLAYER_INFO[game.turn].css), transparent: true, opacity: 0.6, depthWrite: false, fog: false });
       var ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false, fog: false });
+      function vertexMarker(vid) {
+        // cada marcador tiene un área de toque invisible más grande que el disco que se ve (cómoda en el celular)
+        var v = vertices[vid], m = new THREE.Mesh(new THREE.CircleGeometry(0.26, 12), hitMat);
+        m.rotation.x = -Math.PI / 2; m.position.set(v.x, y, v.z); m.userData = { type: 'vertex', id: vid };
+        var disc = new THREE.Mesh(new THREE.CircleGeometry(0.13, 20), markerMat); disc.position.z = 0.001; disc.renderOrder = 3; m.add(disc);
+        var ring = new THREE.Mesh(new THREE.RingGeometry(0.13, 0.17, 20), ringMat); ring.position.z = 0.002; ring.renderOrder = 3; m.add(ring);
+        markersGroup.add(m);
+      }
+      function edgeMarker(eid) {
+        var e = topo.edges[eid], A = vertices[e.a], B = vertices[e.b], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L;
+        var m = segment({ x: A.x + ux * 0.22, z: A.z + uz * 0.22 }, { x: B.x - ux * 0.22, z: B.z - uz * 0.22 }, y, 0.17, 0.03, markerMat);
+        m.castShadow = false; m.receiveShadow = false; m.renderOrder = 3; m.userData = { type: 'edge', id: eid };
+        markersGroup.add(m);
+      }
+      function tileMarker(tid) {
+        // anillo alrededor de la ficha (para no taparla) y un área de toque del tamaño de la casilla
+        var t = tiles[tid], m = new THREE.Mesh(new THREE.CircleGeometry(0.8, 12), hitMat);
+        m.rotation.x = -Math.PI / 2; m.position.set(t.x, TILE_TOP + 0.06, t.z); m.userData = { type: 'tile', id: tid };
+        var ring = new THREE.Mesh(new THREE.RingGeometry(0.56, 0.7, 32), markerMat); ring.position.z = 0.001; ring.renderOrder = 3; m.add(ring);
+        var edge = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.74, 32), ringMat); edge.position.z = 0.002; edge.renderOrder = 3; m.add(edge);
+        markersGroup.add(m);
+      }
       acts.forEach(function (a) {
-        // cada marcador de vértice tiene un área de toque invisible más grande que el disco que se ve (cómoda en el celular)
-        if (a.type === 'placeSettlement') a.vertices.forEach(function (vid) {
-          var v = vertices[vid], m = new THREE.Mesh(new THREE.CircleGeometry(0.26, 12), hitMat);
-          m.rotation.x = -Math.PI / 2; m.position.set(v.x, y, v.z); m.userData = { type: 'vertex', id: vid };
-          var disc = new THREE.Mesh(new THREE.CircleGeometry(0.13, 20), markerMat); disc.position.z = 0.001; disc.renderOrder = 3; m.add(disc);
-          var ring = new THREE.Mesh(new THREE.RingGeometry(0.13, 0.17, 20), ringMat); ring.position.z = 0.002; ring.renderOrder = 3; m.add(ring);
-          markersGroup.add(m);
-        });
-        if (a.type === 'placeRoad') a.edges.forEach(function (eid) {
-          var e = topo.edges[eid], A = vertices[e.a], B = vertices[e.b], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L;
-          var m = segment({ x: A.x + ux * 0.22, z: A.z + uz * 0.22 }, { x: B.x - ux * 0.22, z: B.z - uz * 0.22 }, y, 0.17, 0.03, markerMat);
-          m.castShadow = false; m.receiveShadow = false; m.renderOrder = 3; m.userData = { type: 'edge', id: eid };
-          markersGroup.add(m);
-        });
+        if (a.type === 'placeSettlement' || (a.type === 'buildSettlement' && buildMode === 'settlement') || (a.type === 'buildCity' && buildMode === 'city')) a.vertices.forEach(vertexMarker);
+        if (a.type === 'placeRoad' || (a.type === 'buildRoad' && buildMode === 'road')) a.edges.forEach(edgeMarker);
+        if (a.type === 'moveRobber') a.tiles.forEach(tileMarker);
       });
+      markersGroup.updateMatrixWorld(true); // que se puedan tocar de inmediato, sin esperar al próximo cuadro
     }
 
     // ------------------------------------------------------------------ interacción
@@ -900,9 +933,7 @@ export function initBoard() {
       raycaster.setFromCamera(pointer, camera);
       var hit = raycaster.intersectObjects(markersGroup.children, false)[0];
       if (!hit) return;
-      var m = hit.object.userData;
-      if (m.type === 'vertex') dispatch({ type: 'placeSettlement', player: game.turn, vertex: m.id });
-      else dispatch({ type: 'placeRoad', player: game.turn, edge: m.id });
+      dispatch(commandFromMarker(hit.object.userData));
     });
 
     // ------------------------------------------------------------------ dados (modal con dados 3D de CSS)
@@ -1050,45 +1081,115 @@ export function initBoard() {
     // Copia las manos y los puntos del estado del motor a lo que se ve en pantalla.
     function syncHands() {
       hands = game.players.map(function (pl) { var h = {}; HAND_KINDS.forEach(function (k) { h[k] = pl.hand[k]; }); return h; });
-      vps = game.players.map(function () { return 0; });
-      game.vertexBuildings.forEach(function (bd) { if (bd) vps[bd.player] += bd.city ? 2 : 1; });
+      vps = game.players.map(function (pl, p) { return victoryPoints(game, p); });
     }
     function resetPlayers() { VIEWER = turn = game.turn; syncHands(); renderHand(); renderSeats(); }
-    // Pone la pantalla al día con el estado (banner del jugador de turno, puestos, marcadores y botones).
-    function applyView() { VIEWER = turn = game.turn; syncHands(); renderHand(); renderSeats(); refreshUi(); }
-    function refreshUi() { refreshMarkers(); updateControls(); showStatus(statusText(), false); }
+    // Pone la pantalla al día con el estado (banner del jugador de turno, puestos, ladrón, marcadores, botones y diálogos).
+    function applyView() { VIEWER = turn = game.turn; syncHands(); renderHand(); renderSeats(); syncRobber(); refreshUi(); }
+    function refreshUi() { refreshMarkers(); updateControls(); renderDialog(); showStatus(statusText(), false); }
+
+    // El ladrón se dibuja sobre la casilla del estado (con un saltito al llegar). Fuera del desierto va corrido hacia adelante
+    // para no tapar la ficha del número.
+    function syncRobber() {
+      if (!robber || robberTile === game.robber) return;
+      var t = tiles[game.robber];
+      robberTile = game.robber;
+      t.group.add(robber);
+      robber.position.x = t.kind === 'desert' ? 0.05 : 0; robber.position.z = t.kind === 'desert' ? 0.03 : 0.5;
+      robberPulse = 1;
+    }
+
     function updateControls() {
-      var ph = game.phase.kind;
+      var ph = game.phase.kind, acts = legalActions(game, game.turn), can = {};
+      acts.forEach(function (a) { can[a.type] = true; });
       btnDice.disabled = busy || ph !== 'roll';
       btnEnd.disabled = busy || ph !== 'main';
+      buildEl.hidden = ph === 'setup' || ph === 'finished';
+      if (!can[{ road: 'buildRoad', settlement: 'buildSettlement', city: 'buildCity' }[buildMode]]) buildMode = null; // ya no alcanza o no hay dónde
+      Array.prototype.forEach.call(buildEl.querySelectorAll('[data-build]'), function (b) {
+        var kind = b.getAttribute('data-build');
+        b.disabled = busy || !can[{ road: 'buildRoad', settlement: 'buildSettlement', city: 'buildCity' }[kind]];
+        pressed(b, buildMode === kind);
+      });
     }
+
     function statusText() {
       var ph = game.phase, name = PLAYER_INFO[game.turn].name;
-      if (ph.kind === 'setup') {
-        var round = ph.step < game.players.length ? 1 : 2;
-        return name + ' · ronda ' + round + ' de 2: ' + (ph.part === 'settlement' ? 'tocá un punto para colocar tu poblado' : 'tocá un camino junto a tu poblado');
+      switch (ph.kind) {
+        case 'setup': {
+          var round = ph.step < game.players.length ? 1 : 2;
+          return name + ' · ronda ' + round + ' de 2: ' + (ph.part === 'settlement' ? 'tocá un punto para colocar tu poblado' : 'tocá un camino junto a tu poblado');
+        }
+        case 'roll': return 'Turno de ' + name + ': tirá los dados';
+        case 'main':
+          if (buildMode) return name + ': ' + { road: 'elegí dónde va el camino', settlement: 'elegí dónde va el poblado', city: 'elegí qué poblado mejorar' }[buildMode];
+          return 'Turno de ' + name + ': construí o terminá tu turno';
+        case 'discard': return name + ': salió un 7, descartá ' + ph.queue[0].count + ' cartas';
+        case 'moveRobber': return name + ': mové el ladrón (tocá una casilla)';
+        case 'steal': return name + ': elegí a quién robarle una carta';
+        default: return '¡' + PLAYER_INFO[ph.winner].name + ' ganó la partida con ' + vps[ph.winner] + ' puntos!';
       }
-      if (ph.kind === 'roll') return 'Turno de ' + name + ': tirá los dados';
-      if (ph.kind === 'main') return 'Turno de ' + name + ': terminá tu turno cuando quieras';
-      return 'Partida terminada';
     }
     var statusEl = document.getElementById('status'), statusTimer = null;
-    function showStatus(text, isError) {
+    // Muestra un mensaje. Los errores y avisos "temporales" vuelven solos al texto de siempre.
+    function showStatus(text, isError, temporary) {
       clearTimeout(statusTimer);
       statusEl.innerHTML = '<i style="background:' + PLAYER_INFO[game.turn].css + '"></i><span></span>';
       statusEl.lastChild.textContent = text;
       statusEl.classList.toggle('error', !!isError);
-      if (isError) statusTimer = setTimeout(function () { showStatus(statusText(), false); }, 2500);
+      if (isError || temporary) statusTimer = setTimeout(function () { showStatus(statusText(), false); }, isError ? 2500 : 4000);
     }
+
+    // Diálogo: descartar cartas (con un 7) o elegir a quién robarle. La selección se reinicia cuando cambia quién tiene que actuar.
+    var dialogEl = document.getElementById('dialog'), buildEl = document.getElementById('build');
+    function resIcon(k) { return handEl.querySelector('[data-res="' + k + '"] svg').outerHTML; }
+    function renderDialog() {
+      var ph = game.phase, name = PLAYER_INFO[game.turn].name;
+      if (busy || (ph.kind !== 'discard' && ph.kind !== 'steal')) { dialogEl.hidden = true; dialogKey = ''; return; }
+      var key = ph.kind + ':' + game.turn + ':' + (ph.kind === 'discard' ? ph.queue.length : ph.victims.join(','));
+      if (key !== dialogKey) { dialogKey = key; discardSel = {}; }
+      var html = '';
+      if (ph.kind === 'discard') {
+        var need = ph.queue[0].count, got = HAND_KINDS.reduce(function (a, k) { return a + (discardSel[k] || 0); }, 0);
+        html = '<h3></h3><p>Elegidas ' + got + ' de ' + need + '</p><div class="rows">' + HAND_KINDS.filter(function (k) { return hands[game.turn][k] > 0; }).map(function (k) {
+          return '<div class="row"><span class="ico">' + resIcon(k) + '</span><span class="nm">' + TERRAINS[k].res + '</span>' +
+            '<button type="button" data-dec="' + k + '" aria-label="Menos ' + TERRAINS[k].res + '"' + ((discardSel[k] || 0) ? '' : ' disabled') + '>−</button>' +
+            '<b>' + (discardSel[k] || 0) + ' / ' + hands[game.turn][k] + '</b>' +
+            '<button type="button" data-inc="' + k + '" aria-label="Más ' + TERRAINS[k].res + '"' + ((discardSel[k] || 0) < hands[game.turn][k] && got < need ? '' : ' disabled') + '>+</button></div>';
+        }).join('') + '</div><button type="button" class="primary" data-confirm' + (got === need ? '' : ' disabled') + '>Descartar</button>';
+      } else {
+        html = '<h3></h3><div class="victims">' + ph.victims.map(function (v) {
+          var total = HAND_KINDS.reduce(function (a, k) { return a + hands[v][k]; }, 0);
+          return '<button type="button" class="victim" data-victim="' + v + '" style="--pc:' + PLAYER_INFO[v].css + '"><span class="av">' + avatarSVG(v) + '</span><span>' + PLAYER_INFO[v].name + '</span><small>' + total + ' cartas</small></button>';
+        }).join('') + '</div>';
+      }
+      dialogEl.innerHTML = html;
+      dialogEl.querySelector('h3').textContent = ph.kind === 'discard' ? name + ': descartá ' + ph.queue[0].count + ' cartas' : name + ': ¿a quién le robás?';
+      dialogEl.hidden = false;
+    }
+    dialogEl.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b || b.disabled || busy) return;
+      var ph = game.phase;
+      if (ph.kind === 'discard') {
+        if (b.hasAttribute('data-inc')) discardSel[b.getAttribute('data-inc')] = (discardSel[b.getAttribute('data-inc')] || 0) + 1;
+        else if (b.hasAttribute('data-dec')) discardSel[b.getAttribute('data-dec')] = (discardSel[b.getAttribute('data-dec')] || 0) - 1;
+        else if (b.hasAttribute('data-confirm')) { dispatch({ type: 'discard', player: game.turn, cards: discardSel }); return; }
+        renderDialog();
+      } else if (ph.kind === 'steal' && b.hasAttribute('data-victim')) dispatch({ type: 'steal', player: game.turn, victim: +b.getAttribute('data-victim') });
+    });
+
     // Envía un comando al motor: si lo acepta, actualiza el tablero; si no, muestra el error.
     function dispatch(cmd) {
       var r = applyCommand(game, cmd);
       if (!r.ok) { showStatus(r.error.message, true); return; }
+      var thief = game.turn;
       game = r.state;
+      buildMode = null;
       syncPieces();
       // el 2.º poblado de la colocación inicial cobra recursos: se animan desde las casillas que toca
       var built = r.events.filter(function (e) { return e.type === 'SettlementBuilt'; })[0];
       var got = r.events.filter(function (e) { return e.type === 'ResourcesDistributed'; })[0];
+      var stolen = r.events.filter(function (e) { return e.type === 'Stolen'; })[0];
       var dur = 0;
       if (got && built) {
         var jobs = [];
@@ -1100,6 +1201,13 @@ export function initBoard() {
       }
       if (dur > 0) { busy = true; refreshUi(); setTimeout(function () { busy = false; applyView(); }, dur); }
       else applyView();
+      if (stolen) showStatus(PLAYER_INFO[stolen.thief].name + ' le robó ' + TERRAINS[stolen.resource].res.toLowerCase() + ' a ' + PLAYER_INFO[stolen.victim].name, false, true);
+    }
+    function commandFromMarker(m) {
+      var p = game.turn, setup = game.phase.kind === 'setup';
+      if (m.type === 'tile') return { type: 'moveRobber', player: p, tile: m.id };
+      if (m.type === 'vertex') return { type: setup ? 'placeSettlement' : buildMode === 'city' ? 'buildCity' : 'buildSettlement', player: p, vertex: m.id };
+      return { type: setup ? 'placeRoad' : 'buildRoad', player: p, edge: m.id };
     }
     function pop(el, color) {
       el.animate([{ transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }, { transform: 'scale(1.2)', boxShadow: '0 0 18px 5px ' + color, offset: 0.35 }, { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }], { duration: 520, easing: 'ease-out' });
@@ -1148,6 +1256,11 @@ export function initBoard() {
     btnDice.addEventListener('click', rollDice);
     var btnEnd = document.getElementById('btnEnd');
     btnEnd.addEventListener('click', function () { if (!busy) dispatch({ type: 'endTurn', player: game.turn }); });
+    // los botones de construir activan (o desactivan) el modo: el tablero muestra dónde se puede
+    buildEl.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-build]'); if (!b || b.disabled || busy) return;
+      var kind = b.getAttribute('data-build'); buildMode = buildMode === kind ? null : kind; refreshUi();
+    });
     var lightBtns = Array.prototype.slice.call(document.querySelectorAll('[data-light]'));
     lightBtns.forEach(function (b) {
       b.addEventListener('click', function () {
@@ -1197,6 +1310,28 @@ export function initBoard() {
     }
     if (typeof ResizeObserver !== "undefined") { ro = new ResizeObserver(resize); ro.observe(stage); } else window.addEventListener('resize', resize);
     resize();
+
+    // Gancho de pruebas: solo existe si la URL lleva ?debug. Permite armar situaciones (dar cartas, cambiar de fase) y saber
+    // dónde está cada cosa en pantalla para probar con clics reales. No forma parte del juego.
+    if (/[?&]debug/.test(location.search)) {
+      window.__paisano = {
+        pick: function (x, y) { var r = renderer.domElement.getBoundingClientRect(); pointer.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1); raycaster.setFromCamera(pointer, camera); var h = raycaster.intersectObjects(markersGroup.children, false)[0]; return { hit: h ? h.object.userData : null, ray: [raycaster.ray.origin.toArray(), raycaster.ray.direction.toArray()], pointer: pointer.toArray(), cam: camera.position.toArray(), marker19: markersGroup.children.filter(function (c) { return c.userData.id === 19; }).map(function (c) { return c.matrixWorld.elements.slice(12, 15); }) }; },
+        game: function () { return game; },
+        busy: function () { return busy; },
+        legal: function () { return legalActions(game, game.turn); },
+        tileVertices: function (t) { return topology().tiles[t].vertices; },
+        mutate: function (fn) { game = JSON.parse(JSON.stringify(game)); fn(game); syncPieces(); applyView(); },
+        screen: function (type, id) {
+          var topo = topology(), p = new THREE.Vector3();
+          if (type === 'vertex') p.set(vertices[id].x, TILE_TOP + 0.05, vertices[id].z);
+          else if (type === 'edge') { var e = topo.edges[id]; p.set((vertices[e.a].x + vertices[e.b].x) / 2, TILE_TOP + 0.05, (vertices[e.a].z + vertices[e.b].z) / 2); }
+          else p.set(tiles[id].x, TILE_TOP + 0.06, tiles[id].z);
+          p.project(camera);
+          var r = renderer.domElement.getBoundingClientRect();
+          return { x: r.left + (p.x * 0.5 + 0.5) * r.width, y: r.top + (0.5 - p.y * 0.5) * r.height };
+        }
+      };
+    }
 
     // ------------------------------------------------------------------ bucle
     buildBoard((Date.now() & 0xffffff) | 1);
