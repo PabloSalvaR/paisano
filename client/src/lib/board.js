@@ -38,6 +38,9 @@ export const MARKUP = `
     </button>
   </section>
 
+  <!-- Botón único de turno: dados antes de tirar; flecha hacia el próximo jugador después. Lo arma board.js -->
+  <button type="button" class="panel turn-btn" id="btnTurn" hidden></button>
+
   <!-- Descartar (con un 7) o elegir a quién robarle: se arma desde board.js -->
   <section class="panel dialog" id="dialog" role="dialog" aria-live="polite" hidden></section>
 
@@ -50,6 +53,10 @@ export const MARKUP = `
   <!-- Recursos del jugador (por ahora solo maqueta con cifras fijas; después se conecta al estado de la partida) -->
   <aside class="panel seats" id="seats" aria-label="Jugadores"></aside>
   <section class="panel hand" aria-label="Recursos del jugador 1">
+    <!-- Comprar carta de desarrollo: aparece sobre el banner solo cuando alcanzan los recursos (1 vaca + 1 maíz + 1 piedra) -->
+    <button type="button" class="dev" id="btnDev" aria-label="Comprar carta de desarrollo" title="Carta de desarrollo: 1 vaca + 1 maíz + 1 piedra" hidden>
+      <svg viewBox="0 0 34 44" aria-hidden="true"><g transform="rotate(-6 17 22)"><rect x="3" y="2" width="28" height="40" rx="5" fill="#f6ecd4" stroke="#5b4630" stroke-width="2"/><rect x="7" y="6" width="20" height="32" rx="3" fill="none" stroke="#b4661a" stroke-width="1.6"/><polygon points="17,11 19.6,17.2 26,17.8 21.2,22 22.6,28.4 17,25.2 11.4,28.4 12.8,22 8,17.8 14.4,17.2" fill="#d94141" stroke="#7a1f1f" stroke-width="1.2" stroke-linejoin="round"/></g></svg>
+    </button>
     <div class="who" id="who"></div>
     <div class="res" style="--c:#3f8f45" title="Madera" data-res="forest">
       <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="21" y="28" width="6" height="14" fill="#7a4e2a"/><circle cx="14" cy="26" r="8" fill="#3f8f45"/><circle cx="34" cy="26" r="8" fill="#3f8f45"/><circle cx="24" cy="17" r="11" fill="#3f8f45"/></svg>
@@ -79,8 +86,6 @@ export const MARKUP = `
   <nav class="panel bar" id="bar" aria-label="Controles del tablero">
     <div class="group">
       <button type="button" id="btnNew" class="primary">Nuevo mapa</button>
-      <button type="button" id="btnDice" class="primary">Tirar dados</button>
-      <button type="button" id="btnEnd" class="primary">Terminar turno</button>
     </div>
     <div class="group" role="group" aria-label="Sonido">
       <div class="vol">
@@ -893,17 +898,28 @@ export function initBoard() {
       return { x: (confirmPos.x + 1) / 2 * stage.clientWidth, y: (1 - confirmPos.y) / 2 * stage.clientHeight };
     }
     function placeConfirm() {
-      var g = ghostGroup && ghostGroup.children[0]; if (!g || !pendingCmd || dialogEl.hidden || !dialogEl.classList.contains('confirm')) return;
-      var u = g.userData, top = screenPoint(g.position.x, u.baseY + GHOST_HOVER + 0.4, g.position.z), bot = screenPoint(g.position.x, u.baseY, g.position.z);
+      if (!pendingCmd || dialogEl.hidden || !dialogEl.classList.contains('confirm')) return;
+      var top, bot, sr = stage.getBoundingClientRect();
+      if (pendingCmd.type === 'buyDevCard') { // pegado al botón de la carta
+        var br = btnDev.getBoundingClientRect(), cx = br.left - sr.left + br.width / 2;
+        top = { x: cx, y: br.top - sr.top }; bot = { x: cx, y: br.bottom - sr.top };
+      } else {
+        var g = ghostGroup && ghostGroup.children[0]; if (!g) return;
+        var u = g.userData;
+        top = screenPoint(g.position.x, u.baseY + GHOST_HOVER + 0.4, g.position.z); bot = screenPoint(g.position.x, u.baseY, g.position.z);
+      }
       var W = stage.clientWidth, H = stage.clientHeight, w = dialogEl.offsetWidth, h = dialogEl.offsetHeight, gap = 14, edge = 8;
       var fitsAbove = top.y - gap - h >= edge, fitsBelow = bot.y + gap + h <= H - edge;
       var above = fitsAbove || (!fitsBelow && top.y > H - bot.y);
       var y = above ? top.y - gap - h : bot.y + gap, x = (above ? top.x : bot.x) - w / 2;
       x = Math.max(edge, Math.min(W - w - edge, x)); y = Math.max(edge, Math.min(H - h - edge, y));
-      var sr = stage.getBoundingClientRect(), op = dialogEl.offsetParent, or = op ? op.getBoundingClientRect() : { left: 0, top: 0 };
+      var op = dialogEl.offsetParent, or = op ? op.getBoundingClientRect() : { left: 0, top: 0 };
       dialogEl.style.left = (sr.left - or.left + x) + 'px'; dialogEl.style.top = (sr.top - or.top + y) + 'px'; dialogEl.style.transform = 'none';
     }
     function confirmDrop(cmd) {
+      if (cmd.type === 'buyDevCard') { // el motor todavía no tiene cartas de desarrollo: se conecta en la próxima parte de las reglas
+        showStatus('Las cartas de desarrollo todavía no están en el motor: llegan en la próxima parte.', true); renderDialog(); return;
+      }
       var g = ghostGroup && ghostGroup.children[0];
       if (!g || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) { dispatch(cmd); return; }
       var u = g.userData, a0 = (g.rotation.y - u.baseRot) % (2 * Math.PI), a1 = 2 * Math.PI * (a0 > 4 ? 2 : 1);
@@ -1032,7 +1048,7 @@ export function initBoard() {
       die.cube.style.transform = DIE_TILT + ' rotateX(' + die.cx + 'deg) rotateY(' + die.cy + 'deg)';
       die.el.classList.remove('hop'); void die.el.offsetWidth; if (animate) die.el.classList.add('hop');
     }
-    var diceBox = document.getElementById('dice'), diceTimer = null, diceBusy = false, btnDice = document.getElementById('btnDice');
+    var diceBox = document.getElementById('dice'), diceTimer = null, diceBusy = false;
     diceBox.innerHTML = '<div class="dice-row"></div><b></b>';
     var diceRow = diceBox.firstChild, diceSum = diceRow.nextSibling;
     var dieA = buildDie(), dieB = buildDie(); diceRow.appendChild(dieA.el); diceRow.appendChild(dieB.el);
@@ -1166,11 +1182,44 @@ export function initBoard() {
       robberPulse = 1;
     }
 
+    // Botón único de turno. Antes de tirar: dos dados. Después de tirar: flecha con el color (y la carita) de quien sigue.
+    var btnTurn = document.getElementById('btnTurn'), btnDev = document.getElementById('btnDev');
+    function dieSVG(x, y, rot, pips) {
+      return '<g transform="translate(' + x + ' ' + y + ') rotate(' + rot + ' 13 13)"><rect width="26" height="26" rx="6" fill="#d94141" stroke="#7a1f1f" stroke-width="2"/>' +
+        pips.map(function (i) { return '<circle cx="' + (6.5 + (i % 3) * 6.5) + '" cy="' + (6.5 + Math.floor(i / 3) * 6.5) + '" r="2.2" fill="#fff"/>'; }).join('') + '</g>';
+    }
+    var TURN_DICE = '<svg viewBox="0 0 64 48" aria-hidden="true">' + dieSVG(3, 14, -10, [0, 4, 8]) + dieSVG(35, 7, 9, [0, 2, 4, 6, 8]) + '</svg>';
+    var TURN_ARROW = '<svg viewBox="0 0 40 40" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h24M22 9.5 32.5 20 22 30.5"/></svg>';
+    function updateTurnButton() {
+      var ph = game.phase.kind, on = ph === 'roll' || ph === 'main';
+      btnTurn.hidden = !on;
+      if (!on) { btnTurn.removeAttribute('data-key'); return; }
+      btnTurn.disabled = busy;
+      var next = (game.turn + 1) % game.players.length, key = ph + ':' + next;
+      if (btnTurn.getAttribute('data-key') === key) return;
+      btnTurn.setAttribute('data-key', key); btnTurn.setAttribute('data-mode', ph);
+      var label;
+      if (ph === 'roll') {
+        btnTurn.innerHTML = TURN_DICE; label = 'Tirar dados';
+      } else {
+        var n = PLAYER_INFO[next];
+        btnTurn.style.setProperty('--pc', n.css); btnTurn.style.setProperty('--pt', n.text);
+        btnTurn.innerHTML = TURN_ARROW + '<span class="next">' + avatarSVG(next) + '</span>'; label = 'Pasar el turno a ' + n.name;
+      }
+      btnTurn.setAttribute('aria-label', label); btnTurn.title = label;
+      btnTurn.classList.remove('swap'); void btnTurn.offsetWidth; btnTurn.classList.add('swap'); // pequeña animación al cambiar de función
+    }
+    // La carta de desarrollo se ofrece solo en la fase main y si la mano alcanza para pagarla.
+    function updateDevButton() {
+      var cost = game.config.costs.developmentCard, hand = game.players[game.turn].hand;
+      var show = !busy && game.phase.kind === 'main' && Object.keys(cost).every(function (k) { return hand[k] >= cost[k]; });
+      btnDev.hidden = !show; stage.toggleAttribute('data-dev', show);
+      if (!show && pendingCmd && pendingCmd.type === 'buyDevCard') { pendingCmd = null; renderDialog(); }
+    }
     function updateControls() {
       var ph = game.phase.kind, acts = legalActions(game, game.turn), can = {};
       acts.forEach(function (a) { can[a.type] = true; });
-      btnDice.disabled = busy || ph !== 'roll';
-      btnEnd.disabled = busy || ph !== 'main';
+      updateTurnButton(); updateDevButton();
       buildEl.hidden = ph === 'setup' || ph === 'finished';
       if (!can[{ road: 'buildRoad', settlement: 'buildSettlement', city: 'buildCity' }[buildMode]]) buildMode = null; // ya no alcanza o no hay dónde
       Array.prototype.forEach.call(buildEl.querySelectorAll('[data-build]'), function (b) {
@@ -1213,8 +1262,9 @@ export function initBoard() {
     function renderDialog() {
       var ph = game.phase, name = PLAYER_INFO[game.turn].name;
       if (pendingCmd && (busy || pendingCmd.player !== game.turn)) pendingCmd = null;
+      stage.toggleAttribute('data-confirm', !!pendingCmd); // con una confirmación abierta, el texto de estado se oculta para no quedar debajo
       if (pendingCmd) {
-        dialogKey = ''; showGhost(pendingCmd);
+        dialogKey = ''; if (pendingCmd.type === 'buyDevCard') clearGhost(); else showGhost(pendingCmd);
         dialogEl.className = 'panel dialog confirm';
         dialogEl.innerHTML = '<div class="yesno"><button type="button" class="no" data-cancel aria-label="Cancelar" title="Cancelar">✕</button><button type="button" class="yes" data-ok aria-label="Confirmar" title="Confirmar">✓</button></div>';
         dialogEl.hidden = false; placeConfirm();
@@ -1342,9 +1392,15 @@ export function initBoard() {
     });
     var btnStats = document.getElementById('btnStats');
     btnStats.addEventListener('click', function () { statsEl.hidden = !statsEl.hidden; pressed(btnStats, !statsEl.hidden); });
-    btnDice.addEventListener('click', rollDice);
-    var btnEnd = document.getElementById('btnEnd');
-    btnEnd.addEventListener('click', function () { if (!busy) dispatch({ type: 'endTurn', player: game.turn }); });
+    btnTurn.addEventListener('click', function () {
+      if (busy || !game) return;
+      if (game.phase.kind === 'roll') rollDice();
+      else if (game.phase.kind === 'main') dispatch({ type: 'endTurn', player: game.turn });
+    });
+    btnDev.addEventListener('click', function () {
+      if (busy || !game) return;
+      if (pendingCmd && pendingCmd.type === 'buyDevCard') { pendingCmd = null; renderDialog(); } else askConfirm({ type: 'buyDevCard', player: game.turn });
+    });
     // los botones de construir activan (o desactivan) el modo: el tablero muestra dónde se puede
     buildEl.addEventListener('click', function (e) {
       var b = e.target.closest('[data-build]'); if (!b || b.disabled || busy) return;

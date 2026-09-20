@@ -115,7 +115,7 @@ body{
 .status.error{border-color:#d94141;box-shadow:var(--shadow),0 0 0 2px #d94141}
 
 /* Construir: abajo a la derecha (en pantallas angostas pasa al centro, sobre el banner). Costos como puntos de color. */
-.build{right:70px;bottom:14px;display:flex;gap:6px;padding:8px}
+.build{right:104px;bottom:14px;display:flex;gap:6px;padding:8px}
 .build button{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:70px;padding:6px 8px 7px;font:inherit;font-size:.78rem;font-weight:700;
   color:var(--text);background:var(--btn);border:1px solid var(--border);border-radius:9px;cursor:pointer;transition:background-color .15s,color .15s}
 .build button svg{width:24px;height:24px}
@@ -301,3 +301,46 @@ body{
 .dialog .yesno .no{background:#d94141}
 .dialog .yesno .yes:hover:not(:disabled){background:#38b45c}
 .dialog .yesno .no:hover:not(:disabled){background:#e85a5a}
+
+/* Botón único de turno (abajo a la derecha): dados antes de tirar; flecha del color de quien sigue después de tirar */
+.turn-btn{right:14px;bottom:14px;width:78px;height:78px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;background:#f6ecd4;border:3px solid var(--accent);color:#2b2216;transition:transform .15s,background-color .3s,opacity .15s}
+.turn-btn[hidden]{display:none}
+.turn-btn:hover:not(:disabled){transform:scale(1.07)}
+.turn-btn:active:not(:disabled){transform:scale(.95)}
+.turn-btn:disabled{opacity:.55;cursor:default}
+.turn-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.turn-btn svg{width:54px;height:54px;display:block}
+.turn-btn[data-mode="main"]{background:var(--pc);color:var(--pt);border-color:rgba(0,0,0,.35)}
+.turn-btn[data-mode="main"] svg{width:44px;height:44px}
+.turn-btn .next{position:absolute;top:-8px;left:-8px;width:32px;height:32px;border-radius:50%;overflow:hidden;box-shadow:0 0 0 2px #fff,0 2px 5px rgba(0,0,0,.4)}
+.turn-btn.swap{animation:turnSwap .35s ease-out}
+.turn-btn[data-mode="roll"]:not(:disabled) svg{animation:diceWiggle 2.6s ease-in-out infinite}
+@keyframes turnSwap{0%{transform:scale(.6) rotate(-25deg);opacity:.2}70%{transform:scale(1.1)}100%{transform:none;opacity:1}}
+@keyframes diceWiggle{0%,78%,100%{transform:rotate(0)}84%{transform:rotate(-9deg)}92%{transform:rotate(9deg)}}
+
+/* Carta de desarrollo: sale sobre el banner de recursos cuando alcanza para comprarla; el estado sube para no chocar */
+.hand .dev{position:absolute;bottom:calc(100% + 8px);right:10px;display:flex;align-items:center;justify-content:center;width:56px;height:66px;padding:0;
+  background:var(--panel);border:2px solid var(--accent);border-radius:12px;box-shadow:var(--shadow);cursor:pointer;
+  transition:transform .15s;animation:devPop .4s cubic-bezier(.3,1.4,.5,1)}
+.hand .dev[hidden]{display:none}
+.hand .dev svg{width:36px;height:46px;display:block}
+.hand .dev:hover{transform:translateY(-3px)}
+.hand .dev:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@keyframes devPop{0%{transform:translateY(16px) scale(.5);opacity:0}100%{transform:none;opacity:1}}
+#stage[data-dev] .status{bottom:196px}
+@media (min-width:641px) and (max-width:1000px){ #stage[data-dev] .status{bottom:262px} }
+@media (max-width:640px){
+  .turn-btn{right:10px;bottom:96px;width:58px;height:58px;border-width:2px}
+  .turn-btn svg{width:40px;height:40px}
+  .turn-btn[data-mode="main"] svg{width:32px;height:32px}
+  .turn-btn .next{width:24px;height:24px;top:-6px;left:-6px}
+  .hand .dev{right:auto;left:10px;width:48px;height:58px}
+  .hand .dev svg{width:30px;height:38px}
+  #stage[data-dev] .status{bottom:226px}
+  #stage[data-dev] .build{bottom:166px}
+}
+@media (prefers-reduced-motion: reduce){
+  .turn-btn.swap,.turn-btn[data-mode="roll"] svg,.hand .dev{animation:none}
+}
+#stage[data-confirm] .status{opacity:0}
