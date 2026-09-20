@@ -1330,7 +1330,8 @@ export function initBoard() {
         chips('give', tradeUI.give, function (k) { return !!byGive[k]; }, function (k) { return byGive[k] ? byGive[k].rate + ':1' : '&nbsp;'; }) +
         '<p>Recibo</p>' +
         chips('get', tradeUI.get, function (k) { return !!give && give.get.indexOf(k) >= 0; }, function () { return '1'; }) +
-        '<div class="sum">' + (give && tradeUI.get ? give.rate + ' × ' + TERRAINS[tradeUI.give].res + ' → 1 × ' + TERRAINS[tradeUI.get].res : 'Elegí qué dar y qué recibir') + '</div>';
+        '<div class="sum">' + (give && tradeUI.get ? give.rate + ' × ' + TERRAINS[tradeUI.give].res + ' → 1 × ' + TERRAINS[tradeUI.get].res : 'Elegí qué dar y qué recibir') + '</div>' +
+        (give && tradeUI.get ? '<div class="yesno"><button type="button" class="no" data-cancel aria-label="Cancelar" title="Cancelar">✕</button><button type="button" class="yes" data-ok aria-label="Confirmar" title="Confirmar">✓</button></div>' : '');
       dialogEl.hidden = false;
     }
     dialogEl.addEventListener('click', function (e) {
@@ -1343,6 +1344,8 @@ export function initBoard() {
       if (tradeUI) {
         if (b.hasAttribute('data-give')) tradeUI.give = b.getAttribute('data-give');
         else if (b.hasAttribute('data-get')) tradeUI.get = b.getAttribute('data-get');
+        else if (b.hasAttribute('data-cancel')) { tradeUI = null; refreshUi(); return; }
+        else if (b.hasAttribute('data-ok')) { dispatch({ type: 'bankTrade', player: game.turn, give: tradeUI.give, get: tradeUI.get }); return; }
         renderDialog();
         return;
       }
@@ -1368,6 +1371,7 @@ export function initBoard() {
       pendingCmd = null;
       var r = applyCommand(game, cmd);
       if (!r.ok) { showStatus(r.error.message, true); renderDialog(); return; }
+      tradeUI = null;
       var thief = game.turn;
       var landed = { placeRoad: 'road', buildRoad: 'road', placeSettlement: 'settlement', buildSettlement: 'settlement', buildCity: 'city' }[cmd.type];
       if (landed) audio.land(landed); // la pieza toca el tablero
