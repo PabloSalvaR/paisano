@@ -933,7 +933,8 @@ export function initBoard() {
       raycaster.setFromCamera(pointer, camera);
       var hit = raycaster.intersectObjects(markersGroup.children, false)[0];
       if (!hit) return;
-      dispatch(commandFromMarker(hit.object.userData));
+      var cmd = commandFromMarker(hit.object.userData);
+      if (cmd.type === 'moveRobber') dispatch(cmd); else askConfirm(cmd);
     });
 
     // ------------------------------------------------------------------ dados (modal con dados 3D de CSS)
@@ -1145,6 +1146,16 @@ export function initBoard() {
     function resIcon(k) { return handEl.querySelector('[data-res="' + k + '"] svg').outerHTML; }
     function renderDialog() {
       var ph = game.phase, name = PLAYER_INFO[game.turn].name;
+      if (pendingCmd && (busy || pendingCmd.player !== game.turn)) pendingCmd = null;
+      if (pendingCmd) {
+        dialogKey = '';
+        dialogEl.className = 'panel dialog confirm';
+        dialogEl.innerHTML = '<h3></h3><div class="yesno"><button type="button" class="no" data-cancel aria-label="Cancelar">✕</button><button type="button" class="yes" data-ok aria-label="Confirmar">✓</button></div>';
+        dialogEl.querySelector('h3').textContent = '¿Poner ' + CONFIRM_LABEL[pendingCmd.type] + ' acá?';
+        dialogEl.hidden = false;
+        return;
+      }
+      dialogEl.className = 'panel dialog';
       if (busy || (ph.kind !== 'discard' && ph.kind !== 'steal')) { dialogEl.hidden = true; dialogKey = ''; return; }
       var key = ph.kind + ':' + game.turn + ':' + (ph.kind === 'discard' ? ph.queue.length : ph.victims.join(','));
       if (key !== dialogKey) { dialogKey = key; discardSel = {}; }
@@ -1169,6 +1180,11 @@ export function initBoard() {
     }
     dialogEl.addEventListener('click', function (e) {
       var b = e.target.closest('button'); if (!b || b.disabled || busy) return;
+      if (pendingCmd) {
+        var cmd = pendingCmd; pendingCmd = null;
+        if (b.hasAttribute('data-ok')) dispatch(cmd); else renderDialog();
+        return;
+      }
       var ph = game.phase;
       if (ph.kind === 'discard') {
         if (b.hasAttribute('data-inc')) discardSel[b.getAttribute('data-inc')] = (discardSel[b.getAttribute('data-inc')] || 0) + 1;
@@ -1179,9 +1195,14 @@ export function initBoard() {
     });
 
     // Envía un comando al motor: si lo acepta, actualiza el tablero; si no, muestra el error.
+    // Jugada de construcción a la espera del ✓ / ✕ del jugador.
+    var pendingCmd = null, CONFIRM_LABEL = { placeSettlement: 'un poblado', buildSettlement: 'un poblado', buildCity: 'una ciudad', placeRoad: 'un camino', buildRoad: 'un camino' };
+    function askConfirm(cmd) { pendingCmd = cmd; renderDialog(); }
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && pendingCmd) { pendingCmd = null; renderDialog(); } });
     function dispatch(cmd) {
+      pendingCmd = null;
       var r = applyCommand(game, cmd);
-      if (!r.ok) { showStatus(r.error.message, true); return; }
+      if (!r.ok) { showStatus(r.error.message, true); renderDialog(); return; }
       var thief = game.turn;
       game = r.state;
       buildMode = null;

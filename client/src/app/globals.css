@@ -292,3 +292,10 @@ body{
   .bar button{transition:none}
   .die.hop{animation:none}
 }
+
+/* Confirmación de una jugada de construcción: dos botones grandes, ✕ y ✓ */
+.dialog.confirm{width:min(260px,calc(100% - 28px))}
+.dialog .yesno{display:flex;gap:12px;margin-top:8px}
+.dialog .yesno button{flex:1;min-height:52px;font-size:1.7rem;line-height:1;border-width:2px}
+.dialog .yesno .yes{color:#1f7a3a;border-color:#1f7a3a}
+.dialog .yesno .no{color:#b3261e;border-color:#b3261e}
