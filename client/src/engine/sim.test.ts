@@ -1,4 +1,4 @@
-// Simulación masiva: bots aleatorios juegan partidas enteras (colocación, dados, construcción, ladrón) y en cada paso
+// Simulación masiva: bots aleatorios juegan partidas enteras (colocación, dados, construcción, ladrón, comercio con el banco) y en cada paso
 // se comprueban las invariantes del juego. Es la mejor forma de encontrar bugs de reglas que un test puntual no ve.
 
 import { describe, expect, it } from 'vitest';
@@ -35,7 +35,7 @@ function checkBoard(s: GameState): void {
 
 describe('simulación: bots aleatorios', () => {
   it('120 partidas completas: nunca se traban, los recursos se conservan y las reglas se cumplen', () => {
-    const seen = { discards: 0, steals: 0, cities: 0, settlementsBuilt: 0, roadsBuilt: 0, wins: 0, sevens: 0 };
+    const seen = { discards: 0, steals: 0, cities: 0, settlementsBuilt: 0, roadsBuilt: 0, wins: 0, sevens: 0, trades: 0 };
     for (let seed = 1; seed <= 120; seed++) {
       const rng = mulberry32(seed * 7);
       // en la mitad de las partidas se juega a menos puntos para que también se vea el final
@@ -58,6 +58,7 @@ describe('simulación: bots aleatorios', () => {
           if (ev.type === 'SettlementBuilt' && a.type === 'buildSettlement') seen.settlementsBuilt++;
           if (ev.type === 'RoadBuilt' && a.type === 'buildRoad') seen.roadsBuilt++;
           if (ev.type === 'GameWon') seen.wins++;
+          if (ev.type === 'BankTraded') seen.trades++;
           if (ev.type === 'DiceRolled' && ev.total === 7) seen.sevens++;
         }
         s = r.state;
@@ -74,5 +75,6 @@ describe('simulación: bots aleatorios', () => {
     expect(seen.settlementsBuilt).toBeGreaterThan(20);
     expect(seen.cities).toBeGreaterThan(20);
     expect(seen.wins).toBeGreaterThan(5);
+    expect(seen.trades).toBeGreaterThan(20);
   }, 240000);
 });

@@ -7,4 +7,5 @@ export * from './helpers';
 export * from './map';
 export * from './rng';
 export * from './robber';
+export * from './trade';
 export * from './types';

@@ -98,6 +98,10 @@ export function commandFor(a: LegalAction, player: PlayerId, rng: () => number, 
       }
       return { type: 'discard', player, cards };
     }
+    case 'bankTrade': {
+      const t = pick(a.trades);
+      return { type: 'bankTrade', player, give: t.give, get: pick(t.get) };
+    }
     case 'rollDice':
     case 'endTurn':
       return { type: a.type, player };

@@ -13,6 +13,7 @@ export interface GameConfig {
   discardLimit: number; // con un 7, quien tiene MÁS de estas cartas descarta la mitad
   costs: { road: Cost; settlement: Cost; city: Cost; developmentCard: Cost };
   maxPieces: { roads: number; settlements: number; cities: number };
+  trade: { bank: number; genericPort: number; specificPort: number }; // cartas iguales que se entregan por 1 del banco
 }
 
 export interface PlayerState {
@@ -63,6 +64,7 @@ export type Command =
   | { type: 'discard'; player: PlayerId; cards: Partial<Hand> }
   | { type: 'moveRobber'; player: PlayerId; tile: number }
   | { type: 'steal'; player: PlayerId; victim: PlayerId }
+  | { type: 'bankTrade'; player: PlayerId; give: Resource; get: Resource } // entrega `tasa` cartas de `give` y recibe 1 de `get`
   | { type: 'endTurn'; player: PlayerId };
 
 // ---------------------------------------------------------------- eventos (lo que el servidor confirma)
@@ -85,6 +87,7 @@ export type GameEvent =
   | { type: 'RobberMoved'; player: PlayerId; tile: number }
   | { type: 'Stolen'; thief: PlayerId; victim: PlayerId; resource: Resource } // el recurso solo lo ven los dos implicados
   | { type: 'TurnChanged'; player: PlayerId; phase: 'setup' | 'roll' }
+  | { type: 'BankTraded'; player: PlayerId; give: Resource; giveCount: number; get: Resource }
   | { type: 'GameWon'; player: PlayerId; points: number };
 
 // ---------------------------------------------------------------- resultados
@@ -105,6 +108,8 @@ export type ErrorCode =
   | 'not-connected'
   | 'insufficient-resources'
   | 'no-pieces-left'
+  | 'bank-empty'
+  | 'invalid-trade'
   | 'same-tile';
 
 export interface GameError {
@@ -127,4 +132,5 @@ export type LegalAction =
   | { type: 'discard'; count: number }
   | { type: 'moveRobber'; tiles: number[] }
   | { type: 'steal'; victims: PlayerId[] }
+  | { type: 'bankTrade'; trades: { give: Resource; rate: number; get: Resource[] }[] } // qué se puede entregar (con su tasa) y qué pedir
   | { type: 'endTurn' };

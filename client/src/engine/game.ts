@@ -8,6 +8,7 @@ import { rollDiceFor } from './dice';
 import { bad, canSettleAt, emptyHand, give, type Err } from './helpers';
 import { generateMap, RESOURCES, type Resource } from './map';
 import { mulberry32 } from './rng';
+import { bankTrade, bankTradeOptions } from './trade';
 import { discard, moveRobber, startSeven, steal } from './robber';
 import type {
   Command,
@@ -74,6 +75,8 @@ export function legalActions(state: GameState, player: PlayerId): LegalAction[] 
       if (roads.length) actions.push({ type: 'buildRoad', edges: roads });
       if (settlements.length) actions.push({ type: 'buildSettlement', vertices: settlements });
       if (cities.length) actions.push({ type: 'buildCity', vertices: cities });
+      const trades = bankTradeOptions(state, player);
+      if (trades.length) actions.push({ type: 'bankTrade', trades });
       actions.push({ type: 'endTurn' });
       return actions;
     }
@@ -127,6 +130,8 @@ function run(s: GameState, cmd: Command, events: GameEvent[]): Err {
       return moveRobber(s, cmd.player, cmd.tile, events);
     case 'steal':
       return steal(s, cmd.player, cmd.victim, events);
+    case 'bankTrade':
+      return bankTrade(s, cmd.player, cmd.give, cmd.get, events);
     case 'endTurn':
       return endTurn(s, cmd.player, events);
   }
