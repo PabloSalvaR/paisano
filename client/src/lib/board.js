@@ -885,6 +885,24 @@ export function initBoard() {
       g.position.y = u.baseY + u.drop.h * (1 - k * k);
       g.rotation.y = u.baseRot + u.drop.a0 + (u.drop.a1 - u.drop.a0) * (1 - (1 - k) * (1 - k));
     }
+    // Modal de confirmación pegado a la pieza: arriba de ella si entra en pantalla, si no abajo (y si ninguno entra, del lado con más lugar).
+    // Se recalcula en cada cuadro porque la cámara orbita.
+    var confirmPos = new THREE.Vector3();
+    function screenPoint(x, y, z) {
+      confirmPos.set(x, y, z); board.localToWorld(confirmPos); confirmPos.project(camera);
+      return { x: (confirmPos.x + 1) / 2 * stage.clientWidth, y: (1 - confirmPos.y) / 2 * stage.clientHeight };
+    }
+    function placeConfirm() {
+      var g = ghostGroup && ghostGroup.children[0]; if (!g || !pendingCmd || dialogEl.hidden || !dialogEl.classList.contains('confirm')) return;
+      var u = g.userData, top = screenPoint(g.position.x, u.baseY + GHOST_HOVER + 0.4, g.position.z), bot = screenPoint(g.position.x, u.baseY, g.position.z);
+      var W = stage.clientWidth, H = stage.clientHeight, w = dialogEl.offsetWidth, h = dialogEl.offsetHeight, gap = 14, edge = 8;
+      var fitsAbove = top.y - gap - h >= edge, fitsBelow = bot.y + gap + h <= H - edge;
+      var above = fitsAbove || (!fitsBelow && top.y > H - bot.y);
+      var y = above ? top.y - gap - h : bot.y + gap, x = (above ? top.x : bot.x) - w / 2;
+      x = Math.max(edge, Math.min(W - w - edge, x)); y = Math.max(edge, Math.min(H - h - edge, y));
+      var sr = stage.getBoundingClientRect(), op = dialogEl.offsetParent, or = op ? op.getBoundingClientRect() : { left: 0, top: 0 };
+      dialogEl.style.left = (sr.left - or.left + x) + 'px'; dialogEl.style.top = (sr.top - or.top + y) + 'px'; dialogEl.style.transform = 'none';
+    }
     function confirmDrop(cmd) {
       var g = ghostGroup && ghostGroup.children[0];
       if (!g || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) { dispatch(cmd); return; }
@@ -1199,11 +1217,11 @@ export function initBoard() {
         dialogKey = ''; showGhost(pendingCmd);
         dialogEl.className = 'panel dialog confirm';
         dialogEl.innerHTML = '<div class="yesno"><button type="button" class="no" data-cancel aria-label="Cancelar" title="Cancelar">✕</button><button type="button" class="yes" data-ok aria-label="Confirmar" title="Confirmar">✓</button></div>';
-        dialogEl.hidden = false;
+        dialogEl.hidden = false; placeConfirm();
         return;
       }
       clearGhost();
-      dialogEl.className = 'panel dialog';
+      dialogEl.className = 'panel dialog'; dialogEl.style.left = dialogEl.style.top = dialogEl.style.transform = '';
       if (busy || (ph.kind !== 'discard' && ph.kind !== 'steal')) { dialogEl.hidden = true; dialogKey = ''; return; }
       var key = ph.kind + ':' + game.turn + ':' + (ph.kind === 'discard' ? ph.queue.length : ph.victims.join(','));
       if (key !== dialogKey) { dialogKey = key; discardSel = {}; }
@@ -1436,7 +1454,7 @@ export function initBoard() {
       if (markerMat) markerMat.opacity = 0.5 + 0.2 * Math.sin(time * 4);
       // piezas nuevas: brotan con un pequeño rebote
       var nowS = performance.now() / 1000;
-      animateGhost(nowS);
+      animateGhost(nowS); placeConfirm();
       for (var pc = 0; pc < piecesGroup.children.length; pc++) {
         var pm = piecesGroup.children[pc], born = pm.userData.born;
         if (born === undefined) continue;
