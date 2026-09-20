@@ -358,3 +358,4 @@ body{
 .dialog .pick button[aria-pressed="true"] small{color:inherit}
 .dialog.trade p{margin-bottom:6px;text-align:left;font-weight:700}
 .dialog .sum{min-height:1.4em;font-weight:700;font-size:.92rem;margin-bottom:2px}
+.dialog.trade .yesno{justify-content:center;margin-top:8px}
