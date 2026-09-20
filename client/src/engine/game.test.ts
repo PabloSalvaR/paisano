@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { applyCommand, canSettleAt, createGame, legalActions, setupPlayer, topology } from './game';
+import { topology } from './board';
+import { applyCommand, createGame, legalActions, setupPlayer } from './game';
+import { canSettleAt } from './helpers';
 import { rollDiceFor } from './dice';
 import { RESOURCES, type Resource } from './map';
 import { mulberry32 } from './rng';
+import { commandFor } from './testutil';
 import type { Command, GameEvent, GameState, PlayerId, Result } from './types';
 
 const NAMES = ['Tomás', 'Lucía', 'Mateo', 'Sofía'];
@@ -243,6 +246,10 @@ describe('dados y producción', () => {
     for (let i = 0; i < 8; i++) {
       seenTurns.push(s.turn);
       s = must(s, { type: 'rollDice', player: s.turn }).state;
+      // si salió un 7, se resuelve el ladrón (descarte, mover y robar) con las primeras opciones legales
+      const rng = mulberry32(i + 1);
+      while (s.phase.kind !== 'main') s = must(s, commandFor(legalActions(s, s.turn)[0], s.turn, rng, s)).state;
+      expect(s.turn).toBe(seenTurns[i]); // el ladrón lo mueve quien tiró
       s = must(s, { type: 'endTurn', player: s.turn }).state;
       expect(s.phase).toEqual({ kind: 'roll' });
     }
@@ -290,12 +297,12 @@ describe('dados y producción', () => {
     expect(totalResources(r.state, s.map.terrains[tile.id] as (typeof RESOURCES)[number])).toBe(before);
   });
 
-  it('con un 7 nadie cobra (por ahora) y el turno sigue en "main"', () => {
+  it('con un 7 nadie cobra y el turno pasa al ladrón (sin descarte si nadie tiene más de 7 cartas)', () => {
     const s = rigged(7);
     const handsBefore = JSON.stringify(s.players);
     const r = must(s, { type: 'rollDice', player: 0 });
     expect(JSON.stringify(r.state.players)).toBe(handsBefore);
-    expect(r.state.phase).toEqual({ kind: 'main' });
+    expect(r.state.phase).toEqual({ kind: 'moveRobber' });
     expect(r.events.some((e) => e.type === 'ResourcesDistributed')).toBe(false);
   });
 
@@ -325,46 +332,4 @@ describe('dados y producción', () => {
     expect(r2.state.players[1].hand[two.res]).toBe(0);
     expect(r2.state.bank[two.res]).toBe(1);
   });
-});
-
-describe('simulación: bots aleatorios', () => {
-  it('300 partidas de punta a punta a la colocación y 40 turnos: sin errores, recursos conservados y reglas respetadas', () => {
-    for (let seed = 1; seed <= 300; seed++) {
-      const rng = mulberry32(seed);
-      let s = createGame(NAMES.slice(0, 3 + (seed % 2)), seed * 31);
-      const n = s.players.length;
-      let steps = 0;
-      while (steps++ < 2 * n * 2 + 40 * 3) {
-        const p = s.turn;
-        const actions = legalActions(s, p);
-        expect(actions.length).toBeGreaterThan(0); // nunca se queda trabada
-        const a = actions[Math.floor(rng() * actions.length)];
-        let cmd: Command;
-        if (a.type === 'placeSettlement') cmd = { type: a.type, player: p, vertex: a.vertices[Math.floor(rng() * a.vertices.length)] };
-        else if (a.type === 'placeRoad') cmd = { type: a.type, player: p, edge: a.edges[Math.floor(rng() * a.edges.length)] };
-        else cmd = { type: a.type, player: p };
-        const r = applyCommand(s, cmd);
-        expect(r.ok).toBe(true);
-        if (!r.ok) return;
-        s = r.state;
-
-        for (const res of RESOURCES) {
-          expect(totalResources(s, res)).toBe(19);
-          expect(s.bank[res]).toBeGreaterThanOrEqual(0);
-          for (const pl of s.players) expect(pl.hand[res]).toBeGreaterThanOrEqual(0);
-        }
-      }
-      // reglas de tablero al final: distancia entre poblados, y 2 poblados + 2 caminos por jugador
-      const topo = topology();
-      for (const v of topo.vertices) {
-        if (!s.vertexBuildings[v.id]) continue;
-        for (const nb of v.neighbors) expect(s.vertexBuildings[nb]).toBeNull();
-      }
-      for (let p = 0; p < n; p++) {
-        expect(s.vertexBuildings.filter((b) => b?.player === p)).toHaveLength(2);
-        expect(s.edgeRoads.filter((e) => e === p)).toHaveLength(2);
-      }
-      expect(['roll', 'main']).toContain(s.phase.kind);
-    }
-  }, 60000);
 });

@@ -127,3 +127,9 @@ export function buildTopology(radius = 2): Topology {
     },
   };
 }
+
+let cachedTopology: Topology | undefined;
+/** Topología del tablero base (no se guarda en el estado de la partida: se deduce y es idéntica siempre). */
+export function topology(): Topology {
+  return (cachedTopology ??= buildTopology());
+}

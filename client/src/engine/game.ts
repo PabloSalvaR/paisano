@@ -1,11 +1,14 @@
 // Reglas de la partida: creación, comandos (applyCommand) y acciones legales (legalActions).
-// Por ahora: colocación inicial, tirada de dados con producción y fin de turno. Construir, ladrón y comercio vienen después.
+// La construcción vive en build.ts y el ladrón en robber.ts; acá está el flujo de fases (colocación inicial, dados, turnos).
 
-import { buildTopology, type Topology } from './board';
+import { topology } from './board';
+import { buildCity, buildRoad, buildSettlement, cityOptions, roadOptions, settlementOptions } from './build';
 import { defaultConfig } from './config';
 import { rollDiceFor } from './dice';
+import { bad, canSettleAt, emptyHand, give, type Err } from './helpers';
 import { generateMap, RESOURCES, type Resource } from './map';
 import { mulberry32 } from './rng';
+import { discard, moveRobber, startSeven, steal } from './robber';
 import type {
   Command,
   ErrorCode,
@@ -13,23 +16,14 @@ import type {
   GameEvent,
   GameState,
   Gain,
-  Hand,
   LegalAction,
   PlayerId,
   Result,
 } from './types';
 
-let cachedTopology: Topology | undefined;
-/** Topología del tablero base (no se guarda en el estado: se deduce y es idéntica siempre). */
-export function topology(): Topology {
-  return (cachedTopology ??= buildTopology());
-}
-
-const emptyHand = (): Hand => ({ forest: 0, hills: 0, pasture: 0, fields: 0, mountains: 0 });
-
 // ---------------------------------------------------------------- creación
 
-/** Crea una partida nueva. `names` en orden de mesa (el primero arranca). La semilla decide mapa y dados. */
+/** Crea una partida nueva. `names` en orden de mesa (el primero arranca). La semilla decide mapa, dados y robos. */
 export function createGame(names: string[], seed: number, config?: Partial<GameConfig>): GameState {
   if (names.length < 3 || names.length > 4) throw new Error('createGame: la partida es de 3 o 4 jugadores');
   const cfg: GameConfig = { ...defaultConfig(names.length), ...config, players: names.length };
@@ -47,7 +41,8 @@ export function createGame(names: string[], seed: number, config?: Partial<GameC
     robber: map.desert,
     phase: { kind: 'setup', step: 0, part: 'settlement', lastSettlement: null },
     turn: 0,
-    dice: { seed: (seed ^ 0x5bd1e995) | 0, rolls: 0 }, // flujo de dados separado del del mapa
+    dice: { seed: (seed ^ 0x5bd1e995) | 0, rolls: 0 }, // flujos de azar separados del del mapa
+    random: { seed: (seed ^ 0x2545f491) | 0, count: 0 },
   };
 }
 
@@ -56,37 +51,38 @@ export function setupPlayer(step: number, players: number): PlayerId {
   return step < players ? step : 2 * players - 1 - step;
 }
 
-// ---------------------------------------------------------------- consultas de tablero
-
-/** Un poblado necesita el vértice libre y a 2 aristas o más de cualquier otro poblado o ciudad (regla de distancia). */
-export function canSettleAt(state: GameState, vertex: number): boolean {
-  const v = topology().vertices[vertex];
-  return !!v && state.vertexBuildings[vertex] === null && v.neighbors.every((n) => state.vertexBuildings[n] === null);
-}
-
-function setupSettlementOptions(state: GameState): number[] {
-  return topology()
-    .vertices.map((v) => v.id)
-    .filter((id) => canSettleAt(state, id));
-}
-
-function setupRoadOptions(state: GameState, from: number): number[] {
-  return topology().vertices[from].edges.filter((e) => state.edgeRoads[e] === null);
-}
-
 // ---------------------------------------------------------------- acciones legales
 
 export function legalActions(state: GameState, player: PlayerId): LegalAction[] {
   const phase = state.phase;
   if (phase.kind === 'finished' || player !== state.turn) return [];
   switch (phase.kind) {
-    case 'setup':
-      if (phase.part === 'settlement') return [{ type: 'placeSettlement', vertices: setupSettlementOptions(state) }];
-      return [{ type: 'placeRoad', edges: setupRoadOptions(state, phase.lastSettlement!) }];
+    case 'setup': {
+      const topo = topology();
+      if (phase.part === 'settlement') {
+        return [{ type: 'placeSettlement', vertices: topo.vertices.map((v) => v.id).filter((id) => canSettleAt(state, id)) }];
+      }
+      return [{ type: 'placeRoad', edges: topo.vertices[phase.lastSettlement!].edges.filter((e) => state.edgeRoads[e] === null) }];
+    }
     case 'roll':
       return [{ type: 'rollDice' }];
-    case 'main':
-      return [{ type: 'endTurn' }];
+    case 'main': {
+      const actions: LegalAction[] = [];
+      const roads = roadOptions(state, player);
+      const settlements = settlementOptions(state, player);
+      const cities = cityOptions(state, player);
+      if (roads.length) actions.push({ type: 'buildRoad', edges: roads });
+      if (settlements.length) actions.push({ type: 'buildSettlement', vertices: settlements });
+      if (cities.length) actions.push({ type: 'buildCity', vertices: cities });
+      actions.push({ type: 'endTurn' });
+      return actions;
+    }
+    case 'discard':
+      return [{ type: 'discard', count: phase.queue[0].count }];
+    case 'moveRobber':
+      return [{ type: 'moveRobber', tiles: state.map.terrains.map((_, id) => id).filter((id) => id !== state.robber) }];
+    case 'steal':
+      return [{ type: 'steal', victims: phase.victims }];
   }
 }
 
@@ -111,9 +107,6 @@ export function applyCommand(state: GameState, cmd: Command): Result {
   return err ? { ok: false, error: err } : { ok: true, state: next, events };
 }
 
-type Err = { code: ErrorCode; message: string } | null;
-const bad = (code: ErrorCode, message: string): Err => ({ code, message });
-
 function run(s: GameState, cmd: Command, events: GameEvent[]): Err {
   switch (cmd.type) {
     case 'placeSettlement':
@@ -122,6 +115,18 @@ function run(s: GameState, cmd: Command, events: GameEvent[]): Err {
       return placeRoad(s, cmd.player, cmd.edge, events);
     case 'rollDice':
       return rollDice(s, cmd.player, events);
+    case 'buildRoad':
+      return buildRoad(s, cmd.player, cmd.edge, events);
+    case 'buildSettlement':
+      return buildSettlement(s, cmd.player, cmd.vertex, events);
+    case 'buildCity':
+      return buildCity(s, cmd.player, cmd.vertex, events);
+    case 'discard':
+      return discard(s, cmd.player, cmd.cards, events);
+    case 'moveRobber':
+      return moveRobber(s, cmd.player, cmd.tile, events);
+    case 'steal':
+      return steal(s, cmd.player, cmd.victim, events);
     case 'endTurn':
       return endTurn(s, cmd.player, events);
   }
@@ -187,12 +192,13 @@ function rollDice(s: GameState, player: PlayerId, events: GameEvent[]): Err {
   s.dice.rolls++;
   const total = dice[0] + dice[1];
   events.push({ type: 'DiceRolled', player, dice, total });
-  // TODO (ladrón): con un 7 habrá descarte de manos grandes, mover al ladrón y robar. Por ahora no produce nada.
-  if (total !== 7) {
+  if (total === 7) {
+    startSeven(s, player, events); // nadie cobra: descarte, ladrón y robo
+  } else {
     const gains = produce(s, total);
     if (gains.length) events.push({ type: 'ResourcesDistributed', gains });
+    s.phase = { kind: 'main' };
   }
-  s.phase = { kind: 'main' };
   return null;
 }
 
@@ -204,16 +210,7 @@ function endTurn(s: GameState, player: PlayerId, events: GameEvent[]): Err {
   return null;
 }
 
-// ---------------------------------------------------------------- producción y banco
-
-/** Pasa cartas del banco a un jugador. Devuelve lo que realmente se entregó (nunca más de lo que hay en el banco). */
-function give(s: GameState, player: PlayerId, resource: Resource, amount: number): Gain[] {
-  const n = Math.min(amount, s.bank[resource]);
-  if (n <= 0) return [];
-  s.bank[resource] -= n;
-  s.players[player].hand[resource] += n;
-  return [{ player, resource, amount: n }];
-}
+// ---------------------------------------------------------------- producción
 
 /**
  * Producción de una tirada (distinta de 7): cada casilla con esa ficha, salvo la del ladrón, da 1 carta por poblado
@@ -246,3 +243,4 @@ function produce(s: GameState, total: number): Gain[] {
   }
   return gains;
 }
+

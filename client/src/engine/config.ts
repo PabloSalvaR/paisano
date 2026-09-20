@@ -7,6 +7,7 @@ export function defaultConfig(players: number): GameConfig {
     players,
     victoryPoints: 10,
     bankPerResource: 19,
+    discardLimit: 7,
     costs: {
       road: { forest: 1, hills: 1 },
       settlement: { forest: 1, hills: 1, pasture: 1, fields: 1 },
