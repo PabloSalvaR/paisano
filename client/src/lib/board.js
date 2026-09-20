@@ -4,6 +4,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createAudio } from './audio.js';
+// Motor de reglas (TypeScript puro): decide todo. Este archivo solo dibuja el estado y envía comandos.
+import { createGame, applyCommand, legalActions, topology } from '../engine';
 
 export const MARKUP = `
 <div id="stage">
@@ -16,6 +18,9 @@ export const MARKUP = `
 
   <div class="panel hover" id="hover" hidden></div>
   <div class="dice" id="dice" role="status" aria-live="polite" hidden></div>
+
+  <!-- Qué toca hacer ahora (y errores de jugada) -->
+  <div class="panel status" id="status" role="status" aria-live="polite"></div>
 
   <!-- Estadística de tiradas: una barra vertical por total (2 a 12) con la cantidad de veces que salió -->
   <section class="panel stats" id="stats" aria-label="Estadística de tiradas" hidden>
@@ -56,6 +61,7 @@ export const MARKUP = `
     <div class="group">
       <button type="button" id="btnNew" class="primary">Nuevo mapa</button>
       <button type="button" id="btnDice" class="primary">Tirar dados</button>
+      <button type="button" id="btnEnd" class="primary">Terminar turno</button>
     </div>
     <div class="group" role="group" aria-label="Sonido">
       <div class="vol">
@@ -77,7 +83,6 @@ export const MARKUP = `
       <button type="button" data-light="night" aria-pressed="false">Noche</button>
     </div>
     <div class="group">
-      <button type="button" id="btnPieces" aria-pressed="true">Piezas</button>
       <button type="button" id="btnCenter" title="Volver a la vista por defecto">Centrar cámara</button>
       <button type="button" id="btnStats" aria-pressed="false" aria-controls="stats">Estadística</button>
     </div>
@@ -737,84 +742,44 @@ export function initBoard() {
     }
 
     // ------------------------------------------------------------------ tablero
-    var board = null, tiles = [], tileMeshes = [], ships = [], robber = null, robberBase = 0, robberPulse = 0, piecesGroup = null;
-    var showPieces = true;
-    var NB = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+    var board = null, tiles = [], tileMeshes = [], ships = [], robber = null, robberBase = 0, robberPulse = 0, piecesGroup = null, markersGroup = null;
+    var game = null; // estado de la partida (lo maneja el motor); el tablero 3D es solo su reflejo
+    var busy = false; // true mientras corre una animación (dados, recursos volando): no se aceptan jugadas ni botones
+    var vertices = []; // vértices del motor con su posición 3D; el id es el del motor
 
-    function makeMapData(rnd) {
-      var coords = [], q, r;
-      for (q = -2; q <= 2; q++) for (r = Math.max(-2, -q - 2); r <= Math.min(2, -q + 2); r++) coords.push({ q: q, r: r });
-      var kinds = [];
-      [['forest', 4], ['pasture', 4], ['fields', 4], ['hills', 3], ['mountains', 3], ['desert', 1]].forEach(function (p) { for (var i = 0; i < p[1]; i++) kinds.push(p[0]); });
-      shuffle(kinds, rnd);
-      var base = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12], nums, ok, tries = 0, list;
-      do {
-        nums = shuffle(base.slice(), rnd); var ni = 0;
-        list = coords.map(function (c, i) { return { q: c.q, r: c.r, kind: kinds[i], num: kinds[i] === 'desert' ? 0 : nums[ni++] }; });
-        // Reglas de reparto: dos casillas vecinas no pueden llevar (1) los números "rojos" 6 y 8 juntos
-        // ni (2) el mismo número. Con azar puro, ~81 % de los mapas rompían la regla (2); con este filtro se
-        // necesitan ~5 intentos por mapa en promedio.
-        ok = true;
-        for (var a = 0; a < list.length && ok; a++) {
-          if (!list[a].num) continue;
-          for (var d = 0; d < 6 && ok; d++) {
-            for (var b = 0; b < list.length; b++) {
-              if (list[b].q !== list[a].q + NB[d][0] || list[b].r !== list[a].r + NB[d][1] || !list[b].num) continue;
-              var redPair = (list[a].num === 6 || list[a].num === 8) && (list[b].num === 6 || list[b].num === 8);
-              if (redPair || list[a].num === list[b].num) ok = false;
-            }
-          }
-        }
-      } while (!ok && ++tries < 600);
-      return list;
-    }
-
+    // El mapa lo decide el motor (game.map). Los nombres de terreno del motor coinciden con las claves de TERRAINS.
     function buildBoard(seed) {
       if (board) scene.remove(board);
       var rnd = mulberry32(seed);
+      game = createGame(PLAYER_INFO.map(function (p) { return p.name; }), seed);
+      var topo = topology();
       board = new THREE.Group(); scene.add(board);
-      tiles = []; tileMeshes = []; ships = []; robber = null; hoverTile = null;
+      tiles = []; tileMeshes = []; ships = []; robber = null; hoverTile = null; busy = false; pieceSeen = {};
 
-      // casillas
-      makeMapData(rnd).forEach(function (d) {
-        var t = { q: d.q, r: d.r, kind: d.kind, num: d.num, x: SQ3 * (d.q + d.r / 2), z: 1.5 * d.r, pulse: 0 };
+      // casillas (mismo orden e ids que las del motor)
+      topo.tiles.forEach(function (et) {
+        var kind = game.map.terrains[et.id], num = game.map.numbers[et.id];
+        var t = { id: et.id, q: et.q, r: et.r, kind: kind, num: num, x: et.x, z: et.z, pulse: 0 };
         t.group = new THREE.Group(); t.group.position.set(t.x, 0, t.z);
-        t.mesh = mesh(tileGeo, TERRAINS[d.kind].mats); t.group.add(t.mesh); t.mesh.userData.tile = t;
-        t.group.add(decorate(d.kind, mulberry32(Math.floor(rnd() * 1e9))));
-        if (d.num) {
-          t.token = makeToken(d.num); t.tokenBase = t.token.position.y; t.group.add(t.token);
+        t.mesh = mesh(tileGeo, TERRAINS[kind].mats); t.group.add(t.mesh); t.mesh.userData.tile = t;
+        t.group.add(decorate(kind, mulberry32(Math.floor(rnd() * 1e9))));
+        if (num) {
+          t.token = makeToken(num); t.tokenBase = t.token.position.y; t.group.add(t.token);
           t.glow = new THREE.Mesh(GLOW_GEO, new THREE.MeshBasicMaterial({ map: glowTexture(), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
           t.glow.rotation.x = -Math.PI / 2; t.glow.position.y = TILE_TOP + 0.004; t.glow.visible = false; t.glow.renderOrder = 2; t.group.add(t.glow);
         }
         board.add(t.group); tiles.push(t); tileMeshes.push(t.mesh);
       });
 
-      // vértices y aristas
-      var vertices = [], vmap = {}, edges = {};
-      function vid(x, z) {
-        var k = Math.round(x * 50) + ',' + Math.round(z * 50);
-        if (vmap[k] === undefined) { vmap[k] = vertices.length; vertices.push({ x: x, z: z, tiles: [], nb: [] }); }
-        return vmap[k];
-      }
-      tiles.forEach(function (t) {
-        var c = [];
-        for (var k = 0; k < 6; k++) { var a = Math.PI / 2 + k * Math.PI / 3; c.push(vid(t.x + Math.cos(a), t.z - Math.sin(a))); }
-        c.forEach(function (i) { vertices[i].tiles.push(t); });
-        for (var k2 = 0; k2 < 6; k2++) {
-          var A = c[k2], B = c[(k2 + 1) % 6], key = Math.min(A, B) + '_' + Math.max(A, B);
-          if (!edges[key]) { edges[key] = { a: A, b: B, tiles: [] }; if (vertices[A].nb.indexOf(B) < 0) vertices[A].nb.push(B); if (vertices[B].nb.indexOf(A) < 0) vertices[B].nb.push(A); }
-          edges[key].tiles.push(t);
-        }
-      });
+      // vértices del motor con su posición 3D (el id es el del estado de la partida)
+      vertices = topo.vertices.map(function (v) { return { x: v.x, z: v.z, tiles: v.tiles.map(function (i) { return tiles[i]; }), nb: v.neighbors }; });
 
-      // puertos (9, patrón de separación 3-3-4)
-      var coast = Object.keys(edges).map(function (k) { return edges[k]; }).filter(function (e) { return e.tiles.length === 1; });
-      coast.forEach(function (e) { e.mx = (vertices[e.a].x + vertices[e.b].x) / 2; e.mz = (vertices[e.a].z + vertices[e.b].z) / 2; e.ang = Math.atan2(e.mz, e.mx); });
-      coast.sort(function (p, q) { return p.ang - q.ang; });
-      var kinds = shuffle([null, null, null, null, 'forest', 'hills', 'pasture', 'fields', 'mountains'], rnd);
-      [0, 3, 6, 10, 13, 16, 20, 23, 26].forEach(function (idx, i) {
-        var e = coast[idx % coast.length], t = e.tiles[0], nx = e.mx - t.x, nz = e.mz - t.z, nl = Math.hypot(nx, nz); nx /= nl; nz /= nl;
-        var A = vertices[e.a], B = vertices[e.b], P = { x: e.mx + nx * 1.1, z: e.mz + nz * 1.1 }, D = { x: e.mx + nx * 0.55, z: e.mz + nz * 0.55 };
+      // puertos: los reparte el motor (9 sobre la costa); acá solo se dibujan
+      game.map.ports.forEach(function (port, i) {
+        var e = topo.edges[port.edge], t = tiles[port.tile];
+        var A = vertices[e.a], B = vertices[e.b], mx = (A.x + B.x) / 2, mz = (A.z + B.z) / 2;
+        var nx = mx - t.x, nz = mz - t.z, nl = Math.hypot(nx, nz); nx /= nl; nz /= nl;
+        var P = { x: mx + nx * 1.1, z: mz + nz * 1.1 }, D = { x: mx + nx * 0.55, z: mz + nz * 0.55 };
         board.add(segment(A, D, WATER_Y + 0.03, 0.05, 0.035, MAT.dock)); board.add(segment(B, D, WATER_Y + 0.03, 0.05, 0.035, MAT.dock));
         var ship = new THREE.Group(); ship.add(mesh(HULL, MAT.hull));
         var mast = mesh(MAST, MAT.dock); mast.position.set(0.02, 0.43, 0); ship.add(mast);
@@ -822,7 +787,7 @@ export function initBoard() {
         ship.scale.setScalar(0.7);
         // El cartel va fijo en un poste del muelle (no en el barco), para que no se mueva con las olas.
         var post = mesh(POST, MAT.dock); post.position.set(D.x, WATER_Y + 0.3, D.z); board.add(post);
-        var lab = new THREE.Sprite(new THREE.SpriteMaterial({ map: portLabel(kinds[i]), transparent: true }));
+        var lab = new THREE.Sprite(new THREE.SpriteMaterial({ map: portLabel(port.resource), transparent: true }));
         lab.scale.set(0.62, 0.62, 1); lab.position.set(D.x, WATER_Y + 0.68, D.z); board.add(lab);
         ship.position.set(P.x, WATER_Y, P.z); ship.rotation.y = -Math.atan2(B.z - A.z, B.x - A.x);
         ship.userData.phase = i * 1.3; ship.userData.baseY = WATER_Y - 0.02;
@@ -830,60 +795,74 @@ export function initBoard() {
       });
 
       // ladrón en el desierto
-      var desert = tiles.filter(function (t) { return t.kind === 'desert'; })[0];
       robber = makeRobber(); robber.position.set(0.05, TILE_TOP, 0.03); robberBase = TILE_TOP; robberPulse = 0;
-      desert.group.add(robber);
+      tiles[game.robber].group.add(robber);
 
-      // piezas de ejemplo
-      piecesGroup = new THREE.Group(); piecesGroup.visible = showPieces; board.add(piecesGroup);
-      placePieces(vertices, edges, rnd);
+      // el tablero arranca vacío: las piezas aparecen a medida que se juega
+      piecesGroup = new THREE.Group(); board.add(piecesGroup);
+      markersGroup = new THREE.Group(); board.add(markersGroup);
+      syncPieces();
       resetPlayers();
+      refreshUi();
     }
 
-    function placePieces(vertices, edges, rnd) {
-      var occ = {}, used = {}, order = shuffle(vertices.map(function (v, i) { return i; }).filter(function (i) { return vertices[i].tiles.length >= 2; }), rnd);
-      var settl = [[], [], [], []], roads = [[], [], [], []], p, round, i, ek;
-      function key(a, b) { return Math.min(a, b) + '_' + Math.max(a, b); }
-      function free(i) { return occ[i] === undefined && !vertices[i].nb.some(function (j) { return occ[j] !== undefined; }); }
-      for (round = 0; round < 2; round++) for (p = 0; p < 4; p++) {
-        var pick = order.filter(free)[0];
-        if (pick === undefined) continue;
-        occ[pick] = { p: p, city: false }; settl[p].push(pick);
+    // Dibuja las piezas del estado del motor (caminos, poblados y ciudades). Las que son nuevas "brotan" con una animación corta.
+    var pieceSeen = {};
+    function syncPieces() {
+      while (piecesGroup.children.length) {
+        var old = piecesGroup.children[0]; piecesGroup.remove(old);
+        if (old.geometry && old.geometry.type === 'BoxGeometry') old.geometry.dispose(); // los caminos crean su propia geometría
       }
-      function addRoad(p, a, b) { ek = key(a, b); if (used[ek] || !edges[ek]) return false; used[ek] = true; roads[p].push([a, b]); return true; }
-      for (p = 0; p < 4; p++) settl[p].forEach(function (s) {
-        var nb = shuffle(vertices[s].nb.slice(), rnd);
-        for (var k = 0; k < nb.length; k++) if (addRoad(p, s, nb[k])) break;
-      });
-      for (p = 0; p < 4; p++) for (var extra = 0; extra < 2; extra++) {
-        var pool = roads[p].slice(); if (!pool.length) continue;
-        var rd = pool[Math.floor(rnd() * pool.length)], end = rnd() > 0.5 ? rd[0] : rd[1];
-        var nb2 = shuffle(vertices[end].nb.slice(), rnd);
-        for (var k2 = 0; k2 < nb2.length; k2++) { if (occ[nb2[k2]] !== undefined && occ[nb2[k2]].p !== p) continue; if (addRoad(p, end, nb2[k2])) break; }
-      }
-      if (settl[0].length) occ[settl[0][0]].city = true;
-      if (settl[1].length > 1) occ[settl[1][1]].city = true;
-
-      // quién cobra en cada casilla: 1 por poblado y 2 por ciudad en cualquiera de sus vértices
-      tiles.forEach(function (t) { t.owners = []; });
-      Object.keys(occ).forEach(function (vi) {
-        vertices[vi].tiles.forEach(function (t) {
-          var n = occ[vi].city ? 2 : 1, own = t.owners.filter(function (o) { return o.p === occ[vi].p; })[0];
-          if (own) own.n += n; else t.owners.push({ p: occ[vi].p, n: n });
-        });
-      });
-
-      for (p = 0; p < 4; p++) roads[p].forEach(function (r) {
-        var A = vertices[r[0]], B = vertices[r[1]], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz);
+      var topo = topology(), now = performance.now() / 1000;
+      function born(o, key) { if (!pieceSeen[key]) { pieceSeen[key] = true; o.userData.born = now; o.scale.setScalar(0.001); } }
+      game.edgeRoads.forEach(function (p, eid) {
+        if (p === null) return;
+        var e = topo.edges[eid], A = vertices[e.a], B = vertices[e.b], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz);
         var ux = dx / L, uz = dz / L, a = { x: A.x + ux * 0.2, z: A.z + uz * 0.2 }, b = { x: B.x - ux * 0.2, z: B.z - uz * 0.2 };
-        piecesGroup.add(segment(a, b, TILE_TOP + 0.045, 0.085, 0.07, PLAYERS[p]));
+        var road = segment(a, b, TILE_TOP + 0.045, 0.085, 0.07, PLAYERS[p]);
         var edgeLine = segment(a, b, TILE_TOP + 0.045, 0.085 + 2 * OUTLINE_T, 0.07 + 2 * OUTLINE_T, PLAYERS[p].userData.outline);
-        edgeLine.castShadow = false; edgeLine.receiveShadow = false; piecesGroup.add(edgeLine);
+        edgeLine.castShadow = false; edgeLine.receiveShadow = false;
+        born(road, 'e' + eid); born(edgeLine, 'e' + eid);
+        piecesGroup.add(road); piecesGroup.add(edgeLine);
       });
-      Object.keys(occ).forEach(function (vi) {
-        var o = occ[vi], v = vertices[vi], m = o.city ? makeCity(PLAYERS[o.p]) : makeSettlement(PLAYERS[o.p]);
-        m.position.set(v.x, TILE_TOP, v.z); m.rotation.y = Math.floor(rnd() * 6) * Math.PI / 3 + Math.PI / 6;
+      game.vertexBuildings.forEach(function (bd, vid) {
+        if (!bd) return;
+        var v = vertices[vid], m = bd.city ? makeCity(PLAYERS[bd.player]) : makeSettlement(PLAYERS[bd.player]);
+        m.position.set(v.x, TILE_TOP, v.z); m.rotation.y = ((vid * 5) % 6) * Math.PI / 3 + Math.PI / 6;
+        born(m, 'v' + vid + (bd.city ? 'c' : 's'));
         piecesGroup.add(m);
+      });
+    }
+
+    // Marcadores de las jugadas legales del jugador de turno (vértices para el poblado, aristas para el camino).
+    // Salen de legalActions del motor: el cliente no decide qué es legal.
+    var markerMat = null, hitMat = new THREE.MeshBasicMaterial({ visible: false });
+    function refreshMarkers() {
+      while (markersGroup.children.length) {
+        var c = markersGroup.children[0]; markersGroup.remove(c);
+        if (c.geometry) c.geometry.dispose();
+        c.children.forEach(function (k) { if (k.geometry) k.geometry.dispose(); });
+      }
+      if (markerMat) { markerMat.dispose(); markerMat = null; }
+      if (busy || !game) return;
+      var acts = legalActions(game, game.turn), topo = topology(), y = TILE_TOP + 0.05;
+      markerMat = new THREE.MeshBasicMaterial({ color: col(PLAYER_INFO[game.turn].css), transparent: true, opacity: 0.6, depthWrite: false, fog: false });
+      var ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false, fog: false });
+      acts.forEach(function (a) {
+        // cada marcador de vértice tiene un área de toque invisible más grande que el disco que se ve (cómoda en el celular)
+        if (a.type === 'placeSettlement') a.vertices.forEach(function (vid) {
+          var v = vertices[vid], m = new THREE.Mesh(new THREE.CircleGeometry(0.26, 12), hitMat);
+          m.rotation.x = -Math.PI / 2; m.position.set(v.x, y, v.z); m.userData = { type: 'vertex', id: vid };
+          var disc = new THREE.Mesh(new THREE.CircleGeometry(0.13, 20), markerMat); disc.position.z = 0.001; disc.renderOrder = 3; m.add(disc);
+          var ring = new THREE.Mesh(new THREE.RingGeometry(0.13, 0.17, 20), ringMat); ring.position.z = 0.002; ring.renderOrder = 3; m.add(ring);
+          markersGroup.add(m);
+        });
+        if (a.type === 'placeRoad') a.edges.forEach(function (eid) {
+          var e = topo.edges[eid], A = vertices[e.a], B = vertices[e.b], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L;
+          var m = segment({ x: A.x + ux * 0.22, z: A.z + uz * 0.22 }, { x: B.x - ux * 0.22, z: B.z - uz * 0.22 }, y, 0.17, 0.03, markerMat);
+          m.castShadow = false; m.receiveShadow = false; m.renderOrder = 3; m.userData = { type: 'edge', id: eid };
+          markersGroup.add(m);
+        });
       });
     }
 
@@ -909,6 +888,22 @@ export function initBoard() {
       setHover(hit ? hit.object.userData.tile : null);
     });
     renderer.domElement.addEventListener('pointerleave', function () { setHover(null); });
+
+    // Clic (o toque) sobre un marcador de jugada legal. Si el puntero se movió, era un arrastre de la cámara y no cuenta.
+    var downAt = null;
+    renderer.domElement.addEventListener('pointerdown', function (e) { downAt = e.isPrimary ? { x: e.clientX, y: e.clientY } : null; });
+    renderer.domElement.addEventListener('pointerup', function (e) {
+      var d = downAt; downAt = null;
+      if (!d || !e.isPrimary || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6 || busy || !markersGroup || !markersGroup.children.length) return;
+      var r = renderer.domElement.getBoundingClientRect();
+      pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      raycaster.setFromCamera(pointer, camera);
+      var hit = raycaster.intersectObjects(markersGroup.children, false)[0];
+      if (!hit) return;
+      var m = hit.object.userData;
+      if (m.type === 'vertex') dispatch({ type: 'placeSettlement', player: game.turn, vertex: m.id });
+      else dispatch({ type: 'placeRoad', player: game.turn, edge: m.id });
+    });
 
     // ------------------------------------------------------------------ dados (modal con dados 3D de CSS)
     // Cada dado es un cubo de 6 caras con puntos. Para mostrar la cara `v` de frente hay que girar el cubo:
@@ -964,11 +959,17 @@ export function initBoard() {
       statsN.textContent = total ? '· ' + total + (total === 1 ? ' tirada' : ' tiradas') : '';
     }
     updateStats();
+    // La tirada la decide el motor (servidor autoritativo); acá solo se anima. El estado ya cambió: la pantalla lo revela
+    // cuando los dados terminan de caer, y mientras tanto los botones y marcadores quedan bloqueados (busy).
     function rollDice() {
-      if (diceBusy) return;
-      diceBusy = true; btnDice.disabled = true;
-      var a = 1 + Math.floor(Math.random() * 6), b = 1 + Math.floor(Math.random() * 6), s = a + b;
+      if (busy || !game || game.phase.kind !== 'roll') return;
+      var before = game, r = applyCommand(game, { type: 'rollDice', player: game.turn });
+      if (!r.ok) { showStatus(r.error.message, true); return; }
+      game = r.state;
+      var rolled = r.events.filter(function (e) { return e.type === 'DiceRolled'; })[0], dist = r.events.filter(function (e) { return e.type === 'ResourcesDistributed'; })[0];
+      var a = rolled.dice[0], b = rolled.dice[1], s = rolled.total;
       var animate = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      busy = true; refreshUi();
       clearTimeout(diceTimer);
       diceSum.textContent = '';
       diceBox.hidden = false;
@@ -980,18 +981,37 @@ export function initBoard() {
         rollCounts[s]++; updateStats();
         var dur = 0;
         if (s === 7) robberPulse = 1;
-        else { tiles.forEach(function (t) { if (t.num === s) t.pulse = 1; }); dur = flyResources(s, animate); }
-        // el botón se libera y pasa el turno cuando terminan de llegar los recursos
-        setTimeout(function () { nextTurn(); diceBusy = false; btnDice.disabled = false; }, animate ? Math.max(dur, 1200) : 0);
+        else { tiles.forEach(function (t) { if (t.num === s) t.pulse = 1; }); dur = flyGains(rollJobs(before, s, dist ? dist.gains : []), animate); }
+        // los botones se liberan cuando terminan de llegar los recursos
+        setTimeout(function () { busy = false; applyView(); }, animate ? Math.max(dur, 900) : 0);
         diceTimer = setTimeout(function () { diceBox.hidden = true; }, 3200);
       }, animate ? 1250 : 0);
     }
 
-    // ------------------------------------------------------------------ jugadores simulados
-    // SIMULACIÓN: 4 jugadores ficticios (el 1.º es el rojo). El banner de recursos es siempre el del jugador 1 (rojo, VIEWER) y toma su color;
-    // el turno pasa al siguiente después de cada tirada y solo resalta su puesto. Al salir un número, cada casilla le da
-    // recursos a los jugadores que tienen poblado (1) o ciudad (2) en alguno de sus vértices (t.owners, ver placePieces).
-    // Provisorio: cuando exista el motor de reglas, todo esto vendrá del servidor.
+    // Qué casilla le dio qué a quién en una tirada (para animar los iconos). El motor solo informa el total por jugador y
+    // recurso; se reparte entre las casillas en el mismo orden, así que si el banco no alcanzó, se anima solo lo que se entregó.
+    function rollJobs(state, total, gains) {
+      var left = {}, jobs = [];
+      gains.forEach(function (g) { var k = g.player + ':' + g.resource; left[k] = (left[k] || 0) + g.amount; });
+      topology().tiles.forEach(function (et) {
+        var terr = state.map.terrains[et.id];
+        if (terr === 'desert' || state.map.numbers[et.id] !== total || state.robber === et.id) return;
+        var per = {};
+        et.vertices.forEach(function (vid) { var bd = state.vertexBuildings[vid]; if (bd) per[bd.player] = (per[bd.player] || 0) + (bd.city ? 2 : 1); });
+        Object.keys(per).forEach(function (p) {
+          var k = p + ':' + terr, n = Math.min(per[p], left[k] || 0);
+          if (n > 0) { left[k] -= n; jobs.push({ t: tiles[et.id], p: +p, k: terr, n: n }); }
+        });
+      });
+      return jobs;
+    }
+
+
+    // ------------------------------------------------------------------ jugadores y partida local
+    // Partida local de 4 jugadores en el mismo navegador ("hot-seat"): el banner de recursos muestra la mano del jugador de turno
+    // (VIEWER) con su color, y su puesto se resalta. Las manos y los puntos que se ven son un reflejo del estado del motor
+    // (game); los iconos que vuelan hacia el banner actualizan `hands` a medida que llegan. Con multijugador, VIEWER será
+    // siempre el jugador de este navegador y los nombres vendrán de la sala.
     var HAND_KINDS = ['forest', 'hills', 'pasture', 'fields', 'mountains'];
     var PLAYER_INFO = [
       { name: 'Tomás', css: '#d94141', text: '#ffffff', skin: '#f1c9a5', hair: '#5a3a22', hat: true },
@@ -1010,8 +1030,8 @@ export function initBoard() {
     }
     var handEl = stage.querySelector('.hand'), whoEl = document.getElementById('who'), seatsEl = document.getElementById('seats');
     var STAR = '<svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="10,1.5 12.6,7.2 18.8,7.8 14.1,12 15.5,18.2 10,15 4.5,18.2 5.9,12 1.2,7.8 7.4,7.2" fill="#f2c230" stroke="#7a5a10" stroke-width="1.4" stroke-linejoin="round"/></svg>';
-    var vps = [0, 0, 0, 0]; // puntos de victoria (0 a 10); por ahora siempre 0: falta el motor de reglas
-    var hands = [], turn = 0, VIEWER = 0; // VIEWER: el jugador desde cuyo punto de vista se juega (el rojo); el banner es siempre el suyo
+    var vps = [0, 0, 0, 0]; // puntos de victoria: 1 por poblado y 2 por ciudad (todavía sin cartas ni reconocimientos especiales)
+    var hands = [], turn = 0, VIEWER = 0; // VIEWER: el jugador cuya mano muestra el banner (en la partida local, el de turno)
     seatsEl.innerHTML = PLAYER_INFO.map(function (pl, p) {
       return '<div class="seat" data-p="' + p + '" style="--pc:' + pl.css + '"><div class="av">' + avatarSVG(p) + '</div><span class="nm">' + pl.name + '</span>' +
         '<span class="vp" title="Puntos de victoria">' + STAR + '<b>0</b></span>' +
@@ -1027,22 +1047,71 @@ export function initBoard() {
     function renderSeats() {
       Array.prototype.forEach.call(seatsEl.children, function (s, p) { s.classList.toggle('on', p === turn); s.querySelector('.cnt b').textContent = handTotal(p); s.querySelector('.vp b').textContent = vps[p]; });
     }
-    function resetPlayers() {
-      hands = PLAYER_INFO.map(function () { var h = {}; HAND_KINDS.forEach(function (k) { h[k] = 0; }); return h; });
-      turn = 0; renderHand(); renderSeats();
+    // Copia las manos y los puntos del estado del motor a lo que se ve en pantalla.
+    function syncHands() {
+      hands = game.players.map(function (pl) { var h = {}; HAND_KINDS.forEach(function (k) { h[k] = pl.hand[k]; }); return h; });
+      vps = game.players.map(function () { return 0; });
+      game.vertexBuildings.forEach(function (bd) { if (bd) vps[bd.player] += bd.city ? 2 : 1; });
     }
-    function nextTurn() { turn = (turn + 1) % PLAYER_INFO.length; renderSeats(); }
+    function resetPlayers() { VIEWER = turn = game.turn; syncHands(); renderHand(); renderSeats(); }
+    // Pone la pantalla al día con el estado (banner del jugador de turno, puestos, marcadores y botones).
+    function applyView() { VIEWER = turn = game.turn; syncHands(); renderHand(); renderSeats(); refreshUi(); }
+    function refreshUi() { refreshMarkers(); updateControls(); showStatus(statusText(), false); }
+    function updateControls() {
+      var ph = game.phase.kind;
+      btnDice.disabled = busy || ph !== 'roll';
+      btnEnd.disabled = busy || ph !== 'main';
+    }
+    function statusText() {
+      var ph = game.phase, name = PLAYER_INFO[game.turn].name;
+      if (ph.kind === 'setup') {
+        var round = ph.step < game.players.length ? 1 : 2;
+        return name + ' · ronda ' + round + ' de 2: ' + (ph.part === 'settlement' ? 'tocá un punto para colocar tu poblado' : 'tocá un camino junto a tu poblado');
+      }
+      if (ph.kind === 'roll') return 'Turno de ' + name + ': tirá los dados';
+      if (ph.kind === 'main') return 'Turno de ' + name + ': terminá tu turno cuando quieras';
+      return 'Partida terminada';
+    }
+    var statusEl = document.getElementById('status'), statusTimer = null;
+    function showStatus(text, isError) {
+      clearTimeout(statusTimer);
+      statusEl.innerHTML = '<i style="background:' + PLAYER_INFO[game.turn].css + '"></i><span></span>';
+      statusEl.lastChild.textContent = text;
+      statusEl.classList.toggle('error', !!isError);
+      if (isError) statusTimer = setTimeout(function () { showStatus(statusText(), false); }, 2500);
+    }
+    // Envía un comando al motor: si lo acepta, actualiza el tablero; si no, muestra el error.
+    function dispatch(cmd) {
+      var r = applyCommand(game, cmd);
+      if (!r.ok) { showStatus(r.error.message, true); return; }
+      game = r.state;
+      syncPieces();
+      // el 2.º poblado de la colocación inicial cobra recursos: se animan desde las casillas que toca
+      var built = r.events.filter(function (e) { return e.type === 'SettlementBuilt'; })[0];
+      var got = r.events.filter(function (e) { return e.type === 'ResourcesDistributed'; })[0];
+      var dur = 0;
+      if (got && built) {
+        var jobs = [];
+        topology().vertices[built.vertex].tiles.forEach(function (tid) {
+          var terr = game.map.terrains[tid];
+          if (terr !== 'desert') jobs.push({ t: tiles[tid], p: built.player, k: terr, n: 1 });
+        });
+        dur = flyGains(jobs, !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches));
+      }
+      if (dur > 0) { busy = true; refreshUi(); setTimeout(function () { busy = false; applyView(); }, dur); }
+      else applyView();
+    }
     function pop(el, color) {
       el.animate([{ transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }, { transform: 'scale(1.2)', boxShadow: '0 0 18px 5px ' + color, offset: 0.35 }, { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }], { duration: 520, easing: 'ease-out' });
     }
 
-    // Por cada (casilla, jugador con poblado en ella) sale un icono de la casilla, con una insignia del color del jugador, y vuela
-    // hasta su destino: la tarjeta del banner si es el jugador 1, o su puesto (avatar) si es otro. Devuelve la duración total (ms).
-    function flyResources(sum, animate) {
-      var jobs = [], sr = stage.getBoundingClientRect(), w = stage.clientWidth, h = stage.clientHeight;
-      tiles.forEach(function (t) { if (t.num === sum && t.owners) t.owners.forEach(function (o) { jobs.push({ t: t, o: o }); }); });
+    // Cada trabajo {t: casilla, p: jugador, k: recurso, n: cantidad} hace salir un icono de la casilla, con una insignia del color
+    // del jugador, que vuela hasta su destino: la tarjeta del banner si es el jugador que se está mirando (VIEWER), o su puesto
+    // (avatar) si es otro. Devuelve la duración total (ms).
+    function flyGains(jobs, animate) {
+      var sr = stage.getBoundingClientRect(), w = stage.clientWidth, h = stage.clientHeight;
       jobs.forEach(function (j, n) {
-        var p = j.o.p, k = j.t.kind, amount = j.o.n, mine = p === VIEWER, pl = PLAYER_INFO[p];
+        var p = j.p, k = j.k, amount = j.n, mine = p === VIEWER, pl = PLAYER_INFO[p];
         var card = handEl.querySelector('[data-res="' + k + '"]'), seat = seatsEl.children[p];
         var target = mine ? card : seat, glow = mine ? card.style.getPropertyValue('--c') : pl.css;
         var gain = function () {
@@ -1077,6 +1146,8 @@ export function initBoard() {
     var btnStats = document.getElementById('btnStats');
     btnStats.addEventListener('click', function () { statsEl.hidden = !statsEl.hidden; pressed(btnStats, !statsEl.hidden); });
     btnDice.addEventListener('click', rollDice);
+    var btnEnd = document.getElementById('btnEnd');
+    btnEnd.addEventListener('click', function () { if (!busy) dispatch({ type: 'endTurn', player: game.turn }); });
     var lightBtns = Array.prototype.slice.call(document.querySelectorAll('[data-light]'));
     lightBtns.forEach(function (b) {
       b.addEventListener('click', function () {
@@ -1110,8 +1181,6 @@ export function initBoard() {
     btnMenu.addEventListener('click', function () { setMenu(!stage.classList.contains('menu-open')); });
     setMenu(window.innerWidth > 640); // abierto de arranque en pantallas anchas, cerrado en el móvil
     document.getElementById('btnCenter').addEventListener('click', function () { homing = true; });
-    var btnPieces = document.getElementById('btnPieces');
-    btnPieces.addEventListener('click', function () { showPieces = !showPieces; pressed(btnPieces, showPieces); if (piecesGroup) piecesGroup.visible = showPieces; });
 
     // ------------------------------------------------------------------ tamaño
     function resize() {
@@ -1158,6 +1227,16 @@ export function initBoard() {
         var sh = ships[s], ph = sh.userData.phase;
         sh.position.y = sh.userData.baseY + Math.sin(time * 1.4 + ph) * 0.025 + 0.02;
         sh.rotation.z = Math.sin(time * 1.1 + ph) * 0.05;
+      }
+      // marcadores de jugada legal: laten suave
+      if (markerMat) markerMat.opacity = 0.5 + 0.2 * Math.sin(time * 4);
+      // piezas nuevas: brotan con un pequeño rebote
+      var nowS = performance.now() / 1000;
+      for (var pc = 0; pc < piecesGroup.children.length; pc++) {
+        var pm = piecesGroup.children[pc], born = pm.userData.born;
+        if (born === undefined) continue;
+        var u = Math.min(1, (nowS - born) / 0.35), sc = u >= 1 ? 1 : Math.max(0.001, 1 - Math.pow(1 - u, 3) * Math.cos(u * 9));
+        pm.scale.setScalar(sc); if (u >= 1) pm.userData.born = undefined;
       }
       waterTex.offset.x = (time * 0.006) % 1; waterTex.offset.y = (time * 0.004) % 1;
 
