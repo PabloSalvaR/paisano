@@ -17,6 +17,12 @@ export const MARKUP = `
   <div class="panel hover" id="hover" hidden></div>
   <div class="dice" id="dice" role="status" aria-live="polite" hidden></div>
 
+  <!-- Estadística de tiradas: una barra vertical por total (2 a 12) con la cantidad de veces que salió -->
+  <section class="panel stats" id="stats" aria-label="Estadística de tiradas" hidden>
+    <h2>Estadística <span id="statsN"></span></h2>
+    <div class="chart" id="chart"></div>
+  </section>
+
   <!-- Recursos del jugador (por ahora solo maqueta con cifras fijas; después se conecta al estado de la partida) -->
   <aside class="panel seats" id="seats" aria-label="Jugadores"></aside>
   <section class="panel hand" aria-label="Recursos del jugador 1">
@@ -43,19 +49,24 @@ export const MARKUP = `
     </div>
   </section>
 
-  <nav class="panel bar" aria-label="Controles del tablero">
+  <button type="button" class="panel menu-btn" id="btnMenu" aria-label="Menú" aria-controls="bar" aria-expanded="false">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+  <nav class="panel bar" id="bar" aria-label="Controles del tablero">
     <div class="group">
       <button type="button" id="btnNew" class="primary">Nuevo mapa</button>
       <button type="button" id="btnDice" class="primary">Tirar dados</button>
     </div>
     <div class="group" role="group" aria-label="Sonido">
       <div class="vol">
-        <svg id="volIcon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
-          <path class="w1" d="M16 9.5a3.5 3.5 0 0 1 0 5"/>
-          <path class="w2" d="M18.5 7a7 7 0 0 1 0 10"/>
-          <path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/>
-        </svg>
+        <button type="button" id="btnMute" class="mute" aria-label="Silenciar" aria-pressed="false">
+          <svg id="volIcon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+            <path class="w1" d="M16 9.5a3.5 3.5 0 0 1 0 5"/>
+            <path class="w2" d="M18.5 7a7 7 0 0 1 0 10"/>
+            <path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/>
+          </svg>
+        </button>
         <input type="range" id="volume" min="0" max="100" step="1" aria-label="Volumen">
       </div>
       <button type="button" id="btnAmbient" aria-pressed="true">Ambiente</button>
@@ -67,6 +78,8 @@ export const MARKUP = `
     </div>
     <div class="group">
       <button type="button" id="btnPieces" aria-pressed="true">Piezas</button>
+      <button type="button" id="btnCenter" title="Volver a la vista por defecto">Centrar cámara</button>
+      <button type="button" id="btnStats" aria-pressed="false" aria-controls="stats">Estadística</button>
     </div>
   </nav>
 
@@ -145,6 +158,9 @@ export function initBoard() {
     controls.maxDistance = 30;
     controls.minPolarAngle = 0; // permite volver a la vista cenital; se puede inclinar hasta maxPolarAngle
     controls.maxPolarAngle = 1.3;
+    // vista por defecto (botón "Centrar"): vuelve con una transición suave; si el usuario toca la cámara se cancela
+    var HOME_POS = camera.position.clone(), HOME_TARGET = controls.target.clone(), homing = false;
+    controls.addEventListener('start', function () { homing = false; });
 
     // ------------------------------------------------------------------ materiales
     var allMats = [];
@@ -713,8 +729,8 @@ export function initBoard() {
         ctx.fillText('3:1', 128 - (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2,128 + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
       }
       else {
-        ctx.font = 'bold 68px Georgia, "Times New Roman", serif'; ctx.fillText('2:1', 128, 74);
-        ctx.strokeStyle = '#3b2a18'; ctx.lineWidth = 5; ctx.save(); ctx.translate(128, 166); ctx.scale(0.85, 0.85); PORT_ICONS[kind](ctx, 0, 0); ctx.restore();
+        ctx.font = 'bold 96px Georgia, "Times New Roman", serif'; ctx.fillText('2:1', 128, 68);
+        ctx.strokeStyle = '#3b2a18'; ctx.lineWidth = 5; ctx.save(); ctx.translate(128, 154); ctx.scale(0.85, 0.85); PORT_ICONS[kind](ctx, 0, 0); ctx.restore();
       }
       var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
       return t;
@@ -927,6 +943,27 @@ export function initBoard() {
     diceBox.innerHTML = '<div class="dice-row"></div><b></b>';
     var diceRow = diceBox.firstChild, diceSum = diceRow.nextSibling;
     var dieA = buildDie(), dieB = buildDie(); diceRow.appendChild(dieA.el); diceRow.appendChild(dieB.el);
+    // Estadística: cuántas veces salió cada total (2 a 12). Se reinicia con "Nuevo mapa" (partida nueva).
+    var rollCounts = {}, statsEl = document.getElementById('stats'), chartEl = document.getElementById('chart'), statsN = document.getElementById('statsN');
+    var statBars = {}, PLOT_H = 130, BAR_STEP = 20;
+    for (var sn = 2; sn <= 12; sn++) {
+      var statCol = document.createElement('div'); statCol.className = 'col';
+      statCol.innerHTML = '<div class="plot"><div class="fill"></div></div><span class="lbl">' + sn + '</span>';
+      chartEl.appendChild(statCol); statBars[sn] = statCol.firstChild.firstChild; rollCounts[sn] = 0;
+    }
+    function updateStats() {
+      var max = 1, total = 0, n;
+      for (n = 2; n <= 12; n++) { max = Math.max(max, rollCounts[n]); total += rollCounts[n]; }
+      // cada tirada agrega un escalón fijo a su barra; recién cuando la más alta llena el gráfico se achica el escalón de todas
+      var step = Math.min(BAR_STEP, PLOT_H / max);
+      for (n = 2; n <= 12; n++) {
+        var c = rollCounts[n], bar = statBars[n];
+        bar.textContent = c || '';
+        bar.style.height = c ? Math.max(16, Math.round(c * step)) + 'px' : '0';
+      }
+      statsN.textContent = total ? '· ' + total + (total === 1 ? ' tirada' : ' tiradas') : '';
+    }
+    updateStats();
     function rollDice() {
       if (diceBusy) return;
       diceBusy = true; btnDice.disabled = true;
@@ -940,6 +977,7 @@ export function initBoard() {
       // el resultado (solo el total) y el efecto sobre el tablero aparecen cuando los dados terminan de caer
       diceTimer = setTimeout(function () {
         diceSum.textContent = s;
+        rollCounts[s]++; updateStats();
         var dur = 0;
         if (s === 7) robberPulse = 1;
         else { tiles.forEach(function (t) { if (t.num === s) t.pulse = 1; }); dur = flyResources(s, animate); }
@@ -1031,7 +1069,13 @@ export function initBoard() {
     }
 
     function pressed(btn, on) { btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
-    document.getElementById('btnNew').addEventListener('click', function () { buildBoard((Math.random() * 1e9) | 0); });
+    document.getElementById('btnNew').addEventListener('click', function () {
+      buildBoard((Math.random() * 1e9) | 0);
+      for (var n = 2; n <= 12; n++) rollCounts[n] = 0;
+      updateStats();
+    });
+    var btnStats = document.getElementById('btnStats');
+    btnStats.addEventListener('click', function () { statsEl.hidden = !statsEl.hidden; pressed(btnStats, !statsEl.hidden); });
     btnDice.addEventListener('click', rollDice);
     var lightBtns = Array.prototype.slice.call(document.querySelectorAll('[data-light]'));
     lightBtns.forEach(function (b) {
@@ -1042,12 +1086,30 @@ export function initBoard() {
       });
     });
     var volume = document.getElementById('volume'), volIcon = document.getElementById('volIcon');
-    function showVolume() { volIcon.setAttribute('data-level', volume.value == 0 ? 0 : volume.value < 50 ? 1 : 2); }
+    var btnMute = document.getElementById('btnMute'), lastVolume = 0.5; // volumen al que vuelve el parlante al quitar el silencio
+    function showVolume() {
+      var muted = volume.value == 0;
+      volIcon.setAttribute('data-level', muted ? 0 : volume.value < 50 ? 1 : 2);
+      btnMute.setAttribute('aria-pressed', muted ? 'true' : 'false');
+      btnMute.setAttribute('aria-label', muted ? 'Quitar silencio' : 'Silenciar');
+    }
     volume.value = Math.round(audio.getVolume() * 100); showVolume();
-    volume.addEventListener('input', function () { audio.setVolume(volume.value / 100); showVolume(); });
+    if (volume.value > 0) lastVolume = volume.value / 100;
+    volume.addEventListener('input', function () { audio.setVolume(volume.value / 100); if (volume.value > 0) lastVolume = volume.value / 100; showVolume(); });
+    // el parlante es un botón: silencia en el acto y, al tocarlo de nuevo, vuelve al volumen anterior
+    btnMute.addEventListener('click', function () {
+      var v = volume.value == 0 ? lastVolume : 0;
+      volume.value = Math.round(v * 100); audio.setVolume(v); showVolume();
+    });
     var btnAmbient = document.getElementById('btnAmbient');
     pressed(btnAmbient, audio.isAmbientOn());
     btnAmbient.addEventListener('click', function () { audio.setAmbientOn(!audio.isAmbientOn()); pressed(btnAmbient, audio.isAmbientOn()); });
+    // menú hamburguesa (solo visible en pantallas angostas; ver globals.css)
+    var btnMenu = document.getElementById('btnMenu');
+    function setMenu(open) { stage.classList.toggle('menu-open', open); btnMenu.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+    btnMenu.addEventListener('click', function () { setMenu(!stage.classList.contains('menu-open')); });
+    setMenu(window.innerWidth > 640); // abierto de arranque en pantallas anchas, cerrado en el móvil
+    document.getElementById('btnCenter').addEventListener('click', function () { homing = true; });
     var btnPieces = document.getElementById('btnPieces');
     btnPieces.addEventListener('click', function () { showPieces = !showPieces; pressed(btnPieces, showPieces); if (piecesGroup) piecesGroup.visible = showPieces; });
 
@@ -1074,6 +1136,11 @@ export function initBoard() {
     function frame() {
       if (disposed) return; raf = requestAnimationFrame(frame);
       var dt = Math.min(clock.getDelta(), 0.05); time += dt;
+      if (homing) {
+        var k = 1 - Math.exp(-dt * 6);
+        camera.position.lerp(HOME_POS, k); controls.target.lerp(HOME_TARGET, k);
+        if (camera.position.distanceTo(HOME_POS) < 0.01) { camera.position.copy(HOME_POS); controls.target.copy(HOME_TARGET); homing = false; }
+      }
       controls.update();
       applyLight(1 - Math.exp(-dt * 3.5));
 
