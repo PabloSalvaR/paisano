@@ -313,8 +313,7 @@ body{
 .turn-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .turn-btn svg{width:54px;height:54px;display:block}
 .turn-btn[data-mode="main"]{background:var(--pc);color:var(--pt);border-color:rgba(0,0,0,.35)}
-.turn-btn[data-mode="main"] svg{width:44px;height:44px}
-.turn-btn .next{position:absolute;top:-8px;left:-8px;width:32px;height:32px;border-radius:50%;overflow:hidden;box-shadow:0 0 0 2px #fff,0 2px 5px rgba(0,0,0,.4)}
+.turn-btn[data-mode="main"] svg{width:50px;height:50px}
 .turn-btn.swap{animation:turnSwap .35s ease-out}
 .turn-btn[data-mode="roll"]:not(:disabled) svg{animation:diceWiggle 2.6s ease-in-out infinite}
 @keyframes turnSwap{0%{transform:scale(.6) rotate(-25deg);opacity:.2}70%{transform:scale(1.1)}100%{transform:none;opacity:1}}
@@ -323,8 +322,7 @@ body{
 @media (max-width:640px){
   .turn-btn{right:10px;bottom:108px;width:58px;height:58px;border-width:2px}
   .turn-btn svg{width:40px;height:40px}
-  .turn-btn[data-mode="main"] svg{width:32px;height:32px}
-  .turn-btn .next{width:24px;height:24px;top:-6px;left:-6px}
+  .turn-btn[data-mode="main"] svg{width:36px;height:36px}
 }
 @media (prefers-reduced-motion: reduce){
   .turn-btn.swap,.turn-btn[data-mode="roll"] svg{animation:none}

@@ -1185,7 +1185,7 @@ export function initBoard() {
       robberPulse = 1;
     }
 
-    // Botón único de turno. Antes de tirar: dos dados. Después de tirar: flecha con el color (y la carita) de quien sigue.
+    // Botón único de turno. Antes de tirar: dos dados. Después de tirar: flecha con el color de quien sigue.
     var btnTurn = document.getElementById('btnTurn'), btnDev = document.getElementById('btnDev');
     function dieSVG(x, y, rot, pips) {
       return '<g transform="translate(' + x + ' ' + y + ') rotate(' + rot + ' 13 13)"><rect width="26" height="26" rx="6" fill="#d94141" stroke="#7a1f1f" stroke-width="2"/>' +
@@ -1207,7 +1207,7 @@ export function initBoard() {
       } else {
         var n = PLAYER_INFO[next];
         btnTurn.style.setProperty('--pc', n.css); btnTurn.style.setProperty('--pt', n.text);
-        btnTurn.innerHTML = TURN_ARROW + '<span class="next">' + avatarSVG(next) + '</span>'; label = 'Pasar el turno a ' + n.name;
+        btnTurn.innerHTML = TURN_ARROW; label = 'Pasar el turno a ' + n.name;
       }
       btnTurn.setAttribute('aria-label', label); btnTurn.title = label;
       btnTurn.classList.remove('swap'); void btnTurn.offsetWidth; btnTurn.classList.add('swap'); // pequeña animación al cambiar de función
