@@ -347,3 +347,14 @@ body{
   .build .cost i{width:6px;height:6px}
 }
 .bar button[hidden]{display:none}
+
+/* Comerciar con el banco: dos filas de cinco fichas (doy / recibo) y un resumen */
+.dialog.trade{width:min(348px,calc(100% - 20px))}
+.dialog .pick{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px}
+.dialog .pick button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 2px 4px;border-bottom:3px solid var(--c)}
+.dialog .pick .ico svg{display:block;width:30px;height:30px;stroke:#3b2a18;stroke-width:2.2;stroke-linejoin:round}
+.dialog .pick small{font-size:.72rem;font-weight:700;color:var(--muted);min-height:1em}
+.dialog .pick button[aria-pressed="true"]{background:var(--btn-on);color:var(--btn-on-text);border-color:var(--btn-on);border-bottom-color:var(--c)}
+.dialog .pick button[aria-pressed="true"] small{color:inherit}
+.dialog.trade p{margin-bottom:6px;text-align:left;font-weight:700}
+.dialog .sum{min-height:1.4em;font-weight:700;font-size:.92rem;margin-bottom:2px}

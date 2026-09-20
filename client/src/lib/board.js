@@ -40,6 +40,10 @@ export const MARKUP = `
       <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="7" y="3" width="18" height="26" rx="3.5" fill="none" stroke="currentColor" stroke-width="2.4" transform="rotate(-6 16 16)"/><polygon points="16,9 17.7,13.2 22,13.6 18.8,16.4 19.8,20.7 16,18.4 12.2,20.7 13.2,16.4 10,13.6 14.3,13.2" fill="currentColor" transform="rotate(-6 16 16)"/></svg>
       <span>Carta</span><span class="cost"><i style="--c:#a7d15c"></i><i style="--c:#e8bf45"></i><i style="--c:#8d949c"></i></span>
     </button>
+    <button type="button" id="btnTrade" aria-pressed="false" title="Comerciar con el banco (4:1, o mejor con puertos)">
+      <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h20M19 5l6 6-6 6M27 21H7M13 15l-6 6 6 6"/></svg>
+      <span>Comerciar</span><span class="cost"></span>
+    </button>
   </section>
 
   <!-- Botón único de turno: dados antes de tirar; flecha hacia el próximo jugador después. Lo arma board.js -->
@@ -1187,7 +1191,7 @@ export function initBoard() {
     }
 
     // Botón único de turno. Antes de tirar: dos dados. Después de tirar: flecha con el color de quien sigue.
-    var btnTurn = document.getElementById('btnTurn'), btnDev = document.getElementById('btnDev');
+    var btnTurn = document.getElementById('btnTurn'), btnDev = document.getElementById('btnDev'), btnTrade = document.getElementById('btnTrade');
     function dieSVG(x, y, rot, pips) {
       return '<g transform="translate(' + x + ' ' + y + ') rotate(' + rot + ' 13 13)"><rect width="26" height="26" rx="6" fill="#d94141" stroke="#7a1f1f" stroke-width="2"/>' +
         pips.map(function (i) { return '<circle cx="' + (6.5 + (i % 3) * 6.5) + '" cy="' + (6.5 + Math.floor(i / 3) * 6.5) + '" r="2.2" fill="#fff"/>'; }).join('') + '</g>';
@@ -1224,6 +1228,8 @@ export function initBoard() {
       var ph = game.phase.kind, acts = legalActions(game, game.turn), can = {};
       acts.forEach(function (a) { can[a.type] = true; });
       updateTurnButton(); updateDevButton();
+      if (tradeUI && (busy || !can.bankTrade)) tradeUI = null; // ya no se puede comerciar (otra fase, o la mano no alcanza)
+      btnTrade.disabled = busy || !can.bankTrade; pressed(btnTrade, !!tradeUI);
       buildEl.hidden = ph === 'setup' || ph === 'finished';
       if (!can[{ road: 'buildRoad', settlement: 'buildSettlement', city: 'buildCity' }[buildMode]]) buildMode = null; // ya no alcanza o no hay dónde
       Array.prototype.forEach.call(buildEl.querySelectorAll('[data-build]'), function (b) {
@@ -1276,6 +1282,7 @@ export function initBoard() {
       }
       clearGhost();
       dialogEl.className = 'panel dialog'; dialogEl.style.left = dialogEl.style.top = dialogEl.style.transform = '';
+      if (tradeUI && !busy && ph.kind === 'main') { dialogKey = ''; renderTrade(); return; }
       if (busy || (ph.kind !== 'discard' && ph.kind !== 'steal')) { dialogEl.hidden = true; dialogKey = ''; return; }
       var key = ph.kind + ':' + game.turn + ':' + (ph.kind === 'discard' ? ph.queue.length : ph.victims.join(','));
       if (key !== dialogKey) { dialogKey = key; discardSel = {}; }
@@ -1298,11 +1305,45 @@ export function initBoard() {
       dialogEl.querySelector('h3').textContent = ph.kind === 'discard' ? name + ': descartá ' + ph.queue[0].count + ' cartas' : name + ': ¿a quién le robás?';
       dialogEl.hidden = false;
     }
+    // Comerciar con el banco: dos filas de fichas (doy / recibo). Lo que se puede entregar, la tasa y lo que se puede pedir salen de
+    // la acción bankTrade de legalActions; acá no se calcula ninguna regla.
+    var tradeUI = null; // { give, get } elegidos (null = panel cerrado)
+    function tradeOptions() {
+      var a = legalActions(game, game.turn).filter(function (x) { return x.type === 'bankTrade'; })[0];
+      return a ? a.trades : [];
+    }
+    function renderTrade() {
+      var trades = tradeOptions(), byGive = {};
+      trades.forEach(function (t) { byGive[t.give] = t; });
+      if (tradeUI.give && !byGive[tradeUI.give]) tradeUI.give = tradeUI.get = null;
+      if (tradeUI.get && (!tradeUI.give || byGive[tradeUI.give].get.indexOf(tradeUI.get) < 0)) tradeUI.get = null;
+      var give = tradeUI.give && byGive[tradeUI.give];
+      function chips(attr, sel, enabled, label) {
+        return '<div class="pick">' + HAND_KINDS.map(function (k) {
+          var on = enabled(k), lab = label(k);
+          return '<button type="button" data-' + attr + '="' + k + '" aria-pressed="' + (sel === k ? 'true' : 'false') + '"' + (on ? '' : ' disabled') +
+            ' style="--c:' + handEl.querySelector('[data-res="' + k + '"]').style.getPropertyValue('--c') + '" title="' + TERRAINS[k].res + '"><span class="ico">' + resIcon(k) + '</span><small>' + lab + '</small></button>';
+        }).join('') + '</div>';
+      }
+      dialogEl.className = 'panel dialog trade';
+      dialogEl.innerHTML = '<h3>Comerciar con el banco</h3><p>Doy</p>' +
+        chips('give', tradeUI.give, function (k) { return !!byGive[k]; }, function (k) { return byGive[k] ? byGive[k].rate + ':1' : '&nbsp;'; }) +
+        '<p>Recibo</p>' +
+        chips('get', tradeUI.get, function (k) { return !!give && give.get.indexOf(k) >= 0; }, function () { return '1'; }) +
+        '<div class="sum">' + (give && tradeUI.get ? give.rate + ' × ' + TERRAINS[tradeUI.give].res + ' → 1 × ' + TERRAINS[tradeUI.get].res : 'Elegí qué dar y qué recibir') + '</div>';
+      dialogEl.hidden = false;
+    }
     dialogEl.addEventListener('click', function (e) {
       var b = e.target.closest('button'); if (!b || b.disabled || busy) return;
       if (pendingCmd) {
         var cmd = pendingCmd; pendingCmd = null;
         if (b.hasAttribute('data-ok')) confirmDrop(cmd); else renderDialog();
+        return;
+      }
+      if (tradeUI) {
+        if (b.hasAttribute('data-give')) tradeUI.give = b.getAttribute('data-give');
+        else if (b.hasAttribute('data-get')) tradeUI.get = b.getAttribute('data-get');
+        renderDialog();
         return;
       }
       var ph = game.phase;
@@ -1318,7 +1359,11 @@ export function initBoard() {
     // Jugada de construcción a la espera del ✓ / ✕ del jugador.
     var pendingCmd = null;
     function askConfirm(cmd) { pendingCmd = cmd; renderDialog(); }
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && pendingCmd) { pendingCmd = null; renderDialog(); } });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      if (pendingCmd) { pendingCmd = null; renderDialog(); }
+      else if (tradeUI) { tradeUI = null; refreshUi(); }
+    });
     function dispatch(cmd) {
       pendingCmd = null;
       var r = applyCommand(game, cmd);
@@ -1433,7 +1478,14 @@ export function initBoard() {
     // los botones de construir activan (o desactivan) el modo: el tablero muestra dónde se puede
     buildEl.addEventListener('click', function (e) {
       var b = e.target.closest('[data-build]'); if (!b || b.disabled || busy) return;
-      var kind = b.getAttribute('data-build'); buildMode = buildMode === kind ? null : kind; refreshUi();
+      var kind = b.getAttribute('data-build'); buildMode = buildMode === kind ? null : kind; tradeUI = null; refreshUi();
+    });
+    // Comerciar: abre (o cierra) el panel; es excluyente con el modo de construir y con una confirmación abierta
+    btnTrade.addEventListener('click', function () {
+      if (busy || !game) return;
+      pendingCmd = null; buildMode = null;
+      tradeUI = tradeUI ? null : { give: null, get: null};
+      refreshUi();
     });
     var lightBtns = Array.prototype.slice.call(document.querySelectorAll('[data-light]'));
     lightBtns.forEach(function (b) {
