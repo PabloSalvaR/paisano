@@ -1468,13 +1468,25 @@ export function initBoard() {
     // Se ve con `npm run dev` o con ?debug en la URL; en producción no existe.
     var btnQuick = document.getElementById('btnQuick');
     if (process.env.NODE_ENV !== 'production' || /[?&]debug/.test(location.search)) btnQuick.hidden = false;
+    // Sorteo ponderado hacia el centro: un vértice pesa según cuántas casillas toca (1, 2 o 3) elevado a 4, así que casi siempre
+    // cae en el interior pero cualquiera puede salir; una arista pesa por los vértices que une.
+    function pickCentral(list, isVertex) {
+      var topo = topology();
+      var w = list.map(function (id) {
+        if (isVertex) return Math.pow(topo.vertices[id].tiles.length, 4);
+        var e = topo.edges[id]; return Math.pow(topo.vertices[e.a].tiles.length + topo.vertices[e.b].tiles.length, 4);
+      });
+      var r = Math.random() * w.reduce(function (a, b) { return a + b; }, 0);
+      for (var i = 0; i < list.length; i++) { r -= w[i]; if (r < 0) return list[i]; }
+      return list[list.length - 1];
+    }
     btnQuick.addEventListener('click', function () {
       buildBoard((Math.random() * 1e9) | 0);
       for (var n = 2; n <= 12; n++) rollCounts[n] = 0;
       updateStats();
       var st = game, guard = 0;
       while (st.phase.kind === 'setup' && guard++ < 200) {
-        var p = st.turn, a = legalActions(st, p)[0], list = a.vertices || a.edges, at = list[Math.floor(Math.random() * list.length)];
+        var p = st.turn, a = legalActions(st, p)[0], list = a.vertices || a.edges, at = pickCentral(list, !!a.vertices);
         var r = applyCommand(st, a.type === 'placeSettlement' ? { type: 'placeSettlement', player: p, vertex: at } : { type: 'placeRoad', player: p, edge: at });
         if (!r.ok) break;
         st = r.state;
