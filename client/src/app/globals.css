@@ -319,28 +319,22 @@ body{
 @keyframes turnSwap{0%{transform:scale(.6) rotate(-25deg);opacity:.2}70%{transform:scale(1.1)}100%{transform:none;opacity:1}}
 @keyframes diceWiggle{0%,78%,100%{transform:rotate(0)}84%{transform:rotate(-9deg)}92%{transform:rotate(9deg)}}
 
-/* Carta de desarrollo: sale sobre el banner de recursos cuando alcanza para comprarla; el estado sube para no chocar */
-.hand .dev{position:absolute;bottom:calc(100% + 8px);right:10px;display:flex;align-items:center;justify-content:center;width:56px;height:66px;padding:0;
-  background:var(--panel);border:2px solid var(--accent);border-radius:12px;box-shadow:var(--shadow);cursor:pointer;
-  transition:transform .15s;animation:devPop .4s cubic-bezier(.3,1.4,.5,1)}
-.hand .dev[hidden]{display:none}
-.hand .dev svg{width:36px;height:46px;display:block}
-.hand .dev:hover{transform:translateY(-3px)}
-.hand .dev:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-@keyframes devPop{0%{transform:translateY(16px) scale(.5);opacity:0}100%{transform:none;opacity:1}}
-#stage[data-dev] .status{bottom:196px}
-@media (min-width:641px) and (max-width:1000px){ #stage[data-dev] .status{bottom:262px} }
 @media (max-width:640px){
   .turn-btn{right:10px;bottom:96px;width:58px;height:58px;border-width:2px}
   .turn-btn svg{width:40px;height:40px}
   .turn-btn[data-mode="main"] svg{width:32px;height:32px}
   .turn-btn .next{width:24px;height:24px;top:-6px;left:-6px}
-  .hand .dev{right:auto;left:10px;width:48px;height:58px}
-  .hand .dev svg{width:30px;height:38px}
-  #stage[data-dev] .status{bottom:226px}
-  #stage[data-dev] .build{bottom:166px}
 }
 @media (prefers-reduced-motion: reduce){
-  .turn-btn.swap,.turn-btn[data-mode="roll"] svg,.hand .dev{animation:none}
+  .turn-btn.swap,.turn-btn[data-mode="roll"] svg{animation:none}
 }
 #stage[data-confirm] .status{opacity:0}
+
+/* Celular: bandeja de construir más compacta, para que con la carta de desarrollo visible no pise el texto de estado */
+@media (max-width:640px){
+  .build{gap:4px;padding:4px}
+  .build button{min-width:54px;gap:2px;padding:4px 5px 5px;font-size:.68rem}
+  .build button svg{width:18px;height:18px}
+  .build .cost{min-height:6px}
+  .build .cost i{width:6px;height:6px}
+}

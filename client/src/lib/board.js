@@ -36,6 +36,10 @@ export const MARKUP = `
       <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 28V17l7-6 7 6v11zM17 28V12l6-8 6 8v16z" fill="currentColor"/></svg>
       <span>Ciudad</span><span class="cost"><i style="--c:#e8bf45"></i><i style="--c:#e8bf45"></i><i style="--c:#8d949c"></i><i style="--c:#8d949c"></i><i style="--c:#8d949c"></i></span>
     </button>
+    <button type="button" id="btnDev" title="Carta de desarrollo: 1 vaca + 1 maíz + 1 piedra">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="7" y="3" width="18" height="26" rx="3.5" fill="none" stroke="currentColor" stroke-width="2.4" transform="rotate(-6 16 16)"/><polygon points="16,9 17.7,13.2 22,13.6 18.8,16.4 19.8,20.7 16,18.4 12.2,20.7 13.2,16.4 10,13.6 14.3,13.2" fill="currentColor" transform="rotate(-6 16 16)"/></svg>
+      <span>Carta</span><span class="cost"><i style="--c:#a7d15c"></i><i style="--c:#e8bf45"></i><i style="--c:#8d949c"></i></span>
+    </button>
   </section>
 
   <!-- Botón único de turno: dados antes de tirar; flecha hacia el próximo jugador después. Lo arma board.js -->
@@ -53,10 +57,6 @@ export const MARKUP = `
   <!-- Recursos del jugador (por ahora solo maqueta con cifras fijas; después se conecta al estado de la partida) -->
   <aside class="panel seats" id="seats" aria-label="Jugadores"></aside>
   <section class="panel hand" aria-label="Recursos del jugador 1">
-    <!-- Comprar carta de desarrollo: aparece sobre el banner solo cuando alcanzan los recursos (1 vaca + 1 maíz + 1 piedra) -->
-    <button type="button" class="dev" id="btnDev" aria-label="Comprar carta de desarrollo" title="Carta de desarrollo: 1 vaca + 1 maíz + 1 piedra" hidden>
-      <svg viewBox="0 0 34 44" aria-hidden="true"><g transform="rotate(-6 17 22)"><rect x="3" y="2" width="28" height="40" rx="5" fill="#f6ecd4" stroke="#5b4630" stroke-width="2"/><rect x="7" y="6" width="20" height="32" rx="3" fill="none" stroke="#b4661a" stroke-width="1.6"/><polygon points="17,11 19.6,17.2 26,17.8 21.2,22 22.6,28.4 17,25.2 11.4,28.4 12.8,22 8,17.8 14.4,17.2" fill="#d94141" stroke="#7a1f1f" stroke-width="1.2" stroke-linejoin="round"/></g></svg>
-    </button>
     <div class="who" id="who"></div>
     <div class="res" style="--c:#3f8f45" title="Madera" data-res="forest">
       <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="21" y="28" width="6" height="14" fill="#7a4e2a"/><circle cx="14" cy="26" r="8" fill="#3f8f45"/><circle cx="34" cy="26" r="8" fill="#3f8f45"/><circle cx="24" cy="17" r="11" fill="#3f8f45"/></svg>
@@ -1209,12 +1209,12 @@ export function initBoard() {
       btnTurn.setAttribute('aria-label', label); btnTurn.title = label;
       btnTurn.classList.remove('swap'); void btnTurn.offsetWidth; btnTurn.classList.add('swap'); // pequeña animación al cambiar de función
     }
-    // La carta de desarrollo se ofrece solo en la fase main y si la mano alcanza para pagarla.
+    // Carta de desarrollo: un botón más de la bandeja; se habilita en fase main si la mano alcanza para pagarla.
     function updateDevButton() {
       var cost = game.config.costs.developmentCard, hand = game.players[game.turn].hand;
-      var show = !busy && game.phase.kind === 'main' && Object.keys(cost).every(function (k) { return hand[k] >= cost[k]; });
-      btnDev.hidden = !show; stage.toggleAttribute('data-dev', show);
-      if (!show && pendingCmd && pendingCmd.type === 'buyDevCard') { pendingCmd = null; renderDialog(); }
+      var can = !busy && game.phase.kind === 'main' && Object.keys(cost).every(function (k) { return hand[k] >= cost[k]; });
+      btnDev.disabled = !can;
+      if (!can && pendingCmd && pendingCmd.type === 'buyDevCard') { pendingCmd = null; renderDialog(); }
     }
     function updateControls() {
       var ph = game.phase.kind, acts = legalActions(game, game.turn), can = {};
