@@ -293,9 +293,11 @@ body{
   .die.hop{animation:none}
 }
 
-/* Confirmación de una jugada de construcción: dos botones grandes, ✕ y ✓ */
-.dialog.confirm{width:min(260px,calc(100% - 28px))}
-.dialog .yesno{display:flex;gap:12px;margin-top:8px}
-.dialog .yesno button{flex:1;min-height:52px;font-size:1.7rem;line-height:1;border-width:2px}
-.dialog .yesno .yes{color:#1f7a3a;border-color:#1f7a3a}
-.dialog .yesno .no{color:#b3261e;border-color:#b3261e}
+/* Confirmación de una jugada de construcción: solo dos botones rellenos, ✕ rojo y ✓ verde, con el símbolo en blanco */
+.dialog.confirm{width:auto;padding:10px}
+.dialog .yesno{display:flex;gap:12px}
+.dialog .yesno button{width:64px;height:56px;font-size:1.9rem;line-height:1;color:#fff;border:0}
+.dialog .yesno .yes{background:#2e9e4f}
+.dialog .yesno .no{background:#d94141}
+.dialog .yesno .yes:hover:not(:disabled){background:#38b45c}
+.dialog .yesno .no:hover:not(:disabled){background:#e85a5a}

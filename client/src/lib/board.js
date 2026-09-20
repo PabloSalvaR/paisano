@@ -1150,8 +1150,7 @@ export function initBoard() {
       if (pendingCmd) {
         dialogKey = '';
         dialogEl.className = 'panel dialog confirm';
-        dialogEl.innerHTML = '<h3></h3><div class="yesno"><button type="button" class="no" data-cancel aria-label="Cancelar">✕</button><button type="button" class="yes" data-ok aria-label="Confirmar">✓</button></div>';
-        dialogEl.querySelector('h3').textContent = '¿Poner ' + CONFIRM_LABEL[pendingCmd.type] + ' acá?';
+        dialogEl.innerHTML = '<div class="yesno"><button type="button" class="no" data-cancel aria-label="Cancelar" title="Cancelar">✕</button><button type="button" class="yes" data-ok aria-label="Confirmar" title="Confirmar">✓</button></div>';
         dialogEl.hidden = false;
         return;
       }
@@ -1196,7 +1195,7 @@ export function initBoard() {
 
     // Envía un comando al motor: si lo acepta, actualiza el tablero; si no, muestra el error.
     // Jugada de construcción a la espera del ✓ / ✕ del jugador.
-    var pendingCmd = null, CONFIRM_LABEL = { placeSettlement: 'un poblado', buildSettlement: 'un poblado', buildCity: 'una ciudad', placeRoad: 'un camino', buildRoad: 'un camino' };
+    var pendingCmd = null;
     function askConfirm(cmd) { pendingCmd = cmd; renderDialog(); }
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && pendingCmd) { pendingCmd = null; renderDialog(); } });
     function dispatch(cmd) {
