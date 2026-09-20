@@ -254,7 +254,7 @@ body{
     max-height:calc(100% - 140px);z-index:4}
   .bar button{padding:8px 12px;font-size:.85rem}
   .vol{width:170px}
-  .hand{bottom:12px;gap:6px;padding:8px 10px}
+  .hand{left:10px;right:76px;bottom:12px;transform:none;max-width:none;gap:6px;padding:8px 10px}
   .who{min-width:0}
   .who .nm{display:none}
   .who .av{width:32px;height:32px}
@@ -271,7 +271,7 @@ body{
   .seat .cnt{margin-left:0;padding-left:2px;gap:2px}
   .seat .cnt svg{width:7px;height:9px}
   .seat .cnt b{font-size:.68rem;line-height:1.2}
-  .res{min-width:48px;padding:4px 5px 3px}
+  .res{flex:1;min-width:0;padding:4px 3px 3px}
   .res svg{width:30px;height:30px}
   .res b{font-size:1.2rem}
   .stats{left:10px;right:10px;bottom:215px;width:auto}
@@ -329,7 +329,7 @@ body{
 @keyframes diceWiggle{0%,78%,100%{transform:rotate(0)}84%{transform:rotate(-9deg)}92%{transform:rotate(9deg)}}
 
 @media (max-width:640px){
-  .turn-btn{right:10px;bottom:108px;width:58px;height:58px;border-width:2px}
+  .turn-btn{right:10px;bottom:26px;width:58px;height:58px;border-width:2px}
   .turn-btn svg{width:40px;height:40px}
   .turn-btn[data-mode="main"] svg{width:36px;height:36px}
 }
@@ -340,7 +340,7 @@ body{
 
 /* Celular: bandeja de construir más compacta, para que con la carta de desarrollo visible no pise el texto de estado */
 @media (max-width:640px){
-  .build{left:8px;right:84px;transform:none;gap:3px;padding:4px}
+  .build{left:8px;right:8px;transform:none;gap:3px;padding:4px}
   .build button{flex:1;min-width:0;gap:2px;padding:4px 2px 5px;font-size:.62rem}
   .build button svg{width:18px;height:18px}
   .build .cost{min-height:6px}
