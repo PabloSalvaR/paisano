@@ -761,7 +761,7 @@ export function initBoard() {
     }
 
     // ------------------------------------------------------------------ tablero
-    var board = null, tiles = [], tileMeshes = [], ships = [], robber = null, robberBase = 0, robberPulse = 0, piecesGroup = null, markersGroup = null;
+    var board = null, tiles = [], tileMeshes = [], ships = [], robber = null, robberBase = 0, robberPulse = 0, piecesGroup = null, markersGroup = null, ghostGroup = null;
     var game = null; // estado de la partida (lo maneja el motor); el tablero 3D es solo su reflejo
     var buildMode = null; // 'road' | 'settlement' | 'city' | null: qué se está por construir (en el turno normal)
     var robberTile = -1, discardSel = {}, dialogKey = ''; // casilla donde está dibujado el ladrón; selección del descarte
@@ -822,6 +822,7 @@ export function initBoard() {
       // el tablero arranca vacío: las piezas aparecen a medida que se juega
       piecesGroup = new THREE.Group(); board.add(piecesGroup);
       markersGroup = new THREE.Group(); board.add(markersGroup);
+      ghostGroup = new THREE.Group(); board.add(ghostGroup);
       syncPieces();
       resetPlayers();
       refreshUi();
@@ -853,6 +854,34 @@ export function initBoard() {
         born(m, 'v' + vid + (bd.city ? 'c' : 's'));
         piecesGroup.add(m);
       });
+    }
+
+    // Vista previa de la pieza pendiente de confirmar: la misma pieza del jugador, pero clarita (translúcida).
+    function showGhost(cmd) {
+      clearGhost();
+      var base = PLAYERS[cmd.player], topo = topology();
+      var mat = base.clone(); mat.transparent = true; mat.opacity = 0.42; mat.depthWrite = false;
+      var line = base.userData.outline.clone(); line.transparent = true; line.opacity = 0.3; line.depthWrite = false; mat.userData = { outline: line };
+      var g;
+      if (cmd.edge !== undefined) {
+        var e = topo.edges[cmd.edge], A = vertices[e.a], B = vertices[e.b], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L;
+        g = segment({ x: A.x + ux * 0.2, z: A.z + uz * 0.2 }, { x: B.x - ux * 0.2, z: B.z - uz * 0.2 }, TILE_TOP + 0.045, 0.085, 0.07, mat);
+      } else {
+        var v = vertices[cmd.vertex];
+        g = cmd.type === 'buildCity' ? makeCity(mat) : makeSettlement(mat);
+        g.position.set(v.x, TILE_TOP, v.z); g.rotation.y = ((cmd.vertex * 5) % 6) * Math.PI / 3 + Math.PI / 6;
+      }
+      g.traverse(function (o) { o.castShadow = false; o.receiveShadow = false; o.renderOrder = 4; });
+      g.userData.ghostMats = [mat, line];
+      ghostGroup.add(g);
+    }
+    function clearGhost() {
+      if (!ghostGroup) return;
+      while (ghostGroup.children.length) {
+        var g = ghostGroup.children[0]; ghostGroup.remove(g);
+        g.userData.ghostMats.forEach(function (m) { m.dispose(); });
+        if (g.geometry && g.geometry.type === 'BoxGeometry') g.geometry.dispose();
+      }
     }
 
     // Marcadores de las jugadas legales del jugador de turno (vértices para el poblado, aristas para el camino).
@@ -1148,12 +1177,13 @@ export function initBoard() {
       var ph = game.phase, name = PLAYER_INFO[game.turn].name;
       if (pendingCmd && (busy || pendingCmd.player !== game.turn)) pendingCmd = null;
       if (pendingCmd) {
-        dialogKey = '';
+        dialogKey = ''; showGhost(pendingCmd);
         dialogEl.className = 'panel dialog confirm';
         dialogEl.innerHTML = '<div class="yesno"><button type="button" class="no" data-cancel aria-label="Cancelar" title="Cancelar">✕</button><button type="button" class="yes" data-ok aria-label="Confirmar" title="Confirmar">✓</button></div>';
         dialogEl.hidden = false;
         return;
       }
+      clearGhost();
       dialogEl.className = 'panel dialog';
       if (busy || (ph.kind !== 'discard' && ph.kind !== 'steal')) { dialogEl.hidden = true; dialogKey = ''; return; }
       var key = ph.kind + ':' + game.turn + ':' + (ph.kind === 'discard' ? ph.queue.length : ph.victims.join(','));
