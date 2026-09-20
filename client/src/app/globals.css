@@ -40,6 +40,8 @@
   --shadow:0 6px 28px rgba(0,0,0,.5);
 }
 *{box-sizing:border-box;margin:0;padding:0}
+/* Sin el resaltado de toque del navegador móvil (dibuja el rectángulo del botón al tocar) y sin zoom por doble toque */
+button,[role="button"],a{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{height:100%}
 body{
   background:var(--bg);
@@ -309,7 +311,10 @@ body{
 .turn-btn[hidden]{display:none}
 /* Es opaco: sin el desenfoque heredado de .panel. Con backdrop-filter + animación de transform, Chrome lo dibuja cuadrado hasta que termina. */
 .turn-btn{-webkit-backdrop-filter:none;backdrop-filter:none}
-.turn-btn:hover:not(:disabled){box-shadow:var(--shadow),0 0 0 4px rgba(255,255,255,.4)}
+/* :hover queda "pegado" tras tocar en pantalla táctil */
+@media (hover:hover){
+  .turn-btn:hover:not(:disabled){box-shadow:var(--shadow),0 0 0 4px rgba(255,255,255,.4)}
+}
 .turn-btn:active:not(:disabled){box-shadow:var(--shadow),0 0 0 2px rgba(255,255,255,.4)}
 .turn-btn:disabled{opacity:.55;cursor:default}
 .turn-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
