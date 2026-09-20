@@ -952,7 +952,7 @@ export function initBoard() {
       var ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false, fog: false });
       function vertexMarker(vid) {
         // cada marcador tiene un área de toque invisible más grande que el disco que se ve (cómoda en el celular)
-        var v = vertices[vid], m = new THREE.Mesh(new THREE.CircleGeometry(0.26, 12), hitMat);
+        var v = vertices[vid], m = new THREE.Mesh(new THREE.CircleGeometry(0.3, 12), hitMat);
         m.rotation.x = -Math.PI / 2; m.position.set(v.x, y, v.z); m.userData = { type: 'vertex', id: vid };
         var disc = new THREE.Mesh(new THREE.CircleGeometry(0.13, 20), markerMat); disc.position.z = 0.001; disc.renderOrder = 3; m.add(disc);
         var ring = new THREE.Mesh(new THREE.RingGeometry(0.13, 0.17, 20), ringMat); ring.position.z = 0.002; ring.renderOrder = 3; m.add(ring);
@@ -960,9 +960,12 @@ export function initBoard() {
       }
       function edgeMarker(eid) {
         var e = topo.edges[eid], A = vertices[e.a], B = vertices[e.b], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L;
-        // mismo largo y ancho que el camino ya construido (ver syncPieces), para que al confirmar no cambie de forma
-        var m = segment({ x: A.x + ux * 0.2, z: A.z + uz * 0.2 }, { x: B.x - ux * 0.2, z: B.z - uz * 0.2 }, y, 0.085, 0.03, markerMat);
-        m.castShadow = false; m.receiveShadow = false; m.renderOrder = 3; m.userData = { type: 'edge', id: eid };
+        // Lo que se ve tiene el mismo largo y ancho que el camino ya construido (ver syncPieces), para que al confirmar no cambie
+        // de forma. El área de toque es aparte, invisible y mucho más ancha (0.32 contra 0.085): un camino es fino y costaba apuntarle.
+        var m = segment({ x: A.x + ux * 0.18, z: A.z + uz * 0.18 }, { x: B.x - ux * 0.18, z: B.z - uz * 0.18 }, y, 0.32, 0.06, hitMat);
+        m.castShadow = false; m.receiveShadow = false; m.userData = { type: 'edge', id: eid };
+        var bar = mesh(new THREE.BoxGeometry(L - 0.4, 0.03, 0.085), markerMat);
+        bar.castShadow = false; bar.receiveShadow = false; bar.renderOrder = 3; m.add(bar);
         markersGroup.add(m);
       }
       function tileMarker(tid) {
