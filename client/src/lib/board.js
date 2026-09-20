@@ -1394,6 +1394,8 @@ export function initBoard() {
       if (stolen) dur = Math.max(dur, flyGains([{ from: stolen.victim, p: stolen.thief, k: stolen.resource, n: 1 }], !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)));
       if (dur > 0) { busy = true; refreshUi(); setTimeout(function () { busy = false; applyView(); }, dur); }
       else applyView();
+      var traded = r.events.filter(function (e) { return e.type === 'BankTraded'; })[0];
+      if (traded) { audio.trade(); tradeFx(traded); }
       if (stolen) showStatus(PLAYER_INFO[stolen.thief].name + ' le robó ' + TERRAINS[stolen.resource].res.toLowerCase() + ' a ' + PLAYER_INFO[stolen.victim].name, false, true);
     }
     function commandFromMarker(m) {
@@ -1404,6 +1406,19 @@ export function initBoard() {
     }
     function pop(el, color) {
       el.animate([{ transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }, { transform: 'scale(1.2)', boxShadow: '0 0 18px 5px ' + color, offset: 0.35 }, { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }], { duration: 520, easing: 'ease-out' });
+    }
+
+    // Cifra (+n / −n) que sube y se desvanece sobre una tarjeta o un puesto.
+    function floatText(target, text, color) {
+      var el = document.createElement('span'); el.className = 'plus'; el.textContent = text; el.style.color = color; target.appendChild(el);
+      el.animate([{ transform: 'translateY(6px) scale(.6)', opacity: 0 }, { transform: 'translateY(-4px) scale(1.25)', opacity: 1, offset: 0.12 }, { transform: 'translateY(-10px) scale(1)', opacity: 1, offset: 0.7 }, { transform: 'translateY(-28px) scale(1)', opacity: 0 }], { duration: 2200, easing: 'ease-out' }).onfinish = function () { el.remove(); };
+    }
+    // Comercio con el banco: la tarjeta que se entrega pierde cartas (−n) y la que se recibe gana una (+1). La mano ya está al día.
+    function tradeFx(ev) {
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      var give = handEl.querySelector('[data-res="' + ev.give + '"]'), get = handEl.querySelector('[data-res="' + ev.get + '"]');
+      pop(give, give.style.getPropertyValue('--c')); floatText(give, '−' + ev.giveCount, give.style.getPropertyValue('--c'));
+      setTimeout(function () { pop(get, get.style.getPropertyValue('--c')); floatText(get, '+1', get.style.getPropertyValue('--c')); }, 350);
     }
 
     // Cada trabajo {t: casilla, p: jugador, k: recurso, n: cantidad} hace salir un icono de la casilla, con una insignia del color
@@ -1419,9 +1434,7 @@ export function initBoard() {
           hands[p][k] += amount;
           if (mine) card.querySelector('b').textContent = hands[p][k]; else seat.querySelector('.cnt b').textContent = handTotal(p);
           if (!animate) return;
-          pop(target, glow);
-          var plus = document.createElement('span'); plus.className = 'plus'; plus.textContent = '+' + amount; plus.style.color = mine ? card.style.getPropertyValue('--c') : pl.css; target.appendChild(plus);
-          plus.animate([{ transform: 'translateY(6px) scale(.6)', opacity: 0 }, { transform: 'translateY(-4px) scale(1.25)', opacity: 1, offset: 0.12 }, { transform: 'translateY(-10px) scale(1)', opacity: 1, offset: 0.7 }, { transform: 'translateY(-28px) scale(1)', opacity: 0 }], { duration: 2200, easing: 'ease-out' }).onfinish = function () { plus.remove(); };
+          pop(target, glow); floatText(target, '+' + amount, mine ? card.style.getPropertyValue('--c') : pl.css);
         };
         if (!animate) { gain(); return; }
         var stolen = j.from !== undefined, delay = stolen ? 250 : 450 + n * 260, sx, sy;

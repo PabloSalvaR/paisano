@@ -236,8 +236,8 @@ body{
 .menu-btn{display:flex;top:14px;right:14px;width:44px;height:44px;align-items:center;justify-content:center;
   color:var(--text);cursor:pointer;font:inherit}
 .menu-btn[aria-expanded="true"]{background:var(--btn-on);color:var(--btn-on-text)}
-/* Hasta 1299 px la bandeja no entra al lado del banner de recursos: va centrada encima, con aire entre los dos */
-@media (min-width:641px) and (max-width:1299px){
+/* Hasta 1449 px la bandeja no entra al lado del banner de recursos: va centrada encima, con aire entre los dos */
+@media (min-width:641px) and (max-width:1449px){
   .build{left:50%;right:auto;transform:translateX(-50%);bottom:142px}
   .status{bottom:234px}
 }
@@ -340,8 +340,8 @@ body{
 
 /* Celular: bandeja de construir más compacta, para que con la carta de desarrollo visible no pise el texto de estado */
 @media (max-width:640px){
-  .build{gap:4px;padding:4px}
-  .build button{min-width:54px;gap:2px;padding:4px 5px 5px;font-size:.68rem}
+  .build{left:8px;right:84px;transform:none;gap:3px;padding:4px}
+  .build button{flex:1;min-width:0;gap:2px;padding:4px 2px 5px;font-size:.62rem}
   .build button svg{width:18px;height:18px}
   .build .cost{min-height:6px}
   .build .cost i{width:6px;height:6px}

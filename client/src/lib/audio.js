@@ -134,6 +134,19 @@ export function createAudio() {
     if (kind === 'city') thump(t + 0.13, p[0] * 1.3, p[1] * 0.4, 0.1);
   }
 
+  // Comercio con el banco: dos "tin" de moneda (senos agudos con caída rápida), el segundo un poco más alto.
+  function ting(t, freq, vol) {
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.3);
+  }
+  function trade() {
+    if (!ctx) return;
+    var t = ctx.currentTime + 0.005;
+    ting(t, 1568, 0.16); ting(t + 0.11, 2093, 0.14);
+  }
+
   // ---------------------------------------------------------------- control
   function applyGain() { if (master) fade(master.gain, volume, 0.05); }
   // Llamar desde un gesto del usuario: crea el contexto (una sola vez) y lo reanuda.
@@ -170,6 +183,7 @@ export function createAudio() {
     setAmbient: setAmbient,
     rollDice: rollDice,
     land: land,
+    trade: trade,
     dispose: function () {
       disposed = true; clearTimeout(birdTimer); clearTimeout(cricketTimer);
       document.removeEventListener('visibilitychange', onVisibility);
