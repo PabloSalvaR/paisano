@@ -105,12 +105,12 @@ export function createAudio() {
   // ---------------------------------------------------------------- piezas
   // Una pieza de madera que se apoya con suavidad: "tum" redondo y grave, sin el chasquido seco (arranque suave, sin ruido agudo).
   // El camino es liviano; el poblado, más lleno; la ciudad, más grave y con un segundo apoyo tenue.
-  var LAND = { road: [200, 0.17, 0.14], settlement: [150, 0.24, 0.18], city: [110, 0.3, 0.24] }; // [frecuencia, volumen, duración]
+  var LAND = { road: [215, 0.25, 0.13], settlement: [160, 0.34, 0.17], city: [118, 0.43, 0.22] }; // [frecuencia, volumen, duración]
   function thump(t, freq, vol, dur) {
     var o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = 700;
+    lp.type = 'lowpass'; lp.frequency.value = 1100;
     o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(freq * 0.55, t + dur);
-    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.08);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.08);
     o.connect(lp); lp.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.1);
   }
   function land(kind) {
