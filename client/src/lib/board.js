@@ -871,7 +871,28 @@ export function initBoard() {
         g.position.set(v.x, TILE_TOP, v.z); g.rotation.y = ((cmd.vertex * 5) % 6) * Math.PI / 3 + Math.PI / 6;
       }
       g.traverse(function (o) { o.castShadow = false; o.receiveShadow = false; o.renderOrder = 4; });
+      g.userData.baseY = g.position.y; g.userData.baseRot = g.rotation.y;
             ghostGroup.add(g);
+    }
+    // La pieza pendiente flota sobre su lugar dando vueltas en el eje Y; al confirmar baja, frena el giro hasta quedar
+    // alineada y recién entonces se construye la real (sin animación de brote: ya llegó).
+    var GHOST_HOVER = 0.55, DROP_MS = 380;
+    function animateGhost(now) {
+      var g = ghostGroup && ghostGroup.children[0]; if (!g) return;
+      var u = g.userData;
+      if (!u.drop) { g.position.y = u.baseY + GHOST_HOVER + 0.05 * Math.sin(now * 3); g.rotation.y = u.baseRot + now * 2.4; return; }
+      var k = Math.min(1, (now - u.drop.t0) * 1000 / DROP_MS);
+      g.position.y = u.baseY + u.drop.h * (1 - k * k);
+      g.rotation.y = u.baseRot + u.drop.a0 + (u.drop.a1 - u.drop.a0) * (1 - (1 - k) * (1 - k));
+    }
+    function confirmDrop(cmd) {
+      var g = ghostGroup && ghostGroup.children[0];
+      if (!g || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) { dispatch(cmd); return; }
+      var u = g.userData, a0 = (g.rotation.y - u.baseRot) % (2 * Math.PI), a1 = 2 * Math.PI * (a0 > 4 ? 2 : 1);
+      u.drop = { t0: performance.now() / 1000, h: g.position.y - u.baseY, a0: a0, a1: a1 };
+      busy = true; dialogEl.hidden = true;
+      var key = cmd.edge !== undefined ? 'e' + cmd.edge : 'v' + cmd.vertex + (cmd.type === 'buildCity' ? 'c' : 's');
+      setTimeout(function () { busy = false; pieceSeen[key] = true; dispatch(cmd); }, DROP_MS);
     }
     function clearGhost() {
       if (!ghostGroup) return;
@@ -1209,7 +1230,7 @@ export function initBoard() {
       var b = e.target.closest('button'); if (!b || b.disabled || busy) return;
       if (pendingCmd) {
         var cmd = pendingCmd; pendingCmd = null;
-        if (b.hasAttribute('data-ok')) dispatch(cmd); else renderDialog();
+        if (b.hasAttribute('data-ok')) confirmDrop(cmd); else renderDialog();
         return;
       }
       var ph = game.phase;
@@ -1415,6 +1436,7 @@ export function initBoard() {
       if (markerMat) markerMat.opacity = 0.5 + 0.2 * Math.sin(time * 4);
       // piezas nuevas: brotan con un pequeño rebote
       var nowS = performance.now() / 1000;
+      animateGhost(nowS);
       for (var pc = 0; pc < piecesGroup.children.length; pc++) {
         var pm = piecesGroup.children[pc], born = pm.userData.born;
         if (born === undefined) continue;
