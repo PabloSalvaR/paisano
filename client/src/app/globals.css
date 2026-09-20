@@ -234,12 +234,13 @@ body{
 .menu-btn{display:flex;top:14px;right:14px;width:44px;height:44px;align-items:center;justify-content:center;
   color:var(--text);cursor:pointer;font:inherit}
 .menu-btn[aria-expanded="true"]{background:var(--btn-on);color:var(--btn-on-text)}
-@media (min-width:641px) and (max-width:1000px){
-  .build{left:50%;right:auto;transform:translateX(-50%);bottom:130px}
-  .status{bottom:196px}
+/* Hasta 1299 px la bandeja no entra al lado del banner de recursos: va centrada encima, con aire entre los dos */
+@media (min-width:641px) and (max-width:1299px){
+  .build{left:50%;right:auto;transform:translateX(-50%);bottom:142px}
+  .status{bottom:234px}
 }
 @media (max-width:640px){
-  .build{left:50%;right:auto;transform:translateX(-50%);bottom:96px;padding:6px}
+  .build{left:50%;right:auto;transform:translateX(-50%);bottom:108px;padding:6px}
   .build button{min-width:64px;padding:5px 6px 6px}
   /* logo chico y sin lema, alineado en altura con el botón de menú */
   .title{top:10px;left:10px;height:44px;display:flex;align-items:center;padding:0 6px;border-width:1px;box-shadow:var(--shadow)}
@@ -272,7 +273,7 @@ body{
   .res svg{width:30px;height:30px}
   .res b{font-size:1.2rem}
   .stats{left:10px;right:10px;bottom:215px;width:auto}
-  .status{bottom:160px;font-size:.85rem;padding:7px 12px}
+  .status{bottom:172px;font-size:.85rem;padding:7px 12px}
   .hover{top:auto;bottom:215px;right:10px;left:10px;max-width:none}
   /* el modal de dados va centrado, debajo de la fila de puestos */
   .dice{top:64px;right:auto;left:50%;transform:translateX(-50%);padding:10px 12px 9px;width:200px}
@@ -320,7 +321,7 @@ body{
 @keyframes diceWiggle{0%,78%,100%{transform:rotate(0)}84%{transform:rotate(-9deg)}92%{transform:rotate(9deg)}}
 
 @media (max-width:640px){
-  .turn-btn{right:10px;bottom:96px;width:58px;height:58px;border-width:2px}
+  .turn-btn{right:10px;bottom:108px;width:58px;height:58px;border-width:2px}
   .turn-btn svg{width:40px;height:40px}
   .turn-btn[data-mode="main"] svg{width:32px;height:32px}
   .turn-btn .next{width:24px;height:24px;top:-6px;left:-6px}
