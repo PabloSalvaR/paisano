@@ -1195,6 +1195,7 @@ export function initBoard() {
     var TURN_ARROW = '<svg viewBox="0 0 40 40" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h24M22 9.5 32.5 20 22 30.5"/></svg>';
     function updateTurnButton() {
       var ph = game.phase.kind, on = ph === 'roll' || ph === 'main';
+      if (busy && !btnTurn.hidden) { btnTurn.disabled = true; return; } // durante la tirada (dados rodando, recursos volando) queda como estaba: con un 7 la fase cambia enseguida y el ícono desaparecería antes de ver el número
       btnTurn.hidden = !on;
       if (!on) { btnTurn.removeAttribute('data-key'); return; }
       btnTurn.disabled = busy;
