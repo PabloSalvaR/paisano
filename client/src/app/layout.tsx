@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Paisano · Hacé tu tierra.",
+  title: "Paisano",
   description: "Juego de estrategia hexagonal por turnos con reglas libres.",
 };
 

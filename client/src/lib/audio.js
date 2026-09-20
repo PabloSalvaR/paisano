@@ -11,8 +11,8 @@ var AMBIENT = {
 };
 
 export function createAudio() {
-  var ctx = null, master = null, ambientBus = null, cricketGain = null, birdLevel = 0, mode = 'day';
-  var birdTimer = 0, disposed = false, noiseBuf = null;
+  var ctx = null, master = null, ambientBus = null, cricketLevel = 0, birdLevel = 0, mode = 'day';
+  var birdTimer = 0, cricketTimer = 0, disposed = false, noiseBuf = null;
   var started = false; // ya sonó el primer pájaro (para que el ambiente se note apenas se habilita el audio)
   var volume = 0.5, ambientOn = true; // volume: 0..1 (0 = silencio total, dados incluidos)
   try {
@@ -31,27 +31,15 @@ export function createAudio() {
   // ---------------------------------------------------------------- ambiente
   function startAmbient() {
     ambientBus = ctx.createGain(); ambientBus.gain.value = ambientOn ? 1 : 0; ambientBus.connect(master);
-    // grillos: portadora aguda, modulada por trinos rápidos y por un ritmo lento
-    var car = ctx.createOscillator(); car.frequency.value = 4300;
-    var trill = ctx.createGain(); trill.gain.value = 0;
-    var trillLfo = ctx.createOscillator(), trillLfoG = ctx.createGain();
-    trillLfo.frequency.value = 26; trillLfoG.gain.value = 0.5; trill.gain.value = 0.5;
-    trillLfo.connect(trillLfoG); trillLfoG.connect(trill.gain);
-    var gate = ctx.createGain(); gate.gain.value = 0.5;
-    var gateLfo = ctx.createOscillator(), gateLfoG = ctx.createGain();
-    gateLfo.frequency.value = 2.2; gateLfoG.gain.value = 0.5; gateLfo.connect(gateLfoG); gateLfoG.connect(gate.gain);
-    cricketGain = ctx.createGain(); cricketGain.gain.value = 0;
-    car.connect(trill); trill.connect(gate); gate.connect(cricketGain); cricketGain.connect(ambientBus);
-    car.start(); trillLfo.start(); gateLfo.start();
-
     setAmbient(mode, true);
     scheduleBirds();
+    scheduleCrickets();
   }
   function setAmbient(m, instant) {
     mode = AMBIENT[m] ? m : 'day';
-    if (!ctx || !cricketGain) return;
-    var a = AMBIENT[mode], tc = instant ? 0.01 : 1.2;
-    fade(cricketGain.gain, 0.024 * a.crickets, tc);
+    if (!ctx) return;
+    var a = AMBIENT[mode];
+    cricketLevel = a.crickets;
     birdLevel = a.birds;
   }
   function chirp(t0, base, vol) {
@@ -73,6 +61,31 @@ export function createAudio() {
       if (ctx.state === 'running' && ambientOn && Math.random() < birdLevel) birdCall();
       scheduleBirds();
     }, 1800 + Math.random() * 3200);
+  }
+
+  // Grillos: cantos sueltos y espaciados, no un zumbido continuo. Cada canto son 3 a 6 pulsitos agudos; entre uno y otro pasa un
+  // silencio al azar (a veces largo) y de vez en cuando otro grillo contesta. De noche suenan; de día y al atardecer, no.
+  function cricketPulse(t0, freq, vol) {
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.045);
+    o.connect(g); g.connect(ambientBus); o.start(t0); o.stop(t0 + 0.05);
+  }
+  function cricketCall() {
+    var base = 3900 + Math.random() * 700, n = 3 + Math.floor(Math.random() * 4), gap = 0.05 + Math.random() * 0.03;
+    var t = ctx.currentTime + 0.05, vol = 0.03 * cricketLevel * (0.6 + Math.random() * 0.6);
+    for (var i = 0; i < n; i++) cricketPulse(t + i * gap, base * (0.995 + Math.random() * 0.01), vol);
+  }
+  function scheduleCrickets() {
+    if (disposed) return;
+    var wait = 1200 + Math.random() * 3800 + (Math.random() < 0.2 ? 3000 + Math.random() * 5000 : 0);
+    cricketTimer = setTimeout(function () {
+      if (ctx.state === 'running' && ambientOn && Math.random() < cricketLevel) {
+        cricketCall();
+        if (Math.random() < 0.3) setTimeout(function () { if (!disposed && ctx.state === 'running') cricketCall(); }, 150 + Math.random() * 400); // otro grillo contesta
+      }
+      scheduleCrickets();
+    }, wait);
   }
 
   // ---------------------------------------------------------------- dados
@@ -158,7 +171,7 @@ export function createAudio() {
     rollDice: rollDice,
     land: land,
     dispose: function () {
-      disposed = true; clearTimeout(birdTimer);
+      disposed = true; clearTimeout(birdTimer); clearTimeout(cricketTimer);
       document.removeEventListener('visibilitychange', onVisibility);
       if (ctx) ctx.close();
     }
