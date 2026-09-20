@@ -905,7 +905,8 @@ export function initBoard() {
       }
       function edgeMarker(eid) {
         var e = topo.edges[eid], A = vertices[e.a], B = vertices[e.b], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L;
-        var m = segment({ x: A.x + ux * 0.22, z: A.z + uz * 0.22 }, { x: B.x - ux * 0.22, z: B.z - uz * 0.22 }, y, 0.17, 0.03, markerMat);
+        // mismo largo y ancho que el camino ya construido (ver syncPieces), para que al confirmar no cambie de forma
+        var m = segment({ x: A.x + ux * 0.2, z: A.z + uz * 0.2 }, { x: B.x - ux * 0.2, z: B.z - uz * 0.2 }, y, 0.085, 0.03, markerMat);
         m.castShadow = false; m.receiveShadow = false; m.renderOrder = 3; m.userData = { type: 'edge', id: eid };
         markersGroup.add(m);
       }
