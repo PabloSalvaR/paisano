@@ -103,18 +103,21 @@ export function createAudio() {
   }
 
   // ---------------------------------------------------------------- piezas
-  // Una pieza de madera que cae sobre el tablero: golpe grave con toc seco. El camino es liviano; el poblado, más lleno;
-  // la ciudad pesa más y rebota con un segundo toquecito.
-  var LAND = { road: [230, 0.3, 0.12], settlement: [170, 0.42, 0.16], city: [125, 0.55, 0.2] }; // [frecuencia, volumen, duración]
+  // Una pieza de madera que se apoya con suavidad: "tum" redondo y grave, sin el chasquido seco (arranque suave, sin ruido agudo).
+  // El camino es liviano; el poblado, más lleno; la ciudad, más grave y con un segundo apoyo tenue.
+  var LAND = { road: [200, 0.17, 0.14], settlement: [150, 0.24, 0.18], city: [110, 0.3, 0.24] }; // [frecuencia, volumen, duración]
+  function thump(t, freq, vol, dur) {
+    var o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 700;
+    o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(freq * 0.55, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.08);
+    o.connect(lp); lp.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.1);
+  }
   function land(kind) {
     if (!ctx) return;
     var p = LAND[kind] || LAND.settlement, t = ctx.currentTime + 0.005;
-    var o = ctx.createOscillator(), g = ctx.createGain();
-    o.frequency.setValueAtTime(p[0], t); o.frequency.exponentialRampToValueAtTime(p[0] * 0.4, t + p[2]);
-    g.gain.setValueAtTime(p[1], t); g.gain.exponentialRampToValueAtTime(0.0001, t + p[2] + 0.05);
-    o.connect(g); g.connect(master); o.start(t); o.stop(t + p[2] + 0.06);
-    click(t, p[1] * 0.7, p[0] * 2.6);
-    if (kind === 'city') click(t + 0.11, 0.2, 420);
+    thump(t, p[0], p[1], p[2]);
+    if (kind === 'city') thump(t + 0.13, p[0] * 1.3, p[1] * 0.4, 0.1);
   }
 
   // ---------------------------------------------------------------- control
