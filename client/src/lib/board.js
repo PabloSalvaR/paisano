@@ -856,12 +856,11 @@ export function initBoard() {
       });
     }
 
-    // Vista previa de la pieza pendiente de confirmar: la misma pieza del jugador, opaca pero en un tono más claro.
+    // Vista previa de la pieza pendiente de confirmar: la misma pieza del jugador, opaca y con el color exacto del jugador.
     function showGhost(cmd) {
       clearGhost();
       var base = PLAYERS[cmd.player], topo = topology();
-      var mat = base.clone(); mat.color.lerp(new THREE.Color(0xffffff), 0.45);
-      var line = base.userData.outline.clone(); line.color.lerp(new THREE.Color(0xffffff), 0.3); mat.userData = { outline: line };
+      var mat = base; // el material real del jugador: mismo color, sin aclarar
       var g;
       if (cmd.edge !== undefined) {
         var e = topo.edges[cmd.edge], A = vertices[e.a], B = vertices[e.b], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L;
@@ -872,14 +871,12 @@ export function initBoard() {
         g.position.set(v.x, TILE_TOP, v.z); g.rotation.y = ((cmd.vertex * 5) % 6) * Math.PI / 3 + Math.PI / 6;
       }
       g.traverse(function (o) { o.castShadow = false; o.receiveShadow = false; o.renderOrder = 4; });
-      g.userData.ghostMats = [mat, line];
-      ghostGroup.add(g);
+            ghostGroup.add(g);
     }
     function clearGhost() {
       if (!ghostGroup) return;
       while (ghostGroup.children.length) {
         var g = ghostGroup.children[0]; ghostGroup.remove(g);
-        g.userData.ghostMats.forEach(function (m) { m.dispose(); });
         if (g.geometry && g.geometry.type === 'BoxGeometry') g.geometry.dispose();
       }
     }
