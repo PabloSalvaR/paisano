@@ -86,6 +86,7 @@ export const MARKUP = `
   <nav class="panel bar" id="bar" aria-label="Controles del tablero">
     <div class="group">
       <button type="button" id="btnNew" class="primary">Nuevo mapa</button>
+      <button type="button" id="btnQuick" class="primary" hidden title="Solo desarrollo: mapa nuevo con la colocación inicial hecha al azar, listo para tirar los dados">Partida rápida · dev</button>
     </div>
     <div class="group" role="group" aria-label="Sonido">
       <div class="vol">
@@ -1341,6 +1342,7 @@ export function initBoard() {
         });
         dur = flyGains(jobs, !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches));
       }
+      if (stolen) dur = Math.max(dur, flyGains([{ from: stolen.victim, p: stolen.thief, k: stolen.resource, n: 1 }], !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)));
       if (dur > 0) { busy = true; refreshUi(); setTimeout(function () { busy = false; applyView(); }, dur); }
       else applyView();
       if (stolen) showStatus(PLAYER_INFO[stolen.thief].name + ' le robó ' + TERRAINS[stolen.resource].res.toLowerCase() + ' a ' + PLAYER_INFO[stolen.victim].name, false, true);
@@ -1373,16 +1375,23 @@ export function initBoard() {
           plus.animate([{ transform: 'translateY(6px) scale(.6)', opacity: 0 }, { transform: 'translateY(-4px) scale(1.25)', opacity: 1, offset: 0.12 }, { transform: 'translateY(-10px) scale(1)', opacity: 1, offset: 0.7 }, { transform: 'translateY(-28px) scale(1)', opacity: 0 }], { duration: 2200, easing: 'ease-out' }).onfinish = function () { plus.remove(); };
         };
         if (!animate) { gain(); return; }
-        var v = new THREE.Vector3(j.t.x, TILE_TOP + 0.35, j.t.z).project(camera), sx = (v.x * 0.5 + 0.5) * w, sy = (0.5 - v.y * 0.5) * h;
+        var stolen = j.from !== undefined, delay = stolen ? 250 : 450 + n * 260, sx, sy;
+        if (stolen) { // robo: sale del avatar de la víctima, que pierde la carta en el momento de partir
+          var fs = seatsEl.children[j.from], fr = fs.querySelector('.av').getBoundingClientRect();
+          sx = fr.left - sr.left + fr.width / 2; sy = fr.top - sr.top + fr.height / 2;
+          setTimeout(function () { hands[j.from][k] -= 1; fs.querySelector('.cnt b').textContent = handTotal(j.from); pop(fs, PLAYER_INFO[j.from].css); }, delay);
+        } else {
+          var v = new THREE.Vector3(j.t.x, TILE_TOP + 0.35, j.t.z).project(camera); sx = (v.x * 0.5 + 0.5) * w; sy = (0.5 - v.y * 0.5) * h;
+        }
         var ar = (mine ? card.querySelector('svg') : seat.querySelector('.av')).getBoundingClientRect(), tx = ar.left - sr.left + ar.width / 2, ty = ar.top - sr.top + ar.height / 2;
-        var fly = document.createElement('div'); fly.className = 'fly'; fly.style.background = pl.css; fly.appendChild(card.querySelector('svg').cloneNode(true)); stage.appendChild(fly);
+        var fly = document.createElement('div'); fly.className = 'fly'; fly.style.background = PLAYER_INFO[stolen ? j.from : p].css; fly.appendChild(card.querySelector('svg').cloneNode(true)); stage.appendChild(fly);
         var at = function (x, y, sc) { return 'translate(' + (x - 20) + 'px,' + (y - 20) + 'px) scale(' + sc + ')'; };
         fly.animate([
           { transform: at(sx, sy, 0.4), opacity: 0 },
           { transform: at(sx, sy - 26, 1.3), opacity: 1, offset: 0.2 },
           { transform: at((sx + tx) / 2, Math.min(sy, ty) - 60, 1.1), opacity: 1, offset: 0.55 },
           { transform: at(tx, ty, 0.75), opacity: 1 }
-        ], { duration: 1000, delay: 450 + n * 260, easing: 'ease-in-out', fill: 'both' }).onfinish = function () { fly.remove(); gain(); };
+        ], { duration: 1000, delay: delay, easing: 'ease-in-out', fill: 'both' }).onfinish = function () { fly.remove(); gain(); };
       });
       return animate && jobs.length ? 450 + (jobs.length - 1) * 260 + 1000 + 600 : 0;
     }
@@ -1392,6 +1401,23 @@ export function initBoard() {
       buildBoard((Math.random() * 1e9) | 0);
       for (var n = 2; n <= 12; n++) rollCounts[n] = 0;
       updateStats();
+    });
+    // Solo desarrollo: salta la colocación inicial. Mapa nuevo, poblados y caminos al azar (por el motor, con comandos legales) y listo para tirar.
+    // Se ve con `npm run dev` o con ?debug en la URL; en producción no existe.
+    var btnQuick = document.getElementById('btnQuick');
+    if (process.env.NODE_ENV !== 'production' || /[?&]debug/.test(location.search)) btnQuick.hidden = false;
+    btnQuick.addEventListener('click', function () {
+      buildBoard((Math.random() * 1e9) | 0);
+      for (var n = 2; n <= 12; n++) rollCounts[n] = 0;
+      updateStats();
+      var st = game, guard = 0;
+      while (st.phase.kind === 'setup' && guard++ < 200) {
+        var p = st.turn, a = legalActions(st, p)[0], list = a.vertices || a.edges, at = list[Math.floor(Math.random() * list.length)];
+        var r = applyCommand(st, a.type === 'placeSettlement' ? { type: 'placeSettlement', player: p, vertex: at } : { type: 'placeRoad', player: p, edge: at });
+        if (!r.ok) break;
+        st = r.state;
+      }
+      game = st; syncPieces(); applyView();
     });
     var btnStats = document.getElementById('btnStats');
     btnStats.addEventListener('click', function () { statsEl.hidden = !statsEl.hidden; pressed(btnStats, !statsEl.hidden); });

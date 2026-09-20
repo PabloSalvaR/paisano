@@ -341,3 +341,4 @@ body{
   .build .cost{min-height:6px}
   .build .cost i{width:6px;height:6px}
 }
+.bar button[hidden]{display:none}
