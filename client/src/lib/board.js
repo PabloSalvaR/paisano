@@ -388,6 +388,166 @@ export function initBoard() {
     water.position.y = WATER_Y;
     scene.add(water);
 
+    // ------------------------------------------------------------------ objetos gauchos sobre la mesa (fuera del marco)
+    // Puro adorno: mate con bombilla, pava de hierro, mazo de cartas españolas y facón. Se ven al alejar la cámara.
+    function place(g, x, z, rotY) { g.position.set(x, 0, z); g.rotation.y = rotY || 0; scene.add(g); return g; }
+
+    function makeMate() {
+      var g = new THREE.Group();
+      var gourd = M(0x8a5a2b, 0.55, 0, { env: 0.45 }), silver = M(0xd3d8de, 0.28, 0.85, { env: 0.9 });
+      var prof = [[0, 0], [0.16, 0], [0.27, 0.1], [0.34, 0.27], [0.33, 0.45], [0.27, 0.58], [0.25, 0.6], [0.22, 0.6], [0.21, 0.45], [0.16, 0.22], [0, 0.18]]; // afuera hacia arriba, borde y pared interior hueca
+      g.add(mesh(new THREE.LatheGeometry(prof.map(function (p) { return new THREE.Vector2(p[0], p[1]); }), 24), gourd));
+      var rim = mesh(new THREE.TorusGeometry(0.235, 0.032, 8, 28), silver); rim.rotation.x = Math.PI / 2; rim.position.y = 0.6; g.add(rim);
+      var base = mesh(new THREE.TorusGeometry(0.17, 0.03, 8, 24), silver); base.rotation.x = Math.PI / 2; base.position.y = 0.03; g.add(base);
+      // yerba: queda adentro, por debajo del borde. Superficie inclinada: alta del lado contrario a la bombilla (+x),
+      // baja junto a ella (-x), con un pozo más oscuro y húmedo pegado al caño.
+      var yR = [], ri;
+      for (ri = 0; ri <= 12; ri++) yR.push(new THREE.Vector2(0.215 * (1 - ri / 12), 0)); // de afuera hacia el centro: normales hacia arriba
+      var yGeo = new THREE.LatheGeometry(yR, 32), yp = yGeo.attributes.position, yc = [];
+      var dry = col(0x8a9a3a), wet = col(0x46561f), PX = -0.125;
+      for (var vi = 0; vi < yp.count; vi++) {
+        var vx = yp.getX(vi), vz = yp.getZ(vi);
+        var pd = Math.exp(-Math.pow(Math.hypot(vx - PX, vz) / 0.115, 2));      // 1 en el centro del pozo
+        yp.setY(vi, 0.49 + 0.095 * (vx + 0.215) / 0.43 - 0.12 * pd);          // de 0.49 (junto a la bombilla) a 0.585 (borde en 0.6), menos el pozo
+        var cc = dry.clone().lerp(wet, Math.min(1, pd * 1.5)); yc.push(cc.r, cc.g, cc.b);
+      }
+      yGeo.setAttribute('color', new THREE.Float32BufferAttribute(yc, 3)); yGeo.computeVertexNormals();
+      var yMat = M(0xffffff, 0.95, 0, { env: 0.1 }); yMat.vertexColors = true;
+      g.add(mesh(yGeo, yMat));
+      // bombilla: casi vertical, apoyada contra la pared; entra en el pozo y sobresale por arriba del borde
+      var b = new THREE.Group();
+      var tube = mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.82, 8), silver); tube.position.y = 0.41; b.add(tube);
+      var bulb = mesh(new THREE.SphereGeometry(0.05, 10, 8), silver); bulb.scale.y = 0.7; b.add(bulb);
+      var mouth = mesh(new THREE.CylinderGeometry(0.03, 0.017, 0.09, 10), silver); mouth.position.y = 0.85; b.add(mouth);
+      b.position.set(-0.09, 0.3, 0); b.rotation.z = 0.16;
+      g.add(b);
+      return g;
+    }
+
+    function makePava() {
+      var g = new THREE.Group();
+      var iron = M(0x2a2a2f, 0.55, 0.55, { env: 0.6 });
+      var prof = [[0, 0], [0.48, 0], [0.62, 0.08], [0.67, 0.28], [0.6, 0.52], [0.42, 0.7], [0.3, 0.76], [0.3, 0.8], [0, 0.8]];
+      g.add(mesh(new THREE.LatheGeometry(prof.map(function (p) { return new THREE.Vector2(p[0], p[1]); }), 28), iron));
+      var lid = mesh(new THREE.SphereGeometry(0.29, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), iron); lid.scale.y = 0.55; lid.position.y = 0.78; g.add(lid);
+      var knob = mesh(new THREE.SphereGeometry(0.06, 10, 8), iron); knob.position.y = 0.96; g.add(knob);
+      var spoutGeo = new THREE.CylinderGeometry(0.06, 0.12, 0.8, 12); spoutGeo.translate(0, 0.4, 0);
+      var spout = mesh(spoutGeo, iron); spout.position.set(0.5, 0.2, 0); spout.rotation.z = -1.0; g.add(spout);
+      var arch = mesh(new THREE.TorusGeometry(0.56, 0.035, 8, 26, Math.PI), iron); arch.rotation.y = Math.PI / 2; arch.position.y = 0.6; g.add(arch);
+      var grip = mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.3, 10), M(0x5a3a1e, 0.8, 0, { env: 0.2 })); grip.rotation.x = Math.PI / 2; grip.position.y = 1.16; g.add(grip);
+      return g;
+    }
+
+    // Baraja española: frente con palo (oro, copa, espada, basto) y dorso a rombos.
+    function cardFaceCanvas(suit, num) {
+      var c = makeCanvas(128, 200), x = c.getContext('2d');
+      x.fillStyle = '#f4ead2'; x.fillRect(0, 0, 128, 200);
+      x.strokeStyle = '#7a5a2a'; x.lineWidth = 4; x.strokeRect(6, 6, 116, 188);
+      x.fillStyle = '#3a2a16'; x.font = 'bold 26px Georgia, serif'; x.textAlign = 'left'; x.fillText(String(num), 14, 36);
+      x.textAlign = 'right'; x.fillText(String(num), 114, 188);
+      x.save(); x.translate(64, 100); x.lineWidth = 3;
+      if (suit === 'oros') {
+        x.fillStyle = '#e2b33c'; x.strokeStyle = '#8a5f10'; x.beginPath(); x.arc(0, 0, 38, 0, 6.2832); x.fill(); x.stroke();
+        x.beginPath(); x.arc(0, 0, 24, 0, 6.2832); x.stroke(); x.fillStyle = '#f3d77a'; x.beginPath(); x.arc(0, 0, 12, 0, 6.2832); x.fill(); x.stroke();
+      } else if (suit === 'copas') {
+        x.fillStyle = '#c23b3b'; x.strokeStyle = '#5a1414';
+        x.beginPath(); x.moveTo(-34, -40); x.lineTo(34, -40); x.quadraticCurveTo(30, 12, 0, 14); x.quadraticCurveTo(-30, 12, -34, -40); x.fill(); x.stroke();
+        x.fillRect(-5, 14, 10, 32); x.strokeRect(-5, 14, 10, 32);
+        x.beginPath(); x.ellipse(0, 50, 26, 8, 0, 0, 6.2832); x.fill(); x.stroke();
+      } else if (suit === 'espadas') {
+        x.fillStyle = '#cfd6dd'; x.strokeStyle = '#2b3138';
+        x.beginPath(); x.moveTo(0, -70); x.lineTo(11, -46); x.lineTo(9, 30); x.lineTo(-9, 30); x.lineTo(-11, -46); x.closePath(); x.fill(); x.stroke();
+        x.fillStyle = '#c9a23a'; x.fillRect(-30, 30, 60, 10); x.strokeRect(-30, 30, 60, 10);
+        x.fillStyle = '#5a3a1e'; x.fillRect(-6, 40, 12, 28); x.strokeRect(-6, 40, 12, 28);
+      } else {
+        x.rotate(-0.5); x.fillStyle = '#7a4a1e'; x.strokeStyle = '#3a220b';
+        x.beginPath(); x.moveTo(-14, -66); x.lineTo(14, -66); x.lineTo(20, 40); x.quadraticCurveTo(0, 70, -20, 40); x.closePath(); x.fill(); x.stroke();
+        x.fillStyle = '#3f8f45'; x.beginPath(); x.arc(-22, -14, 10, 0, 6.2832); x.arc(22, 6, 10, 0, 6.2832); x.fill();
+      }
+      x.restore();
+      return c;
+    }
+    function cardBackCanvas() {
+      var c = makeCanvas(128, 200), x = c.getContext('2d');
+      x.fillStyle = '#8f2a2a'; x.fillRect(0, 0, 128, 200);
+      x.strokeStyle = '#e8d6a0'; x.lineWidth = 2;
+      for (var i = -200; i < 260; i += 22) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 200, 200); x.moveTo(i + 200, 0); x.lineTo(i, 200); x.stroke(); }
+      x.lineWidth = 8; x.strokeStyle = '#f4ead2'; x.strokeRect(4, 4, 120, 192);
+      return c;
+    }
+    function makeCards() {
+      var g = new THREE.Group(), CW = 0.9, CL = 1.4, cream = M(0xf4ead2, 0.7, 0, { env: 0.2 });
+      var deck = mesh(new THREE.BoxGeometry(CW, 0.3, CL), [cream, cream, M(0xffffff, 0.7, 0, { env: 0.2, map: tex(cardBackCanvas()) }), cream, cream, cream]);
+      deck.position.set(0.55, 0.15, 0.3); deck.rotation.y = 0.2; g.add(deck);
+      var hand = [['espadas', 1], ['oros', 7], ['copas', 12], ['bastos', 3]];
+      hand.forEach(function (h, i) {
+        var f = new THREE.Group();
+        var card = mesh(new THREE.BoxGeometry(CW, 0.02, CL), [cream, cream, M(0xffffff, 0.7, 0, { env: 0.2, map: tex(cardFaceCanvas(h[0], h[1])) }), cream, cream, cream]);
+        card.position.set(0, 0.011 + i * 0.024, -0.6);
+        f.add(card); f.position.set(-0.75, 0, 0.9); f.rotation.y = (i - 1.5) * 0.3;
+        g.add(f);
+      });
+      return g;
+    }
+
+    function makeFacon() {
+      var g = new THREE.Group();
+      var steel = M(0xdfe4ea, 0.22, 0.9, { env: 1.0 }), brass = M(0xc9a23a, 0.35, 0.8, { env: 0.8 }), wood = M(0x4a2c17, 0.7, 0, { env: 0.25 });
+      var s = new THREE.Shape();
+      s.moveTo(0, -0.085); s.lineTo(1.1, -0.085); s.quadraticCurveTo(1.5, -0.07, 1.7, 0.03); s.lineTo(1.35, 0.085); s.lineTo(0, 0.085); s.closePath();
+      var bladeGeo = new THREE.ExtrudeGeometry(s, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 1 });
+      bladeGeo.rotateX(-Math.PI / 2);
+      var blade = mesh(bladeGeo, steel); blade.position.y = 0.02; g.add(blade);
+      var guard = mesh(new THREE.BoxGeometry(0.07, 0.07, 0.44), brass); guard.position.set(-0.02, 0.06, 0); g.add(guard);
+      var hGeo = new THREE.CylinderGeometry(0.052, 0.07, 0.78, 12); hGeo.rotateZ(Math.PI / 2);
+      var handle = mesh(hGeo, wood); handle.position.set(-0.43, 0.07, 0); g.add(handle);
+      [-0.2, -0.45, -0.7].forEach(function (px) {
+        var ring = mesh(new THREE.TorusGeometry(0.066, 0.011, 6, 16), brass); ring.rotation.y = Math.PI / 2; ring.position.set(px, 0.07, 0); g.add(ring);
+      });
+      var pommel = mesh(new THREE.SphereGeometry(0.085, 12, 10), brass); pommel.position.set(-0.84, 0.07, 0); g.add(pommel);
+      return g;
+    }
+
+    // Farol de campo: base y tapa de hierro, depósito de kerosén, tubo de vidrio con llama y jaula de alambre.
+    // De noche (y algo al atardecer) la llama se enciende: crece, titila y alumbra la mesa (ver `frame`).
+    var lantern = null;
+    function makeLantern() {
+      var g = new THREE.Group();
+      var iron = M(0x2a2a2f, 0.55, 0.55, { env: 0.6 }), brass = M(0xb08a3a, 0.4, 0.8, { env: 0.8 });
+      var glass = M(0xcfe8f0, 0.1, 0, { env: 0.9 }); glass.transparent = true; glass.opacity = 0.3; glass.depthWrite = false; glass.side = THREE.DoubleSide;
+      var foot = mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.08, 20), iron); foot.position.y = 0.04; g.add(foot);
+      var tank = mesh(new THREE.CylinderGeometry(0.24, 0.27, 0.17, 20), brass); tank.position.y = 0.165; g.add(tank);
+      var knob = mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.06, 10), brass); knob.rotation.z = Math.PI / 2; knob.position.set(0.3, 0.17, 0); g.add(knob);
+      var gl = [[0.16, 0.25], [0.24, 0.4], [0.27, 0.6], [0.2, 0.85], [0.17, 1.0]];
+      g.add(mesh(new THREE.LatheGeometry(gl.map(function (p) { return new THREE.Vector2(p[0], p[1]); }), 20), glass, false, false));
+      for (var i = 0; i < 4; i++) {
+        var a = i * Math.PI / 2 + Math.PI / 4, bar = mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.78, 6), iron);
+        bar.position.set(Math.cos(a) * 0.255, 0.63, Math.sin(a) * 0.255); g.add(bar);
+      }
+      var cap = mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.1, 20), iron); cap.position.y = 1.03; g.add(cap);
+      var dome = mesh(new THREE.SphereGeometry(0.2, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), iron); dome.scale.y = 0.55; dome.position.y = 1.08; g.add(dome);
+      var vent = mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.08, 10), iron); vent.position.y = 1.23; g.add(vent);
+      var ring = mesh(new THREE.TorusGeometry(0.13, 0.017, 6, 20), iron); ring.position.y = 1.32; g.add(ring);
+      var wick = mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.14, 6), M(0x1b1712, 0.9, 0, { env: 0.1 })); wick.position.y = 0.32; g.add(wick);
+      var flame = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffc85a, fog: false }));
+      flame.position.y = 0.42; g.add(flame);
+      var halo = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffb040, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+      halo.position.y = 0.43; g.add(halo);
+      var glow = new THREE.PointLight(col(0xffa848), 0, 7, 2); glow.position.y = 0.5; g.add(glow);
+      g.userData = { flame: flame, halo: halo, glow: glow };
+      lantern = g;
+      return g;
+    }
+
+    // Apoyados en los lados inclinados del marco (apotema exterior ≈ 6.06), donde el hexágono deja hueco arriba y abajo:
+    // pava y mate (arriba izq.) a ~0.65 del borde; farol (arriba der.), cartas (abajo der.) y facón (abajo izq.).
+    // Cada uno va girado para quedar paralelo al lado que toca.
+    place(makeLantern(), 6.12, -3.54, 0);
+    place(makePava(), -6.39, -3.69, 1.047);
+    place(makeMate(), -6.74, -2.45, 0.5236); // al lado de la pava, a su izquierda, sobre el mismo lado del marco
+    place(makeCards(), 6.72, 3.88, -2.094);
+    place(makeFacon(), -6.4, 3.25, -1.047);
+
     // ------------------------------------------------------------------ geometrías y materiales compartidos
     var HEX_R = 1;           // = circunradio de la grilla: las casillas se tocan (la bisel deja la línea divisoria)
     function tileShape() {
@@ -1618,6 +1778,17 @@ export function initBoard() {
         var sh = ships[s], ph = sh.userData.phase;
         sh.position.y = sh.userData.baseY + Math.sin(time * 1.4 + ph) * 0.025 + 0.02;
         sh.rotation.z = Math.sin(time * 1.1 + ph) * 0.05;
+      }
+      // farol: la llama se enciende con la noche (cur.lamps: 0 de día, 0.35 al atardecer, 1.25 de noche) y titila
+      if (lantern) {
+        var LL = Math.max(0, Math.min(1, cur.lamps / 1.25)), lu = lantern.userData;
+        var fk = 1 + 0.10 * Math.sin(time * 13) + 0.07 * Math.sin(time * 23 + 1.3) + 0.05 * Math.sin(time * 37 + 0.4);
+        var fs = 0.3 + 0.7 * LL;
+        lu.flame.visible = lu.halo.visible = LL > 0.02;
+        lu.flame.scale.set(fs * (1 + 0.06 * Math.sin(time * 17)), 1.7 * fs * fk, fs);
+        lu.flame.position.x = Math.sin(time * 9 + 0.5) * 0.008 * LL;
+        lu.halo.scale.set(fs * fk, 1.5 * fs * fk, fs * fk); lu.halo.material.opacity = 0.24 * LL * fk;
+        lu.glow.intensity = 1.1 * LL * fk;
       }
       // marcadores de jugada legal: laten suave
       if (markerMat) markerMat.opacity = 0.5 + 0.2 * Math.sin(time * 4);
