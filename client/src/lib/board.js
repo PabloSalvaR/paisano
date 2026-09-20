@@ -1252,7 +1252,7 @@ export function initBoard() {
           if (buildMode) return me ? { road: 'Elegí dónde va el camino', settlement: 'Elegí dónde va el poblado', city: 'Elegí qué poblado mejorar' }[buildMode] : 'Turno de ' + name;
           return me ? 'Tu turno' : 'Turno de ' + name;
         case 'discard': return me ? 'Salió un 7: descartá ' + ph.queue[0].count + ' cartas' : name + ' descarta ' + ph.queue[0].count + ' cartas';
-        case 'moveRobber': return me ? 'Mové el ladrón: tocá una casilla' : name + ' mueve el ladrón';
+        case 'moveRobber': return me ? 'Mové el ladrón' : name + ' mueve el ladrón';
         case 'steal': return me ? 'Elegí a quién robarle una carta' : name + ' elige a quién robarle';
         default: return ph.winner === VIEWER ? '¡Ganaste la partida con ' + vps[ph.winner] + ' puntos!' : '¡' + PLAYER_INFO[ph.winner].name + ' ganó la partida con ' + vps[ph.winner] + ' puntos!';
       }
