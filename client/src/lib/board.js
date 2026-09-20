@@ -1239,7 +1239,7 @@ export function initBoard() {
         case 'roll': return 'Turno de ' + name + ': tirá los dados';
         case 'main':
           if (buildMode) return name + ': ' + { road: 'elegí dónde va el camino', settlement: 'elegí dónde va el poblado', city: 'elegí qué poblado mejorar' }[buildMode];
-          return 'Turno de ' + name + ': construí o terminá tu turno';
+          return 'Turno de ' + name;
         case 'discard': return name + ': salió un 7, descartá ' + ph.queue[0].count + ' cartas';
         case 'moveRobber': return name + ': mové el ladrón (tocá una casilla)';
         case 'steal': return name + ': elegí a quién robarle una carta';
