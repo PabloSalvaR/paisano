@@ -18,7 +18,7 @@ Diferenciador principal: **el anfitrión configura las reglas libremente** (vari
 
 - Trabajar **una fase a la vez** (ver "Hoja de ruta"). No adelantar fases sin que se pida.
 - **Tests primero** en el motor de reglas. Ningún cambio de reglas sin test que lo cubra.
-- **Commits conceptuales y agrupados:** uno por paso lógico completo, no uno por retoque, para que el historial se pueda leer. Mensaje descriptivo.
+- **Commits conceptuales y agrupados:** uno por paso lógico completo, no uno por retoque, para que el historial se pueda leer. Mensaje descriptivo, con la lista de lo que trae. **Si el desarrollador hace varios pedidos chicos seguidos, no commitear cada uno:** esperar a que lo pida o a cerrar un bloque grande (se le tuvo que corregir esto varias veces).
 - Antes de cambios grandes (nuevas dependencias, cambios de arquitectura, refactors amplios), **proponer el plan y esperar confirmación**.
 - No introducir frameworks ni librerías nuevas sin justificarlo.
 - Si una decisión no está en este archivo, preguntar en vez de asumir.
@@ -202,23 +202,27 @@ Las fases 1-4 del plan original (Java/Spring) quedan pospuestas: se hicieron en 
 **Pausa de reglas (sept 2026).** El desarrollador cerró la lógica hasta acá: el comercio entre jugadores, el reloj de turno y las variantes quedan pendientes, sin urgencia. El foco pasa al pulido gráfico (fase 8) y a probar con amigos.
 
 **Al retomar (pendiente inmediato, en este orden)**
-1. **`git push`** desde la terminal del desarrollador (hay commits sin subir: revisar con `git status -sb`). El push despliega en Vercel.
-2. **`npm run build`** desde `client/`, con el servidor de desarrollo **cerrado** (compartir la carpeta `.next` con `npm run dev` lo rompe): no se corrió tras las cartas de desarrollo, el 11 de bastos nuevo ni el `cardart.js`. Es lo único que falta de la definición de «hecho» para esas fases.
+1. **`git push`** desde la terminal del desarrollador (revisar con `git status -sb` cuántos commits faltan). El push despliega en Vercel. Después se puede borrar la rama de respaldo `backup-squash` (`git branch -D backup-squash`): guarda los 10 commits chicos que se juntaron en 4 el 21 de sept 2026.
+2. **`npm run build`** desde `client/`, con el servidor de desarrollo **cerrado** (compartir la carpeta `.next` con `npm run dev` lo rompe): no se corrió tras las cartas de desarrollo, el 11 de bastos nuevo, el `cardart.js` ni el reglamento. Es lo único que falta de la definición de «hecho» para esas fases. Vercel también lo corre al desplegar.
 3. **Escuchar `audio.card()`** (roce de naipe) y ajustarlo a gusto.
 4. **Probar las cartas online con dos personas** (solo se probaron contra bots y en la partida local): comprar, jugar cada carta y ver qué llega al otro jugador (el tipo de carta comprada no debe verse).
-5. Antes de invitar a mucha gente: leer en el FAQ de Upstash qué pasa al llegar al tope del plan gratis (el consumo medido: ~660 comandos en una tarde corta de pruebas; ver `docs/multijugador.md`).
+5. **Probar en un celular real** (hasta ahora solo se vio el ancho de celular en un marco de 390 px): menú, reglamento, tablero, panel «Mis cartas» y las insignias de los puestos.
+6. Antes de invitar a mucha gente: leer en el FAQ de Upstash qué pasa al llegar al tope del plan gratis (el consumo medido: ~660 comandos en una tarde corta de pruebas; ver `docs/multijugador.md`).
 
 **Siguiente (sin orden fijo, a elección del desarrollador)**
-- **Pulido gráfico** (fase 8): lo que el desarrollador vaya marcando. Ideas anotadas: arte de más piezas (los iconos de recursos), animación de las cartas al jugarlas, pantalla de fin de partida.
+- **Portfolio (fase 9):** README con capturas o GIF y la demo online.
+- **Pulido gráfico** (fase 8): lo que el desarrollador vaya marcando. Ideas anotadas: iconos de recursos con arte propio, animación de las cartas al jugarlas, **pantalla de fin de partida** (hoy solo hay el mensaje de victoria y no se revisó).
 - **Tiempo límite por turno y reemplazo por un bot.** El diseño está en `docs/multijugador.md` («Diseño propuesto: tiempo límite por turno…») y **faltan las respuestas del desarrollador a 4 preguntas** (reloj de turno vs presencia, duración por defecto y opciones, reemplazo permanente o recuperable, aviso previo). Empezar por ahí y por los tests.
-- **Comercio entre jugadores** (con bots). **Proponer el diseño primero**: ofertas y contraofertas, quién puede aceptar, límites por turno y cómo responden los bots.
-- Variantes configurables (`GameConfig` por sala).
-- Bots menos aleatorios.
+- **Comercio entre jugadores** (con bots). **Proponer el diseño primero**: ofertas y contraofertas, quién puede aceptar, límites por turno y cómo responden los bots. Al terminarlo hay que **actualizar el reglamento** (`client/src/app/reglamento/page.tsx`, escrito a mano: hoy no lo menciona).
+- Variantes configurables (`GameConfig` por sala). También obligan a revisar el reglamento.
+- Bots menos aleatorios; marca «bot» en los puestos de la partida y nombres propios para los bots locales.
 
 **Sin probar a mano:** el sonido de las cartas, aterrizaje y comercio; el ritmo de las pausas de los bots (2 s antes de cada acción, 650 ms por pieza, 800 el ladrón, 450 el cambio de turno); las animaciones con la pestaña visible; cartas de otros humanos en línea; y un ancho real de celular (solo se vio en un marco de 390 px). Limitaciones conocidas: los bots son aleatorios y en la partida local contra bots comparten nombre con los puestos de siempre (en línea se llaman «Bot 1», «Bot 2»…); ver los límites de la parte online en `docs/multijugador.md`.
 
 ## Decisiones pendientes
 
+- **Repo público (sept 2026):** se habló y la recomendación fue dejarlo público (portfolio; no hay secretos en el repo ni en el historial; `prototipos/` y `.env*` están ignorados). Queda a decisión del desarrollador: (a) si poner una **licencia** (sin ninguna, público no significa reutilizable; por ejemplo MIT si se quiere abierto), y (b) si reescribir en este archivo la mención del juego de referencia (sección «Propiedad intelectual») como «el juego de referencia».
+- **Origen del naipe del 11 de bastos:** riesgo bajo, a verificar (ver «Arte de las cartas» en «Decisiones tomadas»): confirmar de qué edición sale la referencia o reemplazar el PNG por arte propio.
 - **Solo si se retoma el backend Java:** Maven o Gradle (recomendado: Maven con wrapper), separar el motor en un módulo propio sin Spring, JUnit 5 + AssertJ, nombre de paquetes (`com.<org>.paisano`).
 - Login: solo nombre + token, o también Google/Discord (por ahora, nombre + token).
 - **Distribución de los dados** como opción de sala (`GameConfig`): dados reales (por defecto) o mazo barajado de las 36 combinaciones. La semilla por partida con flujos separados (mapa, dados, robos) y el contador guardado en el estado ya están hechos.
