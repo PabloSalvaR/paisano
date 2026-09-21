@@ -1,4 +1,4 @@
-# Proyecto: Paisano — «Hacé tu tierra.»
+# Proyecto: Paisano — «Piedra y camino»
 
 Juego de estrategia multijugador en 3D para jugar con amigos en el navegador, inspirado en los juegos de colonización por recursos. Objetivo doble: divertirse con amigos y servir de proyecto de portfolio.
 
@@ -152,7 +152,7 @@ Las de interfaz están en `docs/decisiones-interfaz.md`.
 - **Alcance:** jugar con amigos y portfolio. Sin monetización, cuentas complejas ni matchmaking.
 - **Cliente web (Next.js + React Three Fiber) y no Unity.** Motivos: se juega abriendo un link, sin instalar nada; encaja con el stack del desarrollador; una demo online luce más en un portfolio. Como el servidor es autoritativo, el cliente es intercambiable: si algún día se quiere publicar en Steam, se puede hacer un cliente Unity contra el mismo backend.
 - **Spring Boot como servidor de reglas** (no Node), con estado en memoria y snapshots en Postgres. **Pospuesto** por el replanteo de sept 2026 (ver abajo): hoy el motor es TypeScript dentro de Next.
-- **Nombre: Paisano** (lema «Hacé tu tierra.», voseo rioplatense). Elegido por no parecerse a Colonist ni a Catan. Pendiente: búsqueda rápida de marca y disponibilidad de URL.
+- **Nombre: Paisano** (lema «Piedra y camino», que reemplazó a «Hacé tu tierra.» y a «Es mi destino, piedra y camino» en sept 2026; voseo rioplatense). Elegido por no parecerse a Colonist ni a Catan. Pendiente: búsqueda rápida de marca y disponibilidad de URL.
 - **Replanteo (sept 2026): prueba gratis primero.** Sin hosts de pago ni backend propio hasta validar que el juego sirve. Cliente Next.js desplegado en Vercel Hobby (gratis, uso no comercial). Vercel no mantiene WebSockets, así que el multijugador por turnos usará API routes + base de datos gratuita (Upstash Redis o Neon) + polling cada 1-2 s. El motor de reglas pasa provisionalmente a **TypeScript** (servidor autoritativo dentro de Next); si la prueba funciona, puede portarse a Java/Spring. Alternativa descartada por ahora: P2P con WebRTC.
 - **Repo y deploy (sept 2026):** demo pública en https://paisano-three.vercel.app. Monorepo en GitHub con `git` y auth por navegador (sin `gh` CLI, no hace falta). Vercel importa el repo con Root Directory `client`; no se instaló el plugin de Vercel para agentes.
 - **Identidad argentina (sept 2026):** recursos y decorado con sabor local: el terreno **Llano** (antes Pradera) produce **Vaca** (no oveja/lana), Campo produce **Maíz** (no trigo), los terrenos pasan a llamarse **Cantera** (antes Montaña, produce **Piedra**, no mineral) y **Barro** (antes Colina, produce **Ladrillo**), bosque con árboles de copa ancha tipo ombú, cantera con rocas irregulares sin nieve. Se probó **Adobe** en lugar de Ladrillo (con hornos de barro) y se descartó. Mantener el resto de nombres y arte propios (ver "Propiedad intelectual").
@@ -189,16 +189,14 @@ Las fases 1-4 del plan original (Java/Spring) quedan pospuestas: se hicieron en 
 - Tablero 3D con identidad argentina, luces día/atardecer/noche, dados, banner de recursos y jugadores, adornos de la mesa (pulido visual cerrado por ahora).
 - Motor (`client/src/engine/`): tablero, mapa con semilla, colocación inicial, dados y producción, construcción (caminos, poblados, ciudades), 7 con descarte, ladrón y robo, comercio con el banco (4:1, puertos 3:1 y 2:1), victoria.
 - Servidor de la prueba: salas, almacén en memoria **y en Upstash Redis** (probado contra la base real), vista filtrada, API completa (crear, unirse, bots, empezar, comando, estado) y bots dentro de la sala. Ver `docs/multijugador.md`.
-- Cliente conectado por `GameSession`: partida de 4 en la misma pantalla y **partida contra bots** (menú «Partida contra bots»), con reproducción de eventos.
-- **Partida online por sala (6b):** `/sala` (crear o unirse), `/sala/CODIGO` («Hola, presentate compañero», lobby con «Sumar bot» y «Empezar», partida), `RemoteSession` con polling, token en `localStorage`, menú «Jugar online» / «Salir de la sala». Con las variables de Upstash funciona en cualquier entorno; las variables ya están cargadas en Vercel (Production y Preview) y **falta subir el código (`git push`) y probar con dos dispositivos**.
+- Cliente conectado por `GameSession`: **menú de inicio en `/`** (bots, online, mesa local) y tablero sin red en `/jugar/bots` y `/jugar/local`, con reproducción de eventos.
+- **Partida online por sala (6b):** `/sala` (crear o unirse), `/sala/CODIGO` («Hola, presentate compañero», lobby con «Sumar bot» y «Empezar», partida), `RemoteSession` con polling, token en `localStorage`, «Salir al menú». Con las variables de Upstash funciona en cualquier entorno; las variables ya están cargadas en Vercel (Production y Preview), el código ya está subido y la API pública responde bien (probada); **falta probar con dos dispositivos**.
 - **Polling que ahorra consultas:** pestaña oculta cada 20 s (al volver, enseguida), y se detiene solo al terminar la partida o ante 404/401 (cada consulta gasta un comando de Upstash; el plan Free da 500.000 al mes y 10 GB de ancho de banda: ~26 partidas de 4 personas por mes, ver `docs/multijugador.md`).
 - Verificado con Chrome (clics reales): construir con ✓/✕, dados y producción, 7 con descarte y robo, comercio, bots colocando y construyendo, y online (un jugador con la interfaz y otro más un bot por la API: colocación, ronda completa, recarga a mitad de partida, entrar por link, sala inexistente).
 
 **Al retomar (pendiente inmediato, en este orden)**
-1. **El desarrollador hace `git push`** (desde su terminal; hay 9 commits sin subir, desde `237aab8`). Las variables de Upstash ya están en Vercel (Production y Preview): el push dispara un deploy que las toma.
-2. Cuando termine el deploy, **Claude prueba la API pública** (`paisano-three.vercel.app`): crear sala y ver que responde bien y no con el 503 de la base. Sin mostrar secretos.
-3. **Prueba con dos dispositivos** (PC y celular, o dos navegadores; los dos humanos más un bot completan los 3 asientos mínimos; dos pestañas del mismo navegador serían el mismo jugador porque comparten `localStorage`). Es lo único que sigue sin probarse online.
-4. Antes de invitar a mucha gente: leer en el FAQ de Upstash qué pasa al llegar al tope del plan gratis.
+1. **Prueba con dos dispositivos** (PC y celular, o dos navegadores; los dos humanos más un bot completan los 3 asientos mínimos; dos pestañas del mismo navegador serían el mismo jugador porque comparten `localStorage`). Es lo único que sigue sin probarse online.
+2. Antes de invitar a mucha gente: leer en el FAQ de Upstash qué pasa al llegar al tope del plan gratis.
 
 **Siguiente (orden acordado)**
 1. **Tiempo límite por turno y reemplazo por un bot** de quien no responde. El diseño ya está propuesto en `docs/multijugador.md` («Diseño propuesto: tiempo límite por turno…») y **falta que el desarrollador conteste las 4 preguntas abiertas** (reloj de turno vs presencia, duración por defecto y opciones, reemplazo permanente o recuperable, aviso previo). Empezar por ahí y por los tests.

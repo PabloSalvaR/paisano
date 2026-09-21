@@ -1,4 +1,4 @@
-# Paisano · Hacé tu tierra.
+# Paisano · Piedra y camino
 
 Juego de estrategia por turnos para jugar con amigos en el navegador, en 3D. Se construye, se comercia con recursos y gana quien arma mejor su tierra.
 

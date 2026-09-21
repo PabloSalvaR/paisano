@@ -59,7 +59,7 @@ export default function OnlineStart() {
           {error}
         </div>
         <Link className="room-btn" href="/">
-          Volver al tablero
+          Volver al menú
         </Link>
       </div>
     </main>

@@ -15,7 +15,7 @@ export const MARKUP = `
 
   <header class="panel title">
     <h1 class="logo"><span class="sr-only">Paisano</span></h1>
-    <p class="tagline">"Es mi destino, piedra y camino."</p>
+    <p class="tagline">Piedra y camino</p>
   </header>
 
   <div class="panel hover" id="hover" hidden></div>
@@ -92,9 +92,7 @@ export const MARKUP = `
   <nav class="panel bar" id="bar" aria-label="Controles del tablero">
     <div class="group">
       <button type="button" id="btnNew" class="primary">Nuevo mapa</button>
-      <button type="button" id="btnBots" class="primary" title="Jugás vos contra tres bots que juegan solos">Partida contra bots</button>
-      <button type="button" id="btnOnline" class="primary" title="Armá una sala y jugá con amigos pasándoles un link">Jugar online</button>
-      <button type="button" id="btnLeave" class="primary" hidden title="Volver al tablero de inicio (la sala sigue: podés volver con el mismo link)">Salir de la sala</button>
+      <button type="button" id="btnLeave" class="primary" title="Volver al menú (en una sala, la partida sigue: podés volver con el mismo link)">Salir al menú</button>
       <button type="button" id="btnQuick" class="primary" hidden title="Solo desarrollo: mapa nuevo con la colocación inicial hecha al azar, listo para tirar los dados">Partida rápida · dev</button>
     </div>
     <div class="group" role="group" aria-label="Sonido">
@@ -126,7 +124,7 @@ export const MARKUP = `
 </div>
 `;
 
-// opts (solo en línea): { session, seats: [{ name, bot }], seed }. Sin opts es la partida local (4 en la pantalla o contra bots).
+// opts (en línea): { session, seats: [{ name, bot }], seed }. Sin `session` es partida local: opts.mode 'bots' (vos contra tres bots) o 'local' (los 4 en la pantalla).
 export function initBoard(opts) {
   opts = opts || {};
   var online = !!opts.session;
@@ -944,7 +942,7 @@ export function initBoard(opts) {
     var session = null; // GameSession: dueña de la partida (hoy local, después remota)
     var game = null, legal = [], me = 0; // última vista de la sesión: partida visible, acciones legales y jugador que mira
     var sending = false; // true mientras espera la respuesta de la sesión a un comando
-    var withOthers = online; // hay otros que juegan por su cuenta (bots o personas en línea), y vos sos siempre el mismo jugador; false: los 4 en la misma pantalla
+    var withOthers = online || opts.mode === 'bots'; // hay otros que juegan por su cuenta (bots o personas en línea), y vos sos siempre el mismo jugador; false: los 4 en la misma pantalla
     var shown = null; // lo que ya se dibujó del estado (piezas y ladrón); durante una reproducción de eventos va por detrás de `game`
     function pull() {
       var v = session.view(); game = v.game; legal = v.legal; me = v.me;
@@ -1720,20 +1718,14 @@ export function initBoard(opts) {
     }
 
     function pressed(btn, on) { btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
-    function newGame(bots) {
-      withOthers = bots;
+    function newGame() {
       buildBoard((Math.random() * 1e9) | 0);
       for (var n = 2; n <= 12; n++) rollCounts[n] = 0;
       updateStats();
     }
-    document.getElementById('btnNew').addEventListener('click', function () { newGame(false); });
-    document.getElementById('btnBots').addEventListener('click', function () { newGame(true); });
-    document.getElementById('btnOnline').addEventListener('click', function () { window.location.assign('/sala'); });
+    document.getElementById('btnNew').addEventListener('click', newGame);
     document.getElementById('btnLeave').addEventListener('click', function () { window.location.assign('/'); });
-    if (online) { // en una sala no hay mapa nuevo ni partidas locales: la partida es de todos
-      ['btnNew', 'btnBots', 'btnOnline'].forEach(function (id) { document.getElementById(id).hidden = true; });
-      document.getElementById('btnLeave').hidden = false;
-    }
+    if (online) document.getElementById('btnNew').hidden = true; // en una sala no hay mapa nuevo: la partida es de todos
     // Solo desarrollo: salta la colocación inicial. Mapa nuevo, poblados y caminos al azar (por el motor, con comandos legales) y listo para tirar.
     // Se ve con `npm run dev` o con ?debug en la URL; en producción no existe.
     var btnQuick = document.getElementById('btnQuick');

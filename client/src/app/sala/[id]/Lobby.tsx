@@ -86,7 +86,7 @@ export default function Lobby({
           {error}
         </div>
         <Link className="room-btn" href="/">
-          Volver al tablero
+          Volver al menú
         </Link>
       </div>
     </main>
