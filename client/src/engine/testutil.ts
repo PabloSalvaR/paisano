@@ -2,6 +2,7 @@
 
 import { expect } from 'vitest';
 import { applyCommand, createGame, legalActions } from './game';
+import { commandFor as botCommandFor } from '../bots/random';
 import { RESOURCES, type Resource } from './map';
 import type { Command, GameEvent, GameState, Hand, LegalAction, PlayerId, Result } from './types';
 
@@ -72,38 +73,7 @@ export function expectConserved(s: GameState): void {
   }
 }
 
-/** Convierte una acción legal en un comando concreto, eligiendo al azar entre sus opciones. */
+/** Convierte una acción legal en un comando concreto, eligiendo al azar entre sus opciones (la lógica vive en el bot aleatorio). */
 export function commandFor(a: LegalAction, player: PlayerId, rng: () => number, state: GameState): Command {
-  const pick = <T>(xs: T[]): T => xs[Math.floor(rng() * xs.length)];
-  switch (a.type) {
-    case 'placeSettlement':
-    case 'buildSettlement':
-    case 'buildCity':
-      return { type: a.type, player, vertex: pick(a.vertices) };
-    case 'placeRoad':
-    case 'buildRoad':
-      return { type: a.type, player, edge: pick(a.edges) };
-    case 'moveRobber':
-      return { type: a.type, player, tile: pick(a.tiles) };
-    case 'steal':
-      return { type: a.type, player, victim: pick(a.victims) };
-    case 'discard': {
-      // descarta `count` cartas al azar de su mano
-      const cards: Partial<Hand> = {};
-      const pool = RESOURCES.flatMap((r) => Array<Resource>(state.players[player].hand[r]).fill(r));
-      for (let i = 0; i < a.count; i++) {
-        const k = Math.floor(rng() * pool.length);
-        const r = pool.splice(k, 1)[0];
-        cards[r] = (cards[r] ?? 0) + 1;
-      }
-      return { type: 'discard', player, cards };
-    }
-    case 'bankTrade': {
-      const t = pick(a.trades);
-      return { type: 'bankTrade', player, give: t.give, get: pick(t.get) };
-    }
-    case 'rollDice':
-    case 'endTurn':
-      return { type: a.type, player };
-  }
+  return botCommandFor(a, player, state.players[player].hand, rng);
 }

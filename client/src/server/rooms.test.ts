@@ -24,7 +24,7 @@ async function lobby(store: MemoryStore, n = 3) {
 async function started(n = 3, seed = 8) {
   const store = newStore();
   const { roomId, tokens } = await lobby(store, n);
-  val(await startGame(store, roomId, tokens[0], seed));
+  val(await startGame(store, roomId, tokens[0], { seed }));
   return { store, roomId, tokens };
 }
 
@@ -66,7 +66,7 @@ describe('lobby', () => {
     const c = val(await joinRoom(store, roomId, 'Cata'));
     expect(code(await startGame(store, roomId, c.token))).toBe('not-host');
     expect(code(await startGame(store, roomId, 'token-ajeno'))).toBe('not-in-room');
-    const view = val(await startGame(store, roomId, tokens[0], 8));
+    const view = val(await startGame(store, roomId, tokens[0], { seed: 8 }));
     expect(view.status).toBe('playing');
     expect(view.game!.players.map((p) => p.name)).toEqual(['Ana', 'Beto', 'Cata']);
     expect(code(await startGame(store, roomId, tokens[0]))).toBe('already-started');

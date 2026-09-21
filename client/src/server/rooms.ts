@@ -5,8 +5,9 @@
 // sale del asiento del token, nunca de lo que diga el cliente.
 
 import { createHash, randomInt, randomUUID } from 'node:crypto';
-import { applyCommand, createGame } from '../engine';
-import type { Command, ErrorCode } from '../engine';
+import { randomBot, type Bot } from '../bots/random';
+import { applyCommand, createGame, legalActions } from '../engine';
+import type { Command, ErrorCode, GameConfig, GameEvent, Rng } from '../engine';
 import { LOG_LIMIT, MAX_SEATS, MIN_SEATS, type Room } from './room';
 import type { RoomStore } from './store';
 import { roomView, type RoomView } from './view';
@@ -36,6 +37,15 @@ const ok = <T>(value: T): Res<T> => ({ ok: true, value });
 const ROOM_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // sin letras ni números que se confunden (0/O, 1/I/L)
 const MAX_TRIES = 4;
 const MAX_NAME = 20;
+const MAX_BOT_STEPS = 2000; // tope de jugadas seguidas de bots en una petición (una partida entera cabe de sobra)
+
+/** Opciones que se inyectan en los tests: semilla y reglas de la partida, azar y elección de los bots. */
+export interface PlayOptions {
+  seed?: number;
+  config?: Partial<GameConfig>;
+  rng?: Rng;
+  bot?: Bot;
+}
 
 export const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 const newRoomId = (): string => Array.from({ length: 6 }, () => ROOM_ALPHABET[randomInt(ROOM_ALPHABET.length)]).join('');
@@ -51,6 +61,30 @@ function seatOf(room: Room, token: string): number {
   if (!token) return -1;
   const h = hashToken(token);
   return room.seats.findIndex((s) => s.tokenHash === h);
+}
+
+/** Anota los eventos en el log de la sala con su versión y descarta los más viejos. */
+function record(room: Room, events: GameEvent[]): void {
+  room.log.push(...events.map((event) => ({ version: room.version, event })));
+  if (room.log.length > LOG_LIMIT) room.log.splice(0, room.log.length - LOG_LIMIT);
+}
+
+/**
+ * Mientras le toque a un bot, juega por él con las mismas acciones legales que tendría un jugador.
+ * Corre dentro de la misma petición que dejó el turno en manos del bot (en Vercel no hay proceso en segundo plano).
+ */
+function playBots(room: Room, opts: PlayOptions): void {
+  const bot = opts.bot ?? randomBot;
+  const rng = opts.rng ?? Math.random;
+  for (let i = 0; i < MAX_BOT_STEPS && room.state && room.state.phase.kind !== 'finished' && room.seats[room.state.turn].bot; i++) {
+    const me = room.state.turn;
+    const legal = legalActions(room.state, me);
+    if (!legal.length) return;
+    const result = applyCommand(room.state, bot({ me, legal, hand: room.state.players[me].hand }, rng));
+    if (!result.ok) return; // un bot que se equivoca no debe trabar la sala: se corta acá
+    room.state = result.state;
+    record(room, result.events);
+  }
 }
 
 /**
@@ -98,8 +132,25 @@ export async function joinRoom(store: RoomStore, roomId: string, playerName: str
   return r.ok ? ok({ token, seat }) : r;
 }
 
-/** Solo el anfitrión (asiento 0). `seed` se inyecta en los tests; en producción sale de crypto. */
-export async function startGame(store: RoomStore, roomId: string, token: string, seed: number = newSeed()): Promise<Res<RoomView>> {
+/** El anfitrión suma un asiento de bot (solo en el lobby). */
+export async function addBot(store: RoomStore, roomId: string, token: string): Promise<Res<RoomView>> {
+  let me = -1;
+  const r = await update(store, roomId, (room) => {
+    me = seatOf(room, token);
+    if (me < 0) return { code: 'not-in-room', message: 'No estás en esta sala.' };
+    if (me !== 0) return { code: 'not-host', message: 'Solo quien creó la sala puede sumar bots.' };
+    if (room.status !== 'lobby') return { code: 'already-started', message: 'La partida ya empezó.' };
+    if (room.seats.length >= MAX_SEATS) return { code: 'room-full', message: 'La sala está llena.' };
+    let n = room.seats.filter((s) => s.bot).length + 1;
+    while (room.seats.some((s) => s.name === `Bot ${n}`)) n++;
+    room.seats.push({ name: `Bot ${n}`, tokenHash: null, bot: true });
+    return null;
+  });
+  return r.ok ? ok(roomView(r.value.room, me, r.value.before)) : r;
+}
+
+/** Solo el anfitrión (asiento 0). La semilla sale de crypto salvo que un test la inyecte. */
+export async function startGame(store: RoomStore, roomId: string, token: string, opts: PlayOptions = {}): Promise<Res<RoomView>> {
   let me = -1;
   const r = await update(store, roomId, (room) => {
     me = seatOf(room, token);
@@ -107,8 +158,9 @@ export async function startGame(store: RoomStore, roomId: string, token: string,
     if (me !== 0) return { code: 'not-host', message: 'Solo quien creó la sala puede empezar.' };
     if (room.status !== 'lobby') return { code: 'already-started', message: 'La partida ya empezó.' };
     if (room.seats.length < MIN_SEATS) return { code: 'not-enough-players', message: `Hacen falta al menos ${MIN_SEATS} jugadores.` };
-    room.state = createGame(room.seats.map((s) => s.name), seed);
+    room.state = createGame(room.seats.map((s) => s.name), opts.seed ?? newSeed(), opts.config);
     room.status = 'playing';
+    playBots(room, opts);
     return null;
   });
   return r.ok ? ok(roomView(r.value.room, me, r.value.before)) : r;
@@ -116,8 +168,8 @@ export async function startGame(store: RoomStore, roomId: string, token: string,
 
 // ---------------------------------------------------------------- partida
 
-/** Aplica el comando del jugador dueño del token. Devuelve su vista con los eventos que produjo. */
-export async function submitCommand(store: RoomStore, roomId: string, token: string, cmd: Command): Promise<Res<RoomView>> {
+/** Aplica el comando del jugador dueño del token y hace jugar a los bots que sigan. Devuelve su vista con todos los eventos. */
+export async function submitCommand(store: RoomStore, roomId: string, token: string, cmd: Command, opts: PlayOptions = {}): Promise<Res<RoomView>> {
   let me = -1;
   const r = await update(store, roomId, (room) => {
     me = seatOf(room, token);
@@ -126,8 +178,8 @@ export async function submitCommand(store: RoomStore, roomId: string, token: str
     const result = applyCommand(room.state, { ...cmd, player: me }); // el jugador lo decide el token, no el cliente
     if (!result.ok) return result.error;
     room.state = result.state;
-    room.log.push(...result.events.map((event) => ({ version: room.version, event })));
-    if (room.log.length > LOG_LIMIT) room.log.splice(0, room.log.length - LOG_LIMIT);
+    record(room, result.events);
+    playBots(room, opts);
     return null;
   });
   return r.ok ? ok(roomView(r.value.room, me, r.value.before)) : r;
