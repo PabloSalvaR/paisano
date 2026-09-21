@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { version } from "../../package.json";
 
-// Menú de inicio: de acá sale toda la navegación (partida contra bots, mesa local de 4 y sala online).
+// Menú de inicio: de acá sale toda la navegación (partida contra bots, mesa local de 4, sala online y el reglamento, que solo se ve desde acá).
 export default function Menu() {
   return (
     <main className="room-page">
@@ -18,6 +18,9 @@ export default function Menu() {
         </Link>
         <Link className="room-btn" href="/jugar/local" title="Los cuatro jugadores en la misma pantalla">
           Mesa local
+        </Link>
+        <Link className="room-btn" href="/reglamento" title="Cómo se juega, en pocas líneas">
+          Reglamento
         </Link>
       </div>
     </main>
