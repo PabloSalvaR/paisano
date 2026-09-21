@@ -6,11 +6,13 @@ Juego de estrategia por turnos para jugar con amigos en el navegador, en 3D. Se 
 
 ## Estado
 
-Prueba de concepto en desarrollo. Por ahora está el **tablero 3D** con su estilo visual; el motor de reglas y el multijugador vienen después.
+Prueba de concepto en desarrollo. Ya se puede jugar una partida completa en el navegador: sola contra tres bots, con cuatro personas en la misma pantalla, o en una sala online por link (por ahora solo en desarrollo local, hasta conectar la base de datos gratuita).
 
 - Tablero hexagonal de 19 casillas generado al azar, con puertos, fichas de número y piezas de ejemplo.
 - Cinco terrenos con recursos de sabor local: **Bosque** (madera), **Llano** (vaca), **Campo** (maíz), **Barro** (ladrillo) y **Cantera** (piedra), más el **Desierto**.
 - Tres iluminaciones: día, atardecer y noche.
+- Motor de reglas propio, con tests: colocación inicial, dados y producción, construcción, ladrón, descarte y robo, comercio con el banco y puertos, victoria.
+- Bots que juegan con las mismas acciones legales que una persona, y salas por link con vista filtrada por jugador.
 
 ## Cómo correrlo
 
@@ -24,7 +26,7 @@ npm run dev
 
 Abrí http://localhost:3000.
 
-Otros comandos, siempre desde `client/`: `npm run build` (compilar) y `npm run lint` (revisar el código).
+Otros comandos, siempre desde `client/`: `npm test` (tests), `npm run build` (compilar) y `npm run lint` (revisar el código).
 
 ## Tecnología
 
@@ -40,6 +42,6 @@ client/   Aplicación web (Next.js) y tablero 3D
 
 ## Próximos pasos
 
-1. Motor de reglas del juego base.
-2. Multijugador por salas con link.
+1. Conectar la base de datos gratuita (Upstash) para jugar online en la demo.
+2. Cartas de desarrollo y comercio entre jugadores.
 3. Variantes y módulos de reglas configurables.

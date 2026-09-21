@@ -93,6 +93,8 @@ export const MARKUP = `
     <div class="group">
       <button type="button" id="btnNew" class="primary">Nuevo mapa</button>
       <button type="button" id="btnBots" class="primary" title="Jugás vos contra tres bots que juegan solos">Partida contra bots</button>
+      <button type="button" id="btnOnline" class="primary" title="Armá una sala y jugá con amigos pasándoles un link">Jugar online</button>
+      <button type="button" id="btnLeave" class="primary" hidden title="Volver al tablero de inicio (la sala sigue: podés volver con el mismo link)">Salir de la sala</button>
       <button type="button" id="btnQuick" class="primary" hidden title="Solo desarrollo: mapa nuevo con la colocación inicial hecha al azar, listo para tirar los dados">Partida rápida · dev</button>
     </div>
     <div class="group" role="group" aria-label="Sonido">
@@ -124,7 +126,11 @@ export const MARKUP = `
 </div>
 `;
 
-export function initBoard() {
+// opts (solo en línea): { session, seats: [{ name, bot }], seed }. Sin opts es la partida local (4 en la pantalla o contra bots).
+export function initBoard(opts) {
+  opts = opts || {};
+  var online = !!opts.session;
+  var unsubscribe = null; // baja de la suscripción a la sesión remota (se cierra en dispose)
   var errBox = document.getElementById('err');
   function fail(msg) { errBox.textContent = msg; errBox.hidden = false; }
   var raf = 0, ro = null, renderer = null, disposed = false;
@@ -135,7 +141,7 @@ export function initBoard() {
   UNLOCK_EVENTS.forEach(function (e) { document.addEventListener(e, unlockAudio, true); });
   try { main(); } catch (e) { console.error(e); fail('No se pudo iniciar la escena 3D: ' + e.message); }
   return function dispose() {
-    disposed = true; cancelAnimationFrame(raf); if (ro) ro.disconnect();
+    disposed = true; cancelAnimationFrame(raf); if (ro) ro.disconnect(); if (unsubscribe) unsubscribe();
     audio.dispose(); UNLOCK_EVENTS.forEach(function (e) { document.removeEventListener(e, unlockAudio, true); });
     if (renderer) { renderer.dispose(); renderer.domElement.remove(); }
   };
@@ -938,7 +944,7 @@ export function initBoard() {
     var session = null; // GameSession: dueña de la partida (hoy local, después remota)
     var game = null, legal = [], me = 0; // última vista de la sesión: partida visible, acciones legales y jugador que mira
     var sending = false; // true mientras espera la respuesta de la sesión a un comando
-    var botMode = false; // true en la partida contra bots (vos sos siempre el primer jugador); false: los 4 en la misma pantalla
+    var withOthers = online; // hay otros que juegan por su cuenta (bots o personas en línea), y vos sos siempre el mismo jugador; false: los 4 en la misma pantalla
     var shown = null; // lo que ya se dibujó del estado (piezas y ladrón); durante una reproducción de eventos va por detrás de `game`
     function pull() {
       var v = session.view(); game = v.game; legal = v.legal; me = v.me;
@@ -953,7 +959,7 @@ export function initBoard() {
     function buildBoard(seed) {
       if (board) scene.remove(board);
       var rnd = mulberry32(seed);
-      session = new LocalSession(PLAYER_INFO.map(function (p) { return p.name; }), seed, undefined, botMode ? { bots: [false, true, true, true] } : {}); pull();
+      session = online ? opts.session : new LocalSession(PLAYER_INFO.map(function (p) { return p.name; }), seed, undefined, withOthers ? { bots: [false, true, true, true] } : {}); pull();
       var topo = topology();
       board = new THREE.Group(); scene.add(board);
       tiles = []; tileMeshes = []; ships = []; robber = null; hoverTile = null; busy = false; sending = false; pieceSeen = {};
@@ -1294,6 +1300,7 @@ export function initBoard() {
       { name: 'Mateo', css: '#f0932b', text: '#2b1a05', skin: '#8d5a3b', hair: '#2b2118', hat: true },
       { name: 'Sofía', css: '#f1eee6', text: '#2b2216', skin: '#f4d3b5', hair: '#a3402b', hat: false }
     ];
+    if (online) opts.seats.forEach(function (st, i) { if (PLAYER_INFO[i]) PLAYER_INFO[i].name = st.name; }); // los nombres vienen de la sala
     function avatarSVG(p) {
       var i = PLAYER_INFO[p];
       return '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#e7dfcc"/>' +
@@ -1312,6 +1319,7 @@ export function initBoard() {
         '<span class="vp" title="Puntos de victoria">' + STAR + '<b>0</b></span>' +
         '<span class="cnt"><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#f6ecd4" stroke="#5b4630" stroke-width="1.6"/></svg><b>0</b></span></div>';
     }).join('');
+    if (online) for (var si = opts.seats.length; si < seatsEl.children.length; si++) seatsEl.children[si].hidden = true; // partidas de 3: sin el 4.º puesto
     function handTotal(p) { return counts[p]; }
     function renderHand() {
       var pl = PLAYER_INFO[VIEWER];
@@ -1353,7 +1361,7 @@ export function initBoard() {
     var TURN_DICE = '<svg viewBox="0 0 64 48" aria-hidden="true">' + dieSVG(3, 14, -10, [0, 4, 8]) + dieSVG(35, 7, 9, [0, 2, 4, 6, 8]) + '</svg>';
     var TURN_ARROW = '<svg viewBox="0 0 40 40" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h24M22 9.5 32.5 20 22 30.5"/></svg>';
     function updateTurnButton() {
-      var ph = game.phase.kind, on = ph === 'roll' || ph === 'main';
+      var ph = game.phase.kind, on = (ph === 'roll' || ph === 'main') && game.turn === me; // en línea, el botón de turno es solo de quien juega
       if (busy && !btnTurn.hidden) { btnTurn.disabled = true; return; } // durante la tirada (dados rodando, recursos volando) queda como estaba: con un 7 la fase cambia enseguida y el ícono desaparecería antes de ver el número
       btnTurn.hidden = !on;
       if (!on) { btnTurn.removeAttribute('data-key'); return; }
@@ -1374,7 +1382,7 @@ export function initBoard() {
     // Carta de desarrollo: un botón más de la bandeja; se habilita en fase main si la mano alcanza para pagarla.
     function updateDevButton() {
       var cost = game.config.costs.developmentCard, hand = game.hand;
-      var can = !busy && game.phase.kind === 'main' && Object.keys(cost).every(function (k) { return hand[k] >= cost[k]; });
+      var can = !busy && game.phase.kind === 'main' && game.turn === me && Object.keys(cost).every(function (k) { return hand[k] >= cost[k]; });
       btnDev.disabled = !can;
       if (!can && pendingCmd && pendingCmd.type === 'buyDevCard') { pendingCmd = null; renderDialog(); }
     }
@@ -1438,7 +1446,7 @@ export function initBoard() {
       clearGhost();
       dialogEl.className = 'panel dialog'; dialogEl.style.left = dialogEl.style.top = dialogEl.style.transform = '';
       if (tradeUI && !busy && ph.kind === 'main') { dialogKey = ''; renderTrade(); return; }
-      if (busy || (ph.kind !== 'discard' && ph.kind !== 'steal')) { dialogEl.hidden = true; dialogKey = ''; return; }
+      if (busy || game.turn !== me || (ph.kind !== 'discard' && ph.kind !== 'steal')) { dialogEl.hidden = true; dialogKey = ''; return; } // descartar y elegir víctima solo lo ve quien actúa
       var key = ph.kind + ':' + game.turn + ':' + (ph.kind === 'discard' ? ph.queue.length : ph.victims.join(','));
       if (key !== dialogKey) { dialogKey = key; discardSel = {}; }
       var html = '';
@@ -1537,22 +1545,33 @@ export function initBoard() {
       playEvents(r.events);
     }
 
+    // En línea, lo que hacen los demás llega por la sesión (polling): se reproduce igual que lo propio, en orden.
+    if (online) {
+      unsubscribe = opts.session.subscribe(function (v, events) {
+        if (!events.length) return;
+        if (playing || busy || sending) queue.push(events); else playEvents(events);
+      });
+    }
+
     // ------------------------------------------------------------------ reproducción de eventos
     // Lo que pasó después de un comando (lo propio y, contra bots, lo de los demás) llega como una lista de eventos. Se
     // reproducen en orden, con pausas cortas cuando actúa otro jugador, para que se vea qué hizo cada uno. `game` (la vista)
     // recién se actualiza al final; mientras tanto `shown` es lo ya dibujado y `counts`, `myHand` y `vps` avanzan al ritmo
     // de la animación (al terminar se corrigen con el estado real: si algo quedó corrido, se arregla solo).
-    function foreign(p) { return botMode && p !== VIEWER; } // jugadas de otro: llevan pausa y sonido
+    function foreign(p) { return withOthers && p !== VIEWER; } // jugadas de otro: llevan pausa y sonido
     function reduced() { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
     function sumOf(o) { var n = 0; for (var k in o) n += o[k]; return n; }
+    var playing = false, queue = []; // queue: tandas de eventos de otros que llegaron mientras se reproducía otra
     function playEvents(events) {
       var animate = !reduced(), i = 0, note = null;
+      playing = true;
       busy = true; refreshUi();
       function pause(cont, ms) { if (animate && ms > 0) setTimeout(cont, ms); else cont(); }
       function take(type) { var e = events[i]; if (e && e.type === type) { i++; return e; } return null; }
       function next() {
         if (i >= events.length) {
-          busy = false; pull(); syncPieces(); applyView();
+          if (queue.length) { events = queue.shift(); i = 0; return next(); } // sigue con lo que llegó mientras tanto
+          playing = false; busy = false; pull(); syncPieces(); applyView();
           if (note) showStatus(note.text, false, true, note.who); // el aviso del robo sobrevive al refresco
           return;
         }
@@ -1632,7 +1651,7 @@ export function initBoard() {
             return pause(cont, foreign(p) ? 600 : 0);
           case 'TurnChanged':
             turn = ev.player; renderSeats();
-            if (botMode) showStatus(ev.player === VIEWER ? 'Tu turno' : 'Turno de ' + PLAYER_INFO[ev.player].name, false, false, ev.player);
+            if (withOthers) showStatus(ev.player === VIEWER ? 'Tu turno' : 'Turno de ' + PLAYER_INFO[ev.player].name, false, false, ev.player);
             return pause(cont, foreign(ev.player) ? 450 : 0);
           default: return cont(); // DiscardRequired, ResourcesDistributed suelto, GameWon: lo muestra el estado final
         }
@@ -1702,17 +1721,23 @@ export function initBoard() {
 
     function pressed(btn, on) { btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
     function newGame(bots) {
-      botMode = bots;
+      withOthers = bots;
       buildBoard((Math.random() * 1e9) | 0);
       for (var n = 2; n <= 12; n++) rollCounts[n] = 0;
       updateStats();
     }
     document.getElementById('btnNew').addEventListener('click', function () { newGame(false); });
     document.getElementById('btnBots').addEventListener('click', function () { newGame(true); });
+    document.getElementById('btnOnline').addEventListener('click', function () { window.location.assign('/sala'); });
+    document.getElementById('btnLeave').addEventListener('click', function () { window.location.assign('/'); });
+    if (online) { // en una sala no hay mapa nuevo ni partidas locales: la partida es de todos
+      ['btnNew', 'btnBots', 'btnOnline'].forEach(function (id) { document.getElementById(id).hidden = true; });
+      document.getElementById('btnLeave').hidden = false;
+    }
     // Solo desarrollo: salta la colocación inicial. Mapa nuevo, poblados y caminos al azar (por el motor, con comandos legales) y listo para tirar.
     // Se ve con `npm run dev` o con ?debug en la URL; en producción no existe.
     var btnQuick = document.getElementById('btnQuick');
-    if (process.env.NODE_ENV !== 'production' || /[?&]debug/.test(location.search)) btnQuick.hidden = false;
+    if (!online && (process.env.NODE_ENV !== 'production' || /[?&]debug/.test(location.search))) btnQuick.hidden = false;
     // Sorteo ponderado hacia el centro: un vértice pesa según cuántas casillas toca (1, 2 o 3) elevado a 4, así que casi siempre
     // cae en el interior pero cualquiera puede salir; una arista pesa por los vértices que une.
     function pickCentral(list, isVertex) {
@@ -1810,11 +1835,11 @@ export function initBoard() {
     if (/[?&]debug/.test(location.search)) {
       window.__paisano = {
         pick: function (x, y) { var r = renderer.domElement.getBoundingClientRect(); pointer.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1); raycaster.setFromCamera(pointer, camera); var h = raycaster.intersectObjects(markersGroup.children, false)[0]; return { hit: h ? h.object.userData : null, ray: [raycaster.ray.origin.toArray(), raycaster.ray.direction.toArray()], pointer: pointer.toArray(), cam: camera.position.toArray(), marker19: markersGroup.children.filter(function (c) { return c.userData.id === 19; }).map(function (c) { return c.matrixWorld.elements.slice(12, 15); }) }; },
-        game: function () { return session.debugState(); },
+        game: function () { return session.debugState ? session.debugState() : game; },
         busy: function () { return busy; },
         legal: function () { return legal; },
         tileVertices: function (t) { return topology().tiles[t].vertices; },
-        mutate: function (fn) { session.debugMutate(fn); pull(); syncPieces(); applyView(); },
+        mutate: function (fn) { if (!session.debugMutate) return; session.debugMutate(fn); pull(); syncPieces(); applyView(); },
         screen: function (type, id) {
           var topo = topology(), p = new THREE.Vector3();
           if (type === 'vertex') p.set(vertices[id].x, TILE_TOP + 0.05, vertices[id].z);
@@ -1828,7 +1853,7 @@ export function initBoard() {
     }
 
     // ------------------------------------------------------------------ bucle
-    buildBoard((Date.now() & 0xffffff) | 1);
+    buildBoard(online ? (opts.seed || 1) : (Date.now() & 0xffffff) | 1);
     applyLight(1);
     var clock = new THREE.Clock(), time = 0;
     function frame() {

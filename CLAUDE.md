@@ -162,6 +162,7 @@ Las de interfaz están en `docs/decisiones-interfaz.md`.
 - **Prototipo portado con three r128 fijo.** No actualizar three sin revisar el aspecto (cambian encodings y colores). Migrar a React Three Fiber cuando el estado del juego lo justifique.
 - **Orden del multijugador (sept 2026): bots antes que humanos.** Primero una partida contra bots en el navegador (6a), después la sala online con amigos (6b). La razón: probar reglas, animaciones y sonido sin depender de otras personas. Los bots usan la misma interfaz que un jugador y son aleatorios a propósito; se pueden mejorar después sin tocar el resto.
 - **Sesión de juego (sept 2026):** el tablero solo conoce `GameSession` (vista del jugador, `send(comando)`, `subscribe`); ya no aplica reglas ni ve el estado completo. Con bots o en línea, lo que hicieron otros llega como lista de eventos y el tablero los reproduce en orden. Detalle en `docs/multijugador.md`.
+- **Partida online (sept 2026):** sala por link `/sala/CODIGO` (6 caracteres sin letras ambiguas), identidad por token en `localStorage` y polling de 1,5 s con `?since=versión`; recargar recupera el estado exacto y no repite lo ya jugado. Detalle y límites en `docs/multijugador.md`.
 - **Ciclo de vida del motor en el servidor (sept 2026):** una sala = un documento JSON con versión; los bots juegan dentro de la misma petición que les deja el turno (Vercel no tiene procesos en segundo plano); el token del navegador se guarda solo como hash en la sala.
 
 ## Hoja de ruta
@@ -172,7 +173,7 @@ Las fases 1-4 del plan original (Java/Spring) quedan pospuestas: se hicieron en 
 2. **Motor de reglas** del juego base con tests. — hecho, salvo cartas de desarrollo, ejército, camino más largo y comercio entre jugadores
 3. **Bots y simulación masiva.** — hecho (bot aleatorio, simulación, bots dentro de la sala)
 4. **Servidor de la prueba:** Route Handlers + almacén de salas. — hecho con almacén en memoria; falta Upstash
-5. **Cliente jugable:** partida local, contra bots y online. — local y contra bots hechos; online (6b) en curso
+5. **Cliente jugable:** partida local, contra bots y online por sala. — hecho (falta probar online con amigos en dos dispositivos)
 6. **Cartas de desarrollo y comercio entre jugadores** (motor, interfaz y bots).
 7. **Variantes configurables** (`GameConfig` por sala y módulos de reglas).
 8. **Arte y pulido:** modelos, iluminación, animaciones y sonido.
@@ -187,23 +188,21 @@ Las fases 1-4 del plan original (Java/Spring) quedan pospuestas: se hicieron en 
 - Motor (`client/src/engine/`): tablero, mapa con semilla, colocación inicial, dados y producción, construcción (caminos, poblados, ciudades), 7 con descarte, ladrón y robo, comercio con el banco (4:1, puertos 3:1 y 2:1), victoria.
 - Servidor de la prueba: salas, almacén en memoria, vista filtrada, API completa (crear, unirse, bots, empezar, comando, estado) y bots dentro de la sala. Ver `docs/multijugador.md`.
 - Cliente conectado por `GameSession`: partida de 4 en la misma pantalla y **partida contra bots** (menú «Partida contra bots»), con reproducción de eventos.
-- Verificado con Chrome (clics reales, escritorio y celular): construir con ✓/✕, dados y producción, 7 con descarte y robo, comercio, bots colocando y construyendo.
-
-**En curso: 6b, partida online con amigos.** `RemoteSession` con polling, pantalla de sala (`/sala/CODIGO`, «Hola, presentate compañero», lobby con «Sumar bot» y «Empezar»), token en `localStorage`, botón «Jugar online».
+- **Partida online por sala (6b):** `/sala` (crear o unirse), `/sala/CODIGO` («Hola, presentate compañero», lobby con «Sumar bot» y «Empezar», partida), `RemoteSession` con polling, token en `localStorage`, menú «Jugar online» / «Salir de la sala». Funciona con `npm run dev` o `next start`; **en Vercel todavía no** (falta Upstash).
+- Verificado con Chrome (clics reales): construir con ✓/✕, dados y producción, 7 con descarte y robo, comercio, bots colocando y construyendo, y online (un jugador con la interfaz y otro más un bot por la API: colocación, ronda completa, recarga a mitad de partida, entrar por link, sala inexistente).
 
 **Siguiente (orden acordado)**
-1. Cuenta gratis de **Upstash Redis** (el desarrollador la crea; URL y token en variables de entorno, nunca en el repo; **avisarle antes de necesitarla**), `UpstashStore` y prueba en Vercel.
+1. **Jugar con amigos de verdad:** cuenta gratis de **Upstash Redis** (el desarrollador la crea; URL y token en variables de entorno, nunca en el repo; **avisarle antes de necesitarla**), `UpstashStore` (mismas operaciones que `MemoryStore`) y prueba en Vercel con dos dispositivos. Sin esto las salas no funcionan online, porque cada función de Vercel tiene su memoria.
 2. Cartas de desarrollo (`buyDevCard`, ejército, camino más largo) y comercio entre jugadores. **Proponer el diseño primero**: hoy el botón «Carta» de la bandeja existe pero solo muestra un aviso, y el motor no tiene nada de esto.
 3. Variantes configurables (`GameConfig` por sala).
 
-**Sin probar a mano:** sonido de aterrizaje y de comercio, ritmo de las pausas de los bots (650 ms por pieza, 800 el ladrón, 450 el cambio de turno), animaciones con la pestaña visible. Limitaciones conocidas: los bots son aleatorios, comparten nombre con los puestos de siempre y no llevan marca de «bot».
+**Sin probar a mano:** sonido de aterrizaje y de comercio, ritmo de las pausas de los bots (650 ms por pieza, 800 el ladrón, 450 el cambio de turno), animaciones con la pestaña visible, la partida online con dos personas y en un ancho real de celular. Limitaciones conocidas: los bots son aleatorios y en la partida local contra bots comparten nombre con los puestos de siempre (en línea se llaman «Bot 1», «Bot 2»…); ver los límites de la parte online en `docs/multijugador.md`.
 
 ## Decisiones pendientes
 
 - **Solo si se retoma el backend Java:** Maven o Gradle (recomendado: Maven con wrapper), separar el motor en un módulo propio sin Spring, JUnit 5 + AssertJ, nombre de paquetes (`com.<org>.paisano`).
 - Login: solo nombre + token, o también Google/Discord (por ahora, nombre + token).
 - **Distribución de los dados** como opción de sala (`GameConfig`): dados reales (por defecto) o mazo barajado de las 36 combinaciones. La semilla por partida con flujos separados (mapa, dados, robos) y el contador guardado en el estado ya están hechos.
-- **Marca de «bot»** en los puestos y nombres propios para los bots.
+- **Marca de «bot»** en los puestos de la partida (en el lobby online ya llevan la etiqueta «bot») y nombres propios para los bots de la partida local.
 - **`client/AGENTS.md`:** ya se borró del repo (commit `8555db3`), pero Next.js lo recrea al correr `npm run dev`. Si reaparece, no commitearlo o agregarlo al `.gitignore` de `client/`.
 - Búsqueda de marca y disponibilidad de URL para el nombre Paisano.
-- `README.md` desactualizado: todavía dice que el motor y el multijugador vienen después.
