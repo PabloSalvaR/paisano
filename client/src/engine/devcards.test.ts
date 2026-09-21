@@ -156,7 +156,7 @@ function findSevenSeed(): number {
   throw new Error('sin semilla con 7');
 }
 
-describe('Ejército (montonera) más grande', () => {
+describe('Ejército (milicia) más grande', () => {
   const playOne = (s: GameState, player: PlayerId): GameState => {
     s.turn = player;
     s.phase = { kind: 'main' };

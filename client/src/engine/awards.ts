@@ -1,4 +1,4 @@
-// Reconocimientos con puntos: la ruta más larga y la montonera más grande.
+// Reconocimientos con puntos: la ruta más larga y la milicia más grande.
 // Se recalculan cuando algo puede cambiarlos (un camino, una casa que corta, un caballero) y avisan solo si cambia quién los tiene.
 
 import { topology } from './board';
@@ -54,7 +54,7 @@ export function updateLongestRoad(s: GameState, events: GameEvent[]): void {
   if (holder !== prev) events.push({ type: 'LongestRoadChanged', player: holder, from: prev, length: s.longestRoad.length });
 }
 
-/** Tras jugar un caballero: si quien lo jugó llega al mínimo y supera al que tiene la montonera, se la queda. */
+/** Tras jugar un caballero: si quien lo jugó llega al mínimo y supera al que tiene la milicia, se la queda. */
 export function updateLargestArmy(s: GameState, player: PlayerId, events: GameEvent[]): void {
   const size = s.players[player].knightsPlayed;
   const { holder } = s.largestArmy;

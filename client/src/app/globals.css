@@ -392,7 +392,7 @@ body{
 .room-seats .tag{margin-left:auto;font-size:.74rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .seat[hidden]{display:none}
 
-/* Cartas de desarrollo: contador en el puesto, reconocimientos (ruta más larga y montonera) y el panel «Mis cartas» */
+/* Cartas de desarrollo: contador en el puesto, reconocimientos (ruta más larga y milicia) y el panel «Mis cartas» */
 /* Segunda fila del puesto: ruta más larga, gauchos jugados y cartas de desarrollo, siempre a la vista y sin salirse del puesto */
 .seat .aw{grid-area:aw;display:flex;align-items:center;gap:4px;min-width:0}
 .seat .bdg,.seat .dv{display:inline-flex;align-items:center;gap:3px;padding:1px 7px 1px 5px;border-radius:999px;background:var(--btn-on);color:var(--btn-on-text);border:1px solid var(--pc);

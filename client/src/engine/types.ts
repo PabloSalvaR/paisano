@@ -20,7 +20,7 @@ export interface GameConfig {
   trade: { bank: number; genericPort: number; specificPort: number; maxOffersPerTurn: number }; // cartas iguales que se entregan por 1 del banco; ofertas a jugadores que puede abrir el de turno
   devDeck: DevHand; // composición del mazo de desarrollo
   longestRoadMin: number; // largo mínimo para el reconocimiento de la ruta más larga
-  largestArmyMin: number; // caballeros jugados mínimos para el de la montonera más grande
+  largestArmyMin: number; // caballeros jugados mínimos para el de la milicia más grande
   awardPoints: number; // puntos de cada reconocimiento
   firstPlayer: PlayerId | null; // quién abre la colocación y la partida; null = se sortea con la semilla
 }

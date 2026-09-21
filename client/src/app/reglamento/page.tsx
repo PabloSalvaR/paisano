@@ -11,7 +11,7 @@ const SECTIONS: { title: string; items: string[]; open?: boolean }[] = [
     open: true,
     items: [
       "Jugás de 3 a 4. Gana el primero que llega a 10 puntos.",
-      "Una casa vale 1 punto, una estancia 2, la Ruta más larga 2 y la Montonera más grande 2. Cada carta de Punto de victoria vale 1.",
+      "Una casa vale 1 punto, una estancia 2, la Ruta más larga 2 y la Milicia más grande 2. Cada carta de Punto de victoria vale 1.",
     ],
   },
   {
@@ -77,11 +77,11 @@ const SECTIONS: { title: string; items: string[]; open?: boolean }[] = [
     ],
   },
   {
-    title: "Ruta y Montonera",
+    title: "Ruta y Milicia",
     items: [
       "Ruta más larga: 5 o más caminos seguidos. Una casa rival en el medio la corta.",
       "En cada puesto ves siempre tu ruta y los Gauchos que jugó cada uno; se iluminan en quien tiene el reconocimiento.",
-      "Montonera más grande: 3 o más Gauchos jugados.",
+      "Milicia más grande: 3 o más Gauchos jugados.",
       "Valen 2 puntos cada una y solo se pierden si alguien te supera.",
     ],
   },

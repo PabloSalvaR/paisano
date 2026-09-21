@@ -26,7 +26,7 @@ export function pieceCounts(state: GameState, player: PlayerId) {
   };
 }
 
-/** Puntos que ven todos: casas (1), estancias (2) y los reconocimientos de ruta y montonera. */
+/** Puntos que ven todos: casas (1), estancias (2) y los reconocimientos de ruta y milicia. */
 export function publicVictoryPoints(state: GameState, player: PlayerId): number {
   const c = pieceCounts(state, player);
   const awards = (state.longestRoad.holder === player ? 1 : 0) + (state.largestArmy.holder === player ? 1 : 0);

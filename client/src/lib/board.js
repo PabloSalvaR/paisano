@@ -1506,7 +1506,7 @@ export function initBoard(opts) {
         var dv = s.querySelector('.dv'), rd = s.querySelector('.bdg.road'), ar = s.querySelector('.bdg.army');
         dv.hidden = !devCounts[p]; dv.querySelector('b').textContent = devCounts[p];
         rd.classList.toggle('held', awardRoad.holder === p); rd.querySelector('b').textContent = roadLens[p]; rd.title = awardRoad.holder === p ? 'Tiene la Ruta más larga (' + roadLens[p] + ')' : 'Ruta más larga propia: ' + roadLens[p] + ' (hacen falta ' + game.config.longestRoadMin + ' y superar al resto)';
-        ar.classList.toggle('held', awardArmy.holder === p); ar.querySelector('b').textContent = knights[p]; ar.title = awardArmy.holder === p ? 'Tiene la Montonera más grande (' + knights[p] + ' gauchos)' : 'Gauchos jugados: ' + knights[p] + ' (hacen falta ' + game.config.largestArmyMin + ' y superar al resto)';
+        ar.classList.toggle('held', awardArmy.holder === p); ar.querySelector('b').textContent = knights[p]; ar.title = awardArmy.holder === p ? 'Tiene la Milicia más grande (' + knights[p] + ' gauchos)' : 'Gauchos jugados: ' + knights[p] + ' (hacen falta ' + game.config.largestArmyMin + ' y superar al resto)';
       });
     }
     // Copia las manos y los puntos del estado del motor a lo que se ve en pantalla.
@@ -2089,7 +2089,7 @@ export function initBoard(opts) {
             vps[ev.player] += apts;
             renderSeats(); renderHand();
             if (animate) pop(seatsEl.children[ev.player], PLAYER_INFO[ev.player].css);
-            showStatus((ev.player === VIEWER ? 'Tenés' : PLAYER_INFO[ev.player].name + ' tiene') + ' la Montonera más grande (' + ev.size + ' gauchos)', false, true, ev.player);
+            showStatus((ev.player === VIEWER ? 'Tenés' : PLAYER_INFO[ev.player].name + ' tiene') + ' la Milicia más grande (' + ev.size + ' gauchos)', false, true, ev.player);
             return pause(cont, 1000);
           }
           case 'Stolen': return stolen(ev, cont);
