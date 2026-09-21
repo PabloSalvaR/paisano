@@ -19,6 +19,7 @@ import type {
   GameState,
   Gain,
   LegalAction,
+  OpeningRoll,
   PlayerId,
   Result,
 } from './types';
@@ -33,7 +34,8 @@ export function createGame(names: string[], seed: number, config?: Partial<GameC
   const map = generateMap(topo, mulberry32(seed));
   const bank = emptyHand();
   for (const r of RESOURCES) bank[r] = cfg.bankPerResource;
-  const first = cfg.firstPlayer ?? Math.floor(mulberry32((seed ^ 0x1b873593) | 0)() * names.length); // flujo aparte, como los demás
+  const draw = cfg.firstPlayer === null ? drawFirstPlayer(names.length, (seed ^ 0x1b873593) | 0) : null; // flujo aparte, como los demás
+  const first = draw ? draw.first : cfg.firstPlayer!;
   return {
     config: cfg,
     map,
@@ -43,6 +45,7 @@ export function createGame(names: string[], seed: number, config?: Partial<GameC
     edgeRoads: topo.edges.map(() => null),
     robber: map.desert,
     phase: { kind: 'setup', step: 0, part: 'settlement', lastSettlement: null },
+    ...(draw ? { opening: draw.rounds } : {}),
     first,
     turn: first,
     dice: { seed: (seed ^ 0x5bd1e995) | 0, rolls: 0 }, // flujos de azar separados del del mapa
@@ -52,6 +55,25 @@ export function createGame(names: string[], seed: number, config?: Partial<GameC
     longestRoad: { holder: null, length: 0 },
     largestArmy: { holder: null, size: 0 },
   };
+}
+
+/**
+ * Sorteo de quién abre: cada jugador tira 2 dados y abre el de mayor total. Si hay empate arriba, tiran de nuevo solo los empatados,
+ * hasta que quede uno. Devuelve todas las rondas (para mostrarlas) y el ganador. Sale de la semilla: mismo resultado siempre.
+ */
+export function drawFirstPlayer(players: number, seed: number): { first: PlayerId; rounds: OpeningRoll[][] } {
+  const rounds: OpeningRoll[][] = [];
+  let candidates = Array.from({ length: players }, (_, i) => i);
+  let n = 0;
+  for (let guard = 0; guard < 50; guard++) {
+    const round = candidates.map((player): OpeningRoll => ({ player, roll: rollDiceFor(seed, n++) }));
+    rounds.push(round);
+    const total = (r: OpeningRoll): number => r.roll[0] + r.roll[1];
+    const max = Math.max(...round.map(total));
+    candidates = round.filter((r) => total(r) === max).map((r) => r.player);
+    if (candidates.length === 1) break;
+  }
+  return { first: candidates[0], rounds }; // (tras 50 empates seguidos, imposible en la práctica, abre el primero de los empatados)
 }
 
 /**

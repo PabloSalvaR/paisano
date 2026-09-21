@@ -17,7 +17,7 @@ const SECTIONS: { title: string; items: string[]; open?: boolean }[] = [
   {
     title: "Al empezar",
     items: [
-      "Se sortea quién empieza. Es en dos fases: en la fase 1 cada uno pone una casa y un camino, en sentido horario; en la fase 2 ponen la segunda casa y su camino en sentido antihorario (el último de la fase 1 juega dos veces seguidas).",
+      "Cada uno tira dos dados y empieza el que saque más (si hay empate arriba, tiran de nuevo solo los empatados). Después son dos fases: en la fase 1 cada uno pone una casa y un camino, en sentido horario; en la fase 2 ponen la segunda casa y su camino en sentido antihorario (el último de la fase 1 juega dos veces seguidas).",
       "Después empieza el juego: el primer turno es de quien abrió la fase 1 y los turnos siguen en sentido horario.",
       "La 2.ª casa te da 1 recurso por cada casilla que toca.",
       "Dos casas (o estancias) nunca pueden quedar pegadas: hace falta al menos un vértice libre entre ellas.",

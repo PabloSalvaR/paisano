@@ -162,3 +162,22 @@ describe('LocalSession contra bots', () => {
     expect(stolen.every((x) => x === null)).toBe(true);
   }, 60000);
 });
+
+describe('kick: apertura de un bot', () => {
+  it('si abre un bot no juega solo al crear la sesión; kick() lo hace jugar hasta que le toca al humano', async () => {
+    const seed = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].find((s) => createGame(['Ana', 'B1', 'B2'], s, { firstPlayer: null }).first !== 0)!;
+    const session = new LocalSession(['Ana', 'B1', 'B2'], seed, { firstPlayer: null }, { bots: [false, true, true] });
+    const before = session.view().game!;
+    expect(before.vertexBuildings.every((b) => b === null)).toBe(true);
+    expect(before.turn).not.toBe(0);
+    const events = await session.kick();
+    expect(events.length).toBeGreaterThan(0);
+    expect(session.view().game!.turn).toBe(0);
+    expect(await session.kick()).toEqual([]); // ya le toca al humano
+  });
+
+  it('si abre el humano, kick() no hace nada', async () => {
+    const session = new LocalSession(['Ana', 'B1', 'B2'], 1, undefined, { bots: [false, true, true] });
+    expect(await session.kick()).toEqual([]);
+  });
+});

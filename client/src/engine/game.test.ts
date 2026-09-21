@@ -378,3 +378,48 @@ describe('victoria al empezar el turno', () => {
     expect(s.turn).toBe(0);
   });
 });
+
+describe('sorteo de quién abre (tirada de dados)', () => {
+  const seeds = Array.from({ length: 60 }, (_, i) => i + 1);
+  const total = (r: { roll: [number, number] }): number => r.roll[0] + r.roll[1];
+
+  it('cada ronda la tiran los que empataron arriba; la última tiene un ganador único: ese abre', () => {
+    for (const seed of seeds) {
+      const s = createGame(NAMES, seed, { firstPlayer: null });
+      const rounds = s.opening!;
+      expect(rounds.length).toBeGreaterThanOrEqual(1);
+      expect(rounds[0].map((r) => r.player)).toEqual([0, 1, 2, 3]); // la primera la tiran todos
+      rounds.forEach((round, i) => {
+        round.forEach((r) => r.roll.forEach((d) => expect(d >= 1 && d <= 6).toBe(true)));
+        const max = Math.max(...round.map(total));
+        const top = round.filter((r) => total(r) === max).map((r) => r.player);
+        if (i < rounds.length - 1) {
+          expect(top.length).toBeGreaterThan(1); // hubo empate: la siguiente ronda es solo de esos
+          expect(rounds[i + 1].map((r) => r.player)).toEqual(top);
+        } else {
+          expect(top).toEqual([s.first]); // desempate resuelto: gana el único con el mayor total
+        }
+      });
+    }
+  });
+
+  it('es reproducible con la misma semilla, y hay semillas con empate y con distintos ganadores', () => {
+    expect(createGame(NAMES, 9, { firstPlayer: null }).opening).toEqual(createGame(NAMES, 9, { firstPlayer: null }).opening);
+    const games = seeds.map((seed) => createGame(NAMES, seed, { firstPlayer: null }));
+    expect(games.some((g) => g.opening!.length > 1)).toBe(true);
+    expect(new Set(games.map((g) => g.first)).size).toBeGreaterThan(1);
+  });
+
+  it('con un primer jugador fijo no hay tirada', () => {
+    const s = createGame(NAMES, 9, { firstPlayer: 2 });
+    expect(s.opening).toBeUndefined();
+    expect(s.first).toBe(2);
+    expect(s.turn).toBe(2);
+  });
+
+  it('funciona con 3 jugadores y la colocación arranca por quien ganó', () => {
+    const s = createGame(['A', 'B', 'C'], 4, { firstPlayer: null });
+    expect(s.opening![0].map((r) => r.player)).toEqual([0, 1, 2]);
+    expect(s.turn).toBe(s.first);
+  });
+});

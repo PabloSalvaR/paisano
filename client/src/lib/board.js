@@ -58,6 +58,7 @@ export const MARKUP = `
 
   <!-- Descartar (con un 7) o elegir a quién robarle: se arma desde board.js -->
   <section class="panel dialog" id="dialog" role="dialog" aria-live="polite" hidden></section>
+  <section class="panel dialog opening" id="opening" role="status" aria-live="polite" hidden></section>
 
   <!-- Estadística de tiradas: una barra vertical por total (2 a 12) con la cantidad de veces que salió -->
   <section class="panel stats" id="stats" aria-label="Estadística de tiradas" hidden>
@@ -1118,7 +1119,7 @@ export function initBoard(opts) {
       session = online ? opts.session : new LocalSession(PLAYER_INFO.map(function (p) { return p.name; }), seed, { firstPlayer: null }, withOthers ? { bots: [false, true, true, true] } : {}); pull();
       var topo = topology();
       board = new THREE.Group(); scene.add(board);
-      setOrbit(false); tiles = []; tileMeshes = []; ships = []; robber = null; hoverTile = null; busy = false; sending = false; pieceSeen = {};
+      setOrbit(false); closeOpening(); tiles = []; tileMeshes = []; ships = []; robber = null; hoverTile = null; busy = false; sending = false; pieceSeen = {};
 
       // casillas (mismo orden e ids que las del motor)
       topo.tiles.forEach(function (et) {
@@ -2084,6 +2085,7 @@ export function initBoard(opts) {
       buildBoard((Math.random() * 1e9) | 0);
       for (var n = 2; n <= 12; n++) rollCounts[n] = 0;
       updateStats();
+      startGame();
     }
     document.getElementById('btnNew').addEventListener('click', newGame);
     document.getElementById('btnLeave').addEventListener('click', function () { window.location.assign('/'); });
@@ -2215,9 +2217,66 @@ export function initBoard(opts) {
       };
     }
 
+    // ------------------------------------------------------------------ sorteo de quién abre
+    // El motor ya sorteó (`game.opening`: rondas de 2 dados por jugador; si hay empate arriba, otra ronda solo con los empatados).
+    // Acá solo se muestra, una tirada por vez, y al terminar arranca la colocación (y, si abre un bot, empieza a jugar). Tocar lo salta.
+    var openingEl = document.getElementById('opening'), openingTimers = [];
+    function miniDie(v) {
+      return '<svg class="odie" viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="6" fill="#d94141" stroke="#7a1f1f" stroke-width="2"/>' +
+        DIE_PIPS[v].map(function (i) { return '<circle cx="' + (6.5 + (i % 3) * 6.5) + '" cy="' + (6.5 + Math.floor(i / 3) * 6.5) + '" r="2.2" fill="#fff"/>'; }).join('') + '</svg>';
+    }
+    function openingRows(round, shownN, winners) {
+      return round.map(function (r, i) {
+        var pl = PLAYER_INFO[r.player], out = i < shownN;
+        return '<div class="orow' + (winners && winners.indexOf(r.player) >= 0 ? ' win' : '') + '" style="--pc:' + pl.css + '"><i></i><span class="nm"></span>' +
+          (out ? miniDie(r.roll[0]) + miniDie(r.roll[1]) + '<b>' + (r.roll[0] + r.roll[1]) + '</b>' : '<span class="odie ph"></span><span class="odie ph"></span><b>?</b>') + '</div>';
+      }).join('');
+    }
+    function closeOpening() { openingTimers.forEach(clearTimeout); openingTimers = []; openingEl.hidden = true; openingEl.onclick = null; }
+    function showOpening(rounds, first, done) {
+      var animate = !reduced();
+      busy = true; refreshUi();
+      openingEl.hidden = false;
+      function later(ms, fn) { openingTimers.push(setTimeout(fn, ms)); }
+      function finish() {
+        openingTimers.forEach(clearTimeout); openingTimers = [];
+        openingEl.hidden = true; openingEl.onclick = null;
+        busy = false; refreshUi();
+        showStatus(first === VIEWER && withOthers ? 'Empezás vos' : 'Empieza ' + PLAYER_INFO[first].name, false, true, first);
+        done();
+      }
+      openingEl.onclick = finish; // tocar salta el sorteo
+      function playRound(ri) {
+        var round = rounds[ri], last = ri === rounds.length - 1, t = 0, max = Math.max.apply(null, round.map(function (r) { return r.roll[0] + r.roll[1]; }));
+        var winners = round.filter(function (r) { return r.roll[0] + r.roll[1] === max; }).map(function (r) { return r.player; });
+        function draw(n, note, win) {
+          openingEl.innerHTML = '<h3>' + (ri === 0 ? '¿Quién empieza?' : 'Desempate') + '</h3><div class="orows">' + openingRows(round, n, win ? winners : null) + '</div><p class="onote">' + (note || '&nbsp;') + '</p>';
+          Array.prototype.forEach.call(openingEl.querySelectorAll('.orow .nm'), function (el, i) { el.textContent = PLAYER_INFO[round[i].player].name; });
+        }
+        draw(0, ri === 0 ? 'Tira cada uno dos dados; abre el mayor' : 'Tiran de nuevo solo los empatados');
+        if (animate) audio.rollDice();
+        round.forEach(function (r, i) { t = 900 + i * 650; later(t, function () { draw(i + 1); }); });
+        t += 550;
+        later(t, function () {
+          var names = winners.map(function (p) { return PLAYER_INFO[p].name; });
+          draw(round.length, last ? 'Empieza ' + names[0] : 'Empate entre ' + names.join(' y ') + ': tiran de nuevo', true);
+          later(last ? 1900 : 1700, function () { if (last) finish(); else playRound(ri + 1); });
+        });
+      }
+      playRound(0);
+    }
+    // Arranca la partida recién armada: muestra el sorteo (si lo hay y nadie jugó todavía) y después deja jugar a los bots que abran.
+    function startGame() {
+      var ph = game.phase;
+      function go() { if (session.kick) session.kick().then(function (evs) { if (evs.length) playEvents(evs); }); }
+      if (!game.opening || ph.kind !== 'setup' || ph.step !== 0 || ph.part !== 'settlement' || reduced()) { go(); return; }
+      showOpening(game.opening, game.turn, go);
+    }
+
     // ------------------------------------------------------------------ bucle
     buildBoard(online ? (opts.seed || 1) : (Date.now() & 0xffffff) | 1);
     applyLight(1);
+    startGame();
     var clock = new THREE.Clock(), time = 0;
     function frame() {
       if (disposed) return; raf = requestAnimationFrame(frame);

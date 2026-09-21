@@ -25,6 +25,12 @@ export interface GameConfig {
   firstPlayer: PlayerId | null; // quién abre la colocación y la partida; null = se sortea con la semilla
 }
 
+/** Una tirada del sorteo de quién abre: dos dados por jugador. */
+export interface OpeningRoll {
+  player: PlayerId;
+  roll: [number, number]; // (no se llama `dice`: así el estado de dados, que sí es secreto, sigue siendo fácil de auditar)
+}
+
 export interface PlayerState {
   name: string;
   hand: Hand;
@@ -61,6 +67,7 @@ export interface GameState {
   edgeRoads: (PlayerId | null)[]; // por id de arista
   robber: number; // id de casilla
   phase: Phase;
+  opening?: OpeningRoll[][]; // el sorteo de quién abre (público): una ronda con todos y, si hay empate arriba, otras solo con los empatados. Ausente si `firstPlayer` es fijo
   first: PlayerId; // quien abrió la colocación inicial (y el primer turno); el orden de mesa es el horario
   turn: PlayerId; // a quién le toca actuar
   dice: { seed: number; rolls: number }; // cada tirada sale de seed + contador (ver dice.ts)

@@ -39,8 +39,6 @@ export class LocalSession implements GameSession {
   ) {
     if (opts.bots?.[0]) throw new Error('LocalSession: el primer asiento tiene que ser humano');
     this.state = createGame(names, seed, config);
-    const bots = opts.bots;
-    if (bots?.[this.state.turn]) this.state = playBots(this.state, (p) => bots[p], opts.rng ?? Math.random, opts.bot).state; // si el sorteo le da la apertura a un bot, juega ya
   }
 
   /** Quién mira: en la partida contra bots, el humano (asiento 0); en la de varios en la misma pantalla, quien tiene el turno. */
@@ -79,6 +77,19 @@ export class LocalSession implements GameSession {
     const events = all.map((e) => viewEvent(e, who));
     this.listeners.forEach((fn) => fn(this.view(), events));
     return { ok: true, events };
+  }
+
+  /**
+   * Si el sorteo le dio la apertura a un bot, que juegue hasta que le toque al humano. Lo llama el tablero cuando termina de mostrar
+   * el sorteo; devuelve los eventos para reproducirlos como cualquier otra jugada.
+   */
+  async kick(): Promise<ViewEvent[]> {
+    const bots = this.opts.bots;
+    if (!bots || !bots[this.state.turn] || this.state.phase.kind === 'finished') return [];
+    const played = playBots(this.state, (p) => bots[p], this.opts.rng ?? Math.random, this.opts.bot);
+    this.state = played.state;
+    this.version++;
+    return played.events.map((e) => viewEvent(e, 0));
   }
 
   subscribe(fn: (view: RoomView, events: ViewEvent[]) => void): () => void {
