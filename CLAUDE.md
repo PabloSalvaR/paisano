@@ -165,6 +165,7 @@ Las de interfaz están en `docs/decisiones-interfaz.md`.
 - **Sesión de juego (sept 2026):** el tablero solo conoce `GameSession` (vista del jugador, `send(comando)`, `subscribe`); ya no aplica reglas ni ve el estado completo. Con bots o en línea, lo que hicieron otros llega como lista de eventos y el tablero los reproduce en orden. Detalle en `docs/multijugador.md`.
 - **Partida online (sept 2026):** sala por link `/sala/CODIGO` (6 caracteres sin letras ambiguas), identidad por token en `localStorage` y polling de 1,5 s con `?since=versión`; recargar recupera el estado exacto y no repite lo ya jugado. Detalle y límites en `docs/multijugador.md`.
 - **Almacén en Upstash sin librería (sept 2026):** habla con la API REST por `fetch` (no se sumó `@upstash/redis`); dos claves por sala, scripts Lua atómicos para crear y para guardar-si-la-versión-no-cambió, vencimiento de 7 días, eviction desactivada. Elegido por `instance.ts` según las variables de entorno. Si la base falla, la API responde 503.
+- **Versión visible (sept 2026):** el menú muestra `v` + la versión de `client/package.json` (hoy `0.1.0`). Se queda en `0.1.0` hasta salir a producción; todo lo anterior es prueba casera.
 - **Ciclo de vida del motor en el servidor (sept 2026):** una sala = un documento JSON con versión; los bots juegan dentro de la misma petición que les deja el turno (Vercel no tiene procesos en segundo plano); el token del navegador se guarda solo como hash en la sala.
 
 ## Hoja de ruta

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { version } from "../../package.json";
 
 // Menú de inicio: de acá sale toda la navegación (partida contra bots, mesa local de 4 y sala online).
 export default function Menu() {
@@ -7,6 +8,7 @@ export default function Menu() {
       <div className="room-card">
         <div className="logo" role="img" aria-label="Paisano" />
         <h1>Piedra y camino</h1>
+        <span className="room-version">v{version}</span>
         <p>Elegí cómo querés jugar.</p>
         <Link className="room-btn primary" href="/jugar/bots" title="Jugás vos contra tres bots que juegan solos">
           Partida contra bots

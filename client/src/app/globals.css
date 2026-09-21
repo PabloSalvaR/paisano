@@ -368,6 +368,7 @@ body{
   -webkit-mask:url(/logo-paisano.png) center/contain no-repeat;mask:url(/logo-paisano.png) center/contain no-repeat}
 .room-card h1{font-family:'Fraunces',Georgia,serif;font-size:1.3rem;line-height:1.2;text-align:center}
 .room-card p{color:var(--muted);font-size:.92rem;line-height:1.4;text-align:center}
+.room-card .room-version{margin-top:-8px;text-align:center;font-size:.75rem;font-weight:600;letter-spacing:.06em;color:var(--muted)}
 .room-card .code{font-family:'Fraunces',Georgia,serif;font-weight:700;letter-spacing:.14em;color:var(--text)}
 .room-card label{display:flex;flex-direction:column;gap:5px;font-size:.82rem;font-weight:700}
 .room-card input{font:inherit;font-size:1rem;font-weight:600;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--btn);color:var(--text);min-height:42px}
