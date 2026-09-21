@@ -237,5 +237,5 @@ Las fases 1-4 del plan original (Java/Spring) quedan pospuestas: se hicieron en 
 - Login: solo nombre + token, o también Google/Discord (por ahora, nombre + token).
 - **Distribución de los dados** como opción de sala (`GameConfig`): dados reales (por defecto) o mazo barajado de las 36 combinaciones. La semilla por partida con flujos separados (mapa, dados, robos) y el contador guardado en el estado ya están hechos.
 - **Marca de «bot»** en los puestos de la partida (en el lobby online ya llevan la etiqueta «bot») y nombres propios para los bots de la partida local.
-- **`client/AGENTS.md`:** ya se borró del repo (commit `8555db3`), pero Next.js lo recrea al correr `npm run dev`. Si reaparece, no commitearlo o agregarlo al `.gitignore` de `client/`.
+- **`client/AGENTS.md` y `client/CLAUDE.md`:** los recrea Next.js al correr `npm run dev`; desde sept 2026 `next.config.ts` tiene `agentRules: false` (ya no se generan) y además están en el `.gitignore` de `client/`. El CLAUDE.md que manda es el de la raíz.
 - Búsqueda de marca y disponibilidad de URL para el nombre Paisano.

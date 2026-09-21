@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Los genera Next.js al correr npm run dev (avisos de la herramienta, no del proyecto)
+/AGENTS.md
+/CLAUDE.md
