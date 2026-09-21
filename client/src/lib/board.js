@@ -8,6 +8,7 @@ import { createAudio } from './audio.js';
 // y le envía comandos; no aplica reglas ni conoce el estado completo. `topology` es geometría fija del tablero.
 import { topology } from '../engine';
 import { LocalSession } from './session';
+import { drawBastos11, devCardURL } from './cardart';
 
 export const MARKUP = `
 <div id="stage">
@@ -222,6 +223,7 @@ export function initBoard(opts) {
     }
     function tex(canvas, repeatX, repeatY) {
       var t = new THREE.CanvasTexture(canvas);
+      canvas.__tex = t; // para poder refrescarla si el lienzo se completa después (ver el 11 de bastos)
       t.encoding = THREE.sRGBEncoding;
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -451,6 +453,17 @@ export function initBoard(opts) {
 
     // Baraja española: frente con palo (oro, copa, espada, basto) y dorso a rombos.
     function cardFaceCanvas(suit, num) {
+      if (suit === 'bastos' && num === 11) { // el caballero: lámina propia, más grande para que se vea nítida (cardart.js)
+        var big = makeCanvas(512, 800), bx = big.getContext('2d'); bx.scale(4, 4); drawBastos11(bx); // el dibujo propio queda de respaldo
+        var img = new Image(); // la lámina definitiva (public/cartas/11-de-bastos.png) reemplaza al dibujo cuando termina de cargar
+        img.onload = function () {
+          bx.setTransform(1, 0, 0, 1, 0, 0); bx.imageSmoothingEnabled = true; bx.imageSmoothingQuality = 'high';
+          bx.drawImage(img, 0, 0, big.width, big.height);
+          if (big.__tex) big.__tex.needsUpdate = true;
+        };
+        img.src = '/cartas/11-de-bastos.png';
+        return big;
+      }
       var c = makeCanvas(128, 200), x = c.getContext('2d');
       x.fillStyle = '#f4ead2'; x.fillRect(0, 0, 128, 200);
       x.strokeStyle = '#7a5a2a'; x.lineWidth = 4; x.strokeRect(6, 6, 116, 188);
@@ -470,26 +483,6 @@ export function initBoard(opts) {
         x.beginPath(); x.moveTo(0, -70); x.lineTo(11, -46); x.lineTo(9, 30); x.lineTo(-9, 30); x.lineTo(-11, -46); x.closePath(); x.fill(); x.stroke();
         x.fillStyle = '#c9a23a'; x.fillRect(-30, 30, 60, 10); x.strokeRect(-30, 30, 60, 10);
         x.fillStyle = '#5a3a1e'; x.fillRect(-6, 40, 12, 28); x.strokeRect(-6, 40, 12, 28);
-      } else if (suit === 'bastos' && num === 11) { // el caballero: jinete a caballo con un basto en la mano
-        x.scale(0.92, 0.92); x.lineJoin = 'round'; x.lineCap = 'round';
-        var line = '#3a220b', horse = '#8a5a2b', coat = '#c23b3b';
-        x.strokeStyle = line; x.lineWidth = 3;
-        x.fillStyle = horse;
-        x.beginPath(); x.moveTo(-28, 16); x.quadraticCurveTo(-46, 22, -44, 46); x.quadraticCurveTo(-36, 32, -26, 28); x.closePath(); x.fill(); x.stroke();
-        [-24, -12, 10, 22].forEach(function (lx) { x.fillRect(lx, 30, 7, 28); x.strokeRect(lx, 30, 7, 28); });
-        x.beginPath(); x.ellipse(-2, 22, 32, 15, 0, 0, 6.2832); x.fill(); x.stroke();
-        x.beginPath(); x.moveTo(18, 14); x.lineTo(26, -6); x.lineTo(40, -16); x.lineTo(54, -6); x.lineTo(50, 6); x.lineTo(38, 5); x.lineTo(32, 22); x.closePath(); x.fill(); x.stroke();
-        x.fillStyle = line; x.beginPath(); x.arc(44, -7, 2, 0, 6.2832); x.fill(); // ojo
-        x.fillStyle = '#4a3a6a'; x.fillRect(-8, 12, 9, 20); x.strokeRect(-8, 12, 9, 20);
-        x.fillStyle = coat; x.beginPath(); x.moveTo(-14, -24); x.lineTo(6, -24); x.lineTo(8, 14); x.lineTo(-14, 14); x.closePath(); x.fill(); x.stroke();
-        x.fillStyle = '#e8c39a'; x.beginPath(); x.arc(-4, -34, 8, 0, 6.2832); x.fill(); x.stroke();
-        x.fillStyle = '#3a2a16'; x.beginPath(); x.moveTo(-16, -37); x.lineTo(8, -37); x.lineTo(2, -50); x.lineTo(-10, -50); x.closePath(); x.fill(); x.stroke();
-        x.strokeStyle = line; x.lineWidth = 9; x.beginPath(); x.moveTo(4, -14); x.lineTo(20, -2); x.stroke();
-        x.strokeStyle = coat; x.lineWidth = 5; x.beginPath(); x.moveTo(4, -14); x.lineTo(20, -2); x.stroke();
-        x.strokeStyle = line; x.lineWidth = 9; x.beginPath(); x.moveTo(16, 6); x.lineTo(34, -62); x.stroke();
-        x.strokeStyle = '#7a4a1e'; x.lineWidth = 5; x.beginPath(); x.moveTo(16, 6); x.lineTo(34, -62); x.stroke();
-        x.fillStyle = '#3f8f45'; x.strokeStyle = line; x.lineWidth = 2;
-        [[26, -30], [31, -50]].forEach(function (p) { x.beginPath(); x.arc(p[0] + 6, p[1], 5, 0, 6.2832); x.fill(); x.stroke(); });
       } else {
         x.rotate(-0.5); x.fillStyle = '#7a4a1e'; x.strokeStyle = '#3a220b';
         x.beginPath(); x.moveTo(-14, -66); x.lineTo(14, -66); x.lineTo(20, 40); x.quadraticCurveTo(0, 70, -20, 40); x.closePath(); x.fill(); x.stroke();
@@ -1317,18 +1310,12 @@ export function initBoard(opts) {
     // Cartas de desarrollo (nombres propios). Lo que se puede jugar y cuándo lo decide el motor (legalActions); acá solo se explica.
     var DEV_ORDER = ['knight', 'monopoly', 'yearOfPlenty', 'roadBuilding', 'victoryPoint'];
     var DEV = {
-      knight: { name: 'Gaucho', desc: 'Mové el ladrón y robá una carta. Se puede jugar antes de tirar.', play: 'playKnight',
-        icon: '<path d="M3 21h26M8 21c0-9 3-13 8-13s8 4 8 13z" fill="currentColor"/>' },
-      monopoly: { name: 'Acopio', desc: 'Elegí un recurso: todos te entregan el que tengan.', play: 'playMonopoly',
-        icon: '<path d="M10 10h12l4 17H6zM11 10l-1.5-5h13L21 10" fill="currentColor"/>' },
-      yearOfPlenty: { name: 'Buena cosecha', desc: 'Tomá 2 recursos del banco.', play: 'playYearOfPlenty',
-        icon: '<path d="M16 29V10M16 10c-4-1-6-4-6-7 4 1 6 3 6 7zM16 10c4-1 6-4 6-7-4 1-6 3-6 7zM16 18c-4-1-6-4-6-7M16 18c4-1 6-4 6-7M16 25c-4-1-6-4-6-7M16 25c4-1 6-4 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>' },
-      roadBuilding: { name: 'Vialidad', desc: 'Poné 2 caminos gratis.', play: 'playRoadBuilding',
-        icon: '<path d="M8 28 13 4M24 28 19 4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M16 26v-4M16 17v-4M16 8V5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>' },
-      victoryPoint: { name: 'Estancia', desc: 'Vale 1 punto. Queda oculta hasta que ganes.', play: null,
-        icon: '<path d="M16 3l3.6 8.1 8.8.8-6.6 5.9 1.9 8.6L16 21.9 8.3 26.4l1.9-8.6-6.6-5.9 8.8-.8z" fill="currentColor"/>' }
+      knight: { name: 'Gaucho', desc: 'Mové el ladrón y robá una carta. Se puede jugar antes de tirar.', play: 'playKnight' },
+      monopoly: { name: 'Acopio', desc: 'Elegí un recurso: todos te entregan el que tengan.', play: 'playMonopoly' },
+      yearOfPlenty: { name: 'Buena cosecha', desc: 'Tomá 2 recursos del banco.', play: 'playYearOfPlenty' },
+      roadBuilding: { name: 'Vialidad', desc: 'Poné 2 caminos gratis.', play: 'playRoadBuilding' },
+      victoryPoint: { name: 'Estancia', desc: 'Vale 1 punto. Queda oculta hasta que ganes.', play: null }
     };
-    function devIcon(k) { return '<svg viewBox="0 0 32 32" aria-hidden="true">' + DEV[k].icon + '</svg>'; }
     var BADGE_ROAD = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="8" width="16" height="4.5" rx="1.5" transform="rotate(-25 10 10)" fill="currentColor"/></svg>';
     var BADGE_ARMY = '<svg viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="10" cy="13.5" rx="8.5" ry="2.4" fill="currentColor"/><path d="M5 13.5c0-5 2-7.5 5-7.5s5 2.5 5 7.5z" fill="currentColor"/></svg>';
     var PLAYER_INFO = [
@@ -1562,11 +1549,13 @@ export function initBoard(opts) {
           '<div class="sum">' + (picks.length ? picks.map(function (k) { return TERRAINS[k].res; }).join(' + ') : 'Elegí 2 recursos') + '</div>' +
           (picks.length ? '<button type="button" class="clear" data-clear>Borrar elección</button>' : '') + yesno(picks.length === 2);
       } else {
-        html = '<button type="button" class="x" data-close aria-label="Cerrar" title="Cerrar">✕</button><h3>Tus cartas</h3><p>Una por turno, y no la que compraste en este mismo turno.</p><div class="rows">' +
+        html = '<button type="button" class="x" data-close aria-label="Cerrar" title="Cerrar">✕</button><h3>Tus cartas</h3><p>Una por turno, y no la que compraste en este mismo turno.</p><div class="cardgrid">' +
           DEV_ORDER.filter(function (k) { return d.hand[k] > 0; }).map(function (k) {
-            var reason = cardReason(k, can), extra = d.fresh[k] ? ' <em>(' + d.fresh[k] + (d.fresh[k] > 1 ? ' nuevas' : ' nueva') + ')</em>' : '';
-            return '<div class="crow' + (reason ? ' off' : '') + '"><span class="ico">' + devIcon(k) + '</span><span class="tx"><b>' + DEV[k].name + ' ×' + d.hand[k] + extra + '</b><small>' + (reason || DEV[k].desc) + '</small></span>' +
-              (DEV[k].play ? '<button type="button" data-play="' + k + '"' + (reason ? ' disabled' : '') + '>Jugar</button>' : '') + '</div>';
+            var reason = cardReason(k, can), fresh = d.fresh[k];
+            return '<div class="dcard' + (reason ? ' off' : '') + '" title="' + DEV[k].desc + '"><div class="pic"><img src="' + devCardURL(k) + '" alt="' + DEV[k].name + '" draggable="false">' +
+              '<span class="qty">×' + d.hand[k] + '</span>' + (fresh ? '<span class="new">' + (fresh > 1 ? fresh + ' nuevas' : 'nueva') + '</span>' : '') + '</div>' +
+              (DEV[k].play ? '<button type="button" data-play="' + k + '"' + (reason ? ' disabled' : '') + '>Jugar</button>' : '') +
+              '<small>' + (DEV[k].play ? DEV[k].desc : 'Punto oculto') + '</small></div>'; // sin explicar por qué no se puede jugar: la carta atenuada alcanza
           }).join('') + '</div>';
       }
       dialogEl.innerHTML = html;
@@ -1758,7 +1747,7 @@ export function initBoard(opts) {
               devCounts[p]++; renderSeats();
               if (foreign(p)) audio.card();
               if (animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
-              if (ev.kind) showStatus('Compraste: ' + DEV[ev.kind].name, false, true, p);
+              if (ev.kind) { showStatus('Compraste: ' + DEV[ev.kind].name, false, true, p); if (animate) revealCard(ev.kind); }
               else showStatus(PLAYER_INFO[p].name + ' compró una carta de desarrollo', false, true, p);
               pause(cont, foreign(p) ? 650 : 0);
             }, afterSpent(ev));
@@ -1879,6 +1868,17 @@ export function initBoard(opts) {
       if (m.type === 'tile') return { type: 'moveRobber', player: p, tile: m.id };
       if (m.type === 'vertex') return { type: setup ? 'placeSettlement' : buildMode === 'city' ? 'buildCity' : 'buildSettlement', player: p, vertex: m.id };
       return { type: setup ? 'placeRoad' : 'buildRoad', player: p, edge: m.id };
+    }
+    // Al comprar una carta se muestra un instante en el centro (solo quien la compró sabe cuál es).
+    function revealCard(kind) {
+      var img = document.createElement('img'); img.className = 'reveal'; img.src = devCardURL(kind); img.alt = DEV[kind].name; img.draggable = false;
+      stage.appendChild(img);
+      img.animate([
+        { transform: 'translate(-50%,-30%) scale(.5) rotate(-8deg)', opacity: 0 },
+        { transform: 'translate(-50%,-50%) scale(1) rotate(2deg)', opacity: 1, offset: 0.22 },
+        { transform: 'translate(-50%,-50%) scale(1) rotate(0deg)', opacity: 1, offset: 0.78 },
+        { transform: 'translate(-50%,-80%) scale(.9) rotate(4deg)', opacity: 0 }
+      ], { duration: 1700, easing: 'ease-out' }).onfinish = function () { img.remove(); };
     }
     function pop(el, color) {
       el.animate([{ transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }, { transform: 'scale(1.2)', boxShadow: '0 0 18px 5px ' + color, offset: 0.35 }, { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }], { duration: 520, easing: 'ease-out' });

@@ -402,14 +402,6 @@ body{
 .seat .bdg b{color:inherit;font-size:.72rem}
 .seat .dv[hidden],.seat .bdg[hidden]{display:none}
 .build .cost b{font-size:.68rem;line-height:8px;font-weight:800;color:var(--muted)}
-.dialog.cards .crow{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:10px;background:var(--btn);text-align:left}
-.dialog.cards .crow .ico svg{display:block;width:28px;height:28px;color:var(--text)}
-.dialog.cards .crow .tx{flex:1;min-width:0}
-.dialog.cards .crow .tx b{display:block;font-size:.9rem}
-.dialog.cards .crow .tx em{font-style:normal;font-weight:600;color:var(--muted);font-size:.75rem}
-.dialog.cards .crow .tx small{display:block;color:var(--muted);font-weight:600;font-size:.72rem;line-height:1.25;margin-top:1px}
-.dialog.cards .crow.off .ico{opacity:.55}
-.dialog.cards .crow button{padding:6px 12px;font-size:.85rem;min-height:34px}
 .dialog.cards .x{position:absolute;top:8px;right:8px;width:30px;height:30px;font-size:1rem;line-height:1}
 .dialog.cards .clear{display:block;margin:0 auto 6px;padding:3px 10px;font-size:.78rem}
 .dialog.cards h3{padding:0 30px}
@@ -422,4 +414,23 @@ body{
   .seat .dv{position:absolute;left:1px;bottom:-9px;margin:0;gap:1px;padding:0 3px 0 2px;border-radius:999px;background:var(--btn-on);border:1px solid var(--pc)}
   .seat .dv svg{width:5px;height:7px}
   .seat .dv b{font-size:.55rem;line-height:1.2;color:var(--btn-on-text)}
+}
+
+/* Panel «Mis cartas»: las cartas se ven como cartas (lámina propia de cardart.js), con su botón y el motivo si no se pueden jugar */
+.dialog.cards{width:min(392px,calc(100% - 20px));max-height:calc(100% - 24px);overflow-y:auto}
+.dialog.cards .cardgrid{display:flex;flex-wrap:wrap;gap:12px 10px;justify-content:center;margin-bottom:2px}
+.dialog.cards .dcard{width:112px;display:flex;flex-direction:column;align-items:stretch;gap:5px}
+.dialog.cards .dcard .pic{position:relative;aspect-ratio:128/200;filter:drop-shadow(0 3px 5px rgba(0,0,0,.4));transition:transform .15s}
+.dialog.cards .dcard:not(.off):hover .pic{transform:translateY(-3px) rotate(-1deg)}
+.dialog.cards .dcard img{display:block;width:100%;height:100%;user-select:none;-webkit-user-drag:none}
+.dialog.cards .dcard.off .pic{opacity:.6;filter:grayscale(.45) drop-shadow(0 2px 4px rgba(0,0,0,.3))}
+.dialog.cards .dcard .qty{position:absolute;top:-6px;right:-6px;min-width:24px;padding:1px 6px;border-radius:999px;background:var(--btn-on);color:var(--btn-on-text);font-size:.8rem;font-weight:800;line-height:1.35;border:1px solid var(--border)}
+.dialog.cards .dcard .new{position:absolute;left:5px;top:5px;padding:0 6px;border-radius:999px;background:#b23a2e;color:#fff;font-size:.62rem;font-weight:800;line-height:1.5}
+.dialog.cards .dcard button{width:100%;padding:5px 8px;font-size:.85rem;min-height:32px}
+.dialog.cards .dcard small{display:block;color:var(--muted);font-weight:600;font-size:.68rem;line-height:1.25;min-height:2.5em}
+.reveal{position:absolute;left:50%;top:42%;width:150px;transform:translate(-50%,-50%);z-index:7;pointer-events:none;filter:drop-shadow(0 8px 14px rgba(0,0,0,.5))}
+@media (max-width:640px){
+  .dialog.cards .cardgrid{gap:10px 6px}
+  .dialog.cards .dcard{width:88px}
+  .reveal{width:120px}
 }
