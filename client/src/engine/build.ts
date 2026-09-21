@@ -1,8 +1,9 @@
 // Construcción en el turno normal: caminos, poblados y ciudades.
 
 import { topology } from './board';
-import { bad, canAfford, canSettleAt, pay, pieceCounts, victoryPoints, type Err } from './helpers';
-import type { GameEvent, GameState, PlayerId } from './types';
+import { updateLongestRoad } from './awards';
+import { bad, canAfford, canSettleAt, checkWin, pay, pieceCounts, type Err } from './helpers';
+import type { GameEvent, GameState, Phase, PlayerId } from './types';
 
 // ---------------------------------------------------------------- opciones (qué se puede construir y dónde)
 
@@ -22,12 +23,17 @@ function settlementConnects(s: GameState, player: PlayerId, vertex: number): boo
   return topology().vertices[vertex].edges.some((id) => s.edgeRoads[id] === player);
 }
 
-/** Aristas donde el jugador puede poner un camino ahora (vacío si no le alcanzan los recursos o no le quedan piezas). */
-export function roadOptions(s: GameState, player: PlayerId): number[] {
-  if (pieceCounts(s, player).roads >= s.config.maxPieces.roads || !canAfford(s.players[player].hand, s.config.costs.road)) return [];
+/** Aristas donde el jugador podría poner un camino (le queden piezas y salga de su red), sin mirar si le alcanza para pagarlo. */
+export function roadPlaces(s: GameState, player: PlayerId): number[] {
+  if (pieceCounts(s, player).roads >= s.config.maxPieces.roads) return [];
   return topology()
     .edges.map((e) => e.id)
     .filter((id) => s.edgeRoads[id] === null && roadConnects(s, player, id));
+}
+
+/** Aristas donde el jugador puede construir un camino ahora (vacío si no le alcanzan los recursos o no le quedan piezas). */
+export function roadOptions(s: GameState, player: PlayerId): number[] {
+  return canAfford(s.players[player].hand, s.config.costs.road) ? roadPlaces(s, player) : [];
 }
 
 export function settlementOptions(s: GameState, player: PlayerId): number[] {
@@ -46,26 +52,35 @@ export function cityOptions(s: GameState, player: PlayerId): number[] {
 
 // ---------------------------------------------------------------- comandos
 
-function checkWin(s: GameState, player: PlayerId, events: GameEvent[]): void {
-  const points = victoryPoints(s, player);
-  if (points >= s.config.victoryPoints) {
-    s.phase = { kind: 'finished', winner: player };
-    events.push({ type: 'GameWon', player, points });
-  }
+/** Tras cada camino gratis: si no queda ninguno por poner, o no hay dónde, se vuelve a la fase principal. */
+export function afterFreeRoad(s: GameState, player: PlayerId, events: GameEvent[]): void {
+  if (s.phase.kind !== 'roadBuilding') return;
+  const left = s.phase.left - 1;
+  updateLongestRoad(s, events);
+  checkWin(s, player, events);
+  if ((s.phase as Phase).kind === 'finished') return; // ganó con el reconocimiento
+  s.phase = left > 0 && roadPlaces(s, player).length > 0 ? { kind: 'roadBuilding', left } : { kind: 'main' };
 }
 
 export function buildRoad(s: GameState, player: PlayerId, edge: number, events: GameEvent[]): Err {
-  if (s.phase.kind !== 'main') return bad('wrong-phase', 'Solo se puede construir después de tirar los dados.');
+  const free = s.phase.kind === 'roadBuilding'; // carta Vialidad: el camino no se paga
+  if (s.phase.kind !== 'main' && !free) return bad('wrong-phase', 'Solo se puede construir después de tirar los dados.');
   const topo = topology();
   if (!Number.isInteger(edge) || edge < 0 || edge >= topo.edges.length) return bad('invalid-edge', 'Esa arista no existe.');
   if (s.edgeRoads[edge] !== null) return bad('occupied', 'Ya hay un camino ahí.');
   if (!roadConnects(s, player, edge)) return bad('not-connected', 'El camino tiene que salir de tu red (un poblado, una ciudad u otro camino tuyo).');
   if (pieceCounts(s, player).roads >= s.config.maxPieces.roads) return bad('no-pieces-left', 'No te quedan caminos.');
   const cost = s.config.costs.road;
-  if (!canAfford(s.players[player].hand, cost)) return bad('insufficient-resources', 'Un camino cuesta 1 madera y 1 ladrillo.');
-  pay(s, player, cost);
+  if (!free && !canAfford(s.players[player].hand, cost)) return bad('insufficient-resources', 'Un camino cuesta 1 madera y 1 ladrillo.');
+  if (!free) pay(s, player, cost);
   s.edgeRoads[edge] = player;
-  events.push({ type: 'ResourcesSpent', player, cost }, { type: 'RoadBuilt', player, edge });
+  if (!free) events.push({ type: 'ResourcesSpent', player, cost });
+  events.push({ type: 'RoadBuilt', player, edge });
+  if (free) afterFreeRoad(s, player, events);
+  else {
+    updateLongestRoad(s, events);
+    checkWin(s, player, events);
+  }
   return null;
 }
 
@@ -82,6 +97,7 @@ export function buildSettlement(s: GameState, player: PlayerId, vertex: number, 
   pay(s, player, cost);
   s.vertexBuildings[vertex] = { player, city: false };
   events.push({ type: 'ResourcesSpent', player, cost }, { type: 'SettlementBuilt', player, vertex });
+  updateLongestRoad(s, events); // un poblado puede cortar el camino de un rival
   checkWin(s, player, events);
   return null;
 }

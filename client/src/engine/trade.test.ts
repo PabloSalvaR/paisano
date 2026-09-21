@@ -156,7 +156,7 @@ describe('comercio con el banco: comando bankTrade', () => {
     expect(errorOf(applyCommand(roll, { type: 'bankTrade', player: 0, give: 'forest', get: 'hills' }))).toBe('wrong-phase');
     const seven = emptyBoard();
     setHand(seven, 0, { forest: 4 });
-    seven.phase = { kind: 'moveRobber' };
+    seven.phase = { kind: 'moveRobber', after: 'main' };
     expect(errorOf(applyCommand(seven, { type: 'bankTrade', player: 0, give: 'forest', get: 'hills' }))).toBe('wrong-phase');
   });
 

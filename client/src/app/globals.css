@@ -390,3 +390,36 @@ body{
 .room-seats .dot{width:16px;height:16px;border-radius:50%;flex:none;border:2px solid rgba(43,34,22,.55)}
 .room-seats .tag{margin-left:auto;font-size:.74rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .seat[hidden]{display:none}
+
+/* Cartas de desarrollo: contador en el puesto, reconocimientos (ruta más larga y montonera) y el panel «Mis cartas» */
+.seat .dv{display:inline-flex;align-items:center;gap:2px;margin-left:2px}
+.seat .dv svg{width:11px;height:14px}
+.seat .dv b{font-size:.85rem;color:var(--text)}
+.seat .aw{position:absolute;top:-9px;right:10px;display:flex;gap:3px;pointer-events:none}
+.seat .bdg{display:inline-flex;align-items:center;gap:2px;padding:1px 6px 1px 4px;border-radius:999px;background:var(--btn-on);color:var(--btn-on-text);border:1px solid var(--pc);
+  font-size:.72rem;font-weight:800;line-height:1.25;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.seat .bdg svg{width:12px;height:12px}
+.seat .bdg b{color:inherit;font-size:.72rem}
+.seat .dv[hidden],.seat .bdg[hidden]{display:none}
+.build .cost b{font-size:.68rem;line-height:8px;font-weight:800;color:var(--muted)}
+.dialog.cards .crow{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:10px;background:var(--btn);text-align:left}
+.dialog.cards .crow .ico svg{display:block;width:28px;height:28px;color:var(--text)}
+.dialog.cards .crow .tx{flex:1;min-width:0}
+.dialog.cards .crow .tx b{display:block;font-size:.9rem}
+.dialog.cards .crow .tx em{font-style:normal;font-weight:600;color:var(--muted);font-size:.75rem}
+.dialog.cards .crow .tx small{display:block;color:var(--muted);font-weight:600;font-size:.72rem;line-height:1.25;margin-top:1px}
+.dialog.cards .crow.off .ico{opacity:.55}
+.dialog.cards .crow button{padding:6px 12px;font-size:.85rem;min-height:34px}
+.dialog.cards .x{position:absolute;top:8px;right:8px;width:30px;height:30px;font-size:1rem;line-height:1}
+.dialog.cards .clear{display:block;margin:0 auto 6px;padding:3px 10px;font-size:.78rem}
+.dialog.cards h3{padding:0 30px}
+@media (max-width:640px){
+  /* en celular los puestos son muy angostos: las insignias van sobre el avatar (arriba) y el contador de cartas debajo, sin tapar puntos ni mano */
+  .seat .aw{top:-10px;left:1px;right:auto;gap:1px}
+  .seat .bdg{padding:0 3px 0 2px;font-size:.55rem;border-width:1px}
+  .seat .bdg svg{width:8px;height:8px}
+  .seat .bdg b{font-size:.55rem}
+  .seat .dv{position:absolute;left:1px;bottom:-9px;margin:0;gap:1px;padding:0 3px 0 2px;border-radius:999px;background:var(--btn-on);border:1px solid var(--pc)}
+  .seat .dv svg{width:5px;height:7px}
+  .seat .dv b{font-size:.55rem;line-height:1.2;color:var(--btn-on-text)}
+}

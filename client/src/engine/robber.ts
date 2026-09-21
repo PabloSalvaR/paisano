@@ -1,5 +1,5 @@
 // El ladrón: se activa con un 7 (descarte, mover al ladrón, robar).
-// Pendiente para cuando haya cartas de desarrollo: el caballero también mueve al ladrón, sin descarte.
+// El Gaucho (caballero) también mueve al ladrón y roba, sin descarte: `after` recuerda a qué fase volver.
 
 import { topology } from './board';
 import { bad, handTotal, pickInt, type Err } from './helpers';
@@ -20,7 +20,7 @@ export function startSeven(s: GameState, roller: PlayerId, events: GameEvent[]):
     s.turn = queue[0].player;
     events.push({ type: 'DiscardRequired', players: queue });
   } else {
-    s.phase = { kind: 'moveRobber' };
+    s.phase = { kind: 'moveRobber', after: 'main' };
   }
 }
 
@@ -51,7 +51,7 @@ export function discard(s: GameState, player: PlayerId, cards: Partial<Hand>, ev
   if (phase.queue.length) s.turn = phase.queue[0].player;
   else {
     s.turn = phase.roller;
-    s.phase = { kind: 'moveRobber' };
+    s.phase = { kind: 'moveRobber', after: 'main' };
   }
   return null;
 }
@@ -73,12 +73,13 @@ export function moveRobber(s: GameState, player: PlayerId, tile: number, events:
   s.robber = tile;
   events.push({ type: 'RobberMoved', player, tile });
 
+  const after = s.phase.after;
   const victims = robberVictims(s, player, tile);
-  if (victims.length === 0) s.phase = { kind: 'main' };
+  if (victims.length === 0) s.phase = { kind: after };
   else if (victims.length === 1) {
     stealFrom(s, player, victims[0], events);
-    s.phase = { kind: 'main' };
-  } else s.phase = { kind: 'steal', victims };
+    s.phase = { kind: after };
+  } else s.phase = { kind: 'steal', victims, after };
   return null;
 }
 
@@ -87,7 +88,7 @@ export function steal(s: GameState, player: PlayerId, victim: PlayerId, events: 
   if (phase.kind !== 'steal') return bad('wrong-phase', 'Ahora no se roba.');
   if (!phase.victims.includes(victim)) return bad('invalid-victim', 'Ese jugador no tiene un poblado junto al ladrón (o no tiene cartas).');
   stealFrom(s, player, victim, events);
-  s.phase = { kind: 'main' };
+  s.phase = { kind: phase.after };
   return null;
 }
 

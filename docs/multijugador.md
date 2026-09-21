@@ -21,6 +21,8 @@ board.js ──► GameSession ──┬─► LocalSession   (motor en el naveg
 | `server/rooms.ts` | Servicio: `createRoom`, `joinRoom`, `addBot`, `startGame`, `submitCommand`, `getView`. Sin nada de Next: se prueba con Vitest. |
 | `server/view.ts` | Vista filtrada de un jugador (`RoomView`). Es lo único que sale del servidor. |
 | `server/api.ts` | Capa HTTP (Request → Response) y validación de la forma de los comandos (`parseCommand`). |
+
+Cartas de desarrollo (sept 2026): `parseCommand` acepta `buyDevCard`, `playKnight`, `playMonopoly {resource}`, `playYearOfPlenty {resources: [a, b]}` y `playRoadBuilding`. `RoomView.game` suma `dev` (tus cartas y cuáles son nuevas), `deckCount`, `longestRoad`, `largestArmy` y, por jugador, `devCount` y `knights`; **no** sale el mazo ni las cartas ajenas, y los `points` de los demás no incluyen sus Estancias. Un `DevCardBought` ajeno llega con `kind: null`.
 | `server/instance.ts` | El almacén que usan las rutas: Upstash si están las variables de entorno, si no memoria. |
 | `app/api/rooms/**` | Route Handlers de una línea, delegan en `api.ts`. |
 | `bots/random.ts`, `bots/play.ts` | Bot aleatorio (`Bot`) y `playBots` (puro: lo usan la sala y la partida local). |

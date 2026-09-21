@@ -3,12 +3,13 @@
 import { topology } from './board';
 import { RESOURCES, type Resource } from './map';
 import { mulberry32 } from './rng';
-import type { Cost, ErrorCode, Gain, GameState, Hand, PlayerId } from './types';
+import type { Cost, DevHand, ErrorCode, GameEvent, Gain, GameState, Hand, PlayerId } from './types';
 
 export type Err = { code: ErrorCode; message: string } | null;
 export const bad = (code: ErrorCode, message: string): Err => ({ code, message });
 
 export const emptyHand = (): Hand => ({ forest: 0, hills: 0, pasture: 0, fields: 0, mountains: 0 });
+export const emptyDev = (): DevHand => ({ knight: 0, monopoly: 0, yearOfPlenty: 0, roadBuilding: 0, victoryPoint: 0 });
 export const handTotal = (h: Hand): number => RESOURCES.reduce((n, r) => n + h[r], 0);
 
 /** Un poblado necesita el vértice libre y a 2 aristas o más de cualquier otro poblado o ciudad (regla de distancia). */
@@ -25,10 +26,25 @@ export function pieceCounts(state: GameState, player: PlayerId) {
   };
 }
 
-/** Puntos de victoria: 1 por poblado y 2 por ciudad (después se suman cartas y reconocimientos especiales). */
-export function victoryPoints(state: GameState, player: PlayerId): number {
+/** Puntos que ven todos: poblados (1), ciudades (2) y los reconocimientos de ruta y montonera. */
+export function publicVictoryPoints(state: GameState, player: PlayerId): number {
   const c = pieceCounts(state, player);
-  return c.settlements + 2 * c.cities;
+  const awards = (state.longestRoad.holder === player ? 1 : 0) + (state.largestArmy.holder === player ? 1 : 0);
+  return c.settlements + 2 * c.cities + awards * state.config.awardPoints;
+}
+
+/** Puntos reales: los públicos más las cartas de Estancia, que solo conoce su dueño. */
+export function victoryPoints(state: GameState, player: PlayerId): number {
+  return publicVictoryPoints(state, player) + state.players[player].dev.victoryPoint;
+}
+
+/** Si quien actúa llegó a los puntos para ganar (contando sus cartas ocultas), termina la partida. */
+export function checkWin(s: GameState, player: PlayerId, events: GameEvent[]): void {
+  const points = victoryPoints(s, player);
+  if (points >= s.config.victoryPoints) {
+    s.phase = { kind: 'finished', winner: player };
+    events.push({ type: 'GameWon', player, points });
+  }
 }
 
 export function canAfford(hand: Hand, cost: Cost): boolean {

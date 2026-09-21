@@ -92,6 +92,23 @@ describe('parseCommand', () => {
     expect(parseCommand({ type: 'endTurn' })).toEqual({ type: 'endTurn', player: 0 });
   });
 
+  it('acepta los comandos de las cartas de desarrollo', () => {
+    expect(parseCommand({ type: 'buyDevCard', player: 3 })).toEqual({ type: 'buyDevCard', player: 0 });
+    expect(parseCommand({ type: 'playKnight' })).toEqual({ type: 'playKnight', player: 0 });
+    expect(parseCommand({ type: 'playRoadBuilding' })).toEqual({ type: 'playRoadBuilding', player: 0 });
+    expect(parseCommand({ type: 'playMonopoly', resource: 'forest' })).toEqual({ type: 'playMonopoly', player: 0, resource: 'forest' });
+    expect(parseCommand({ type: 'playYearOfPlenty', resources: ['hills', 'fields'] })).toEqual({ type: 'playYearOfPlenty', player: 0, resources: ['hills', 'fields'] });
+  });
+
+  it('rechaza cartas mal formadas', () => {
+    expect(parseCommand({ type: 'playMonopoly' })).toBeNull();
+    expect(parseCommand({ type: 'playMonopoly', resource: 'oro' })).toBeNull();
+    expect(parseCommand({ type: 'playYearOfPlenty', resources: ['hills'] })).toBeNull();
+    expect(parseCommand({ type: 'playYearOfPlenty', resources: ['hills', 'oro'] })).toBeNull();
+    expect(parseCommand({ type: 'playYearOfPlenty', resources: ['hills', 'fields', 'forest'] })).toBeNull();
+    expect(parseCommand({ type: 'playYearOfPlenty', resources: 'hills' })).toBeNull();
+  });
+
   it('rechaza formas inválidas', () => {
     expect(parseCommand(null)).toBeNull();
     expect(parseCommand({ type: 'buildCity', vertex: 1.5 })).toBeNull();

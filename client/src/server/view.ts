@@ -1,24 +1,32 @@
 // Vista filtrada: lo que un jugador puede ver de la sala. Es lo único que sale del servidor.
-// Se oculta: las manos rivales (solo la cantidad), las semillas de dados y robos (permitirían predecir el azar)
-// y el recurso robado cuando el jugador no es ni el ladrón ni la víctima.
+// Se oculta: las manos rivales (solo la cantidad), las semillas de dados y robos (permitirían predecir el azar),
+// el recurso robado cuando el jugador no es ni el ladrón ni la víctima, y de las cartas de desarrollo el mazo (solo se
+// cuenta cuántas quedan), las cartas ajenas (solo cuántas), qué carta compró otro y los puntos de Estancia ajenos.
 
-import { legalActions, victoryPoints } from '../engine';
-import type { GameEvent, GameState, Hand, LegalAction, PlayerId, Resource } from '../engine';
+import { legalActions, publicVictoryPoints, victoryPoints } from '../engine';
+import type { DevCardKind, DevHand, GameEvent, GameState, Hand, LegalAction, PlayerId, Resource } from '../engine';
 import type { LoggedEvent, Room } from './room';
 
 export interface PlayerView {
   name: string;
   handCount: number;
-  points: number;
+  devCount: number; // cartas de desarrollo en la mano (cuántas, no cuáles)
+  knights: number; // caballeros ya jugados (público)
+  points: number; // los que ve todo el mundo; el de quien mira incluye sus Estancias
 }
 
-export type GameView = Pick<GameState, 'config' | 'map' | 'bank' | 'vertexBuildings' | 'edgeRoads' | 'robber' | 'phase' | 'turn'> & {
+export type GameView = Pick<GameState, 'config' | 'map' | 'bank' | 'vertexBuildings' | 'edgeRoads' | 'robber' | 'phase' | 'turn' | 'longestRoad' | 'largestArmy'> & {
   players: PlayerView[];
   hand: Hand; // la mano de quien mira
+  dev: { hand: DevHand; fresh: DevHand; played: boolean }; // sus cartas de desarrollo; `fresh`: las compradas este turno (no jugables)
+  deckCount: number; // cuántas cartas quedan en el mazo de desarrollo
 };
 
-/** Como GameEvent, pero `Stolen` puede traer el recurso oculto (null). */
-export type ViewEvent = Exclude<GameEvent, { type: 'Stolen' }> | { type: 'Stolen'; thief: PlayerId; victim: PlayerId; resource: Resource | null };
+/** Como GameEvent, pero `Stolen` puede traer el recurso oculto y `DevCardBought` el tipo de carta (null). */
+export type ViewEvent =
+  | Exclude<GameEvent, { type: 'Stolen' | 'DevCardBought' }>
+  | { type: 'Stolen'; thief: PlayerId; victim: PlayerId; resource: Resource | null }
+  | { type: 'DevCardBought'; player: PlayerId; kind: DevCardKind | null };
 
 export interface RoomView {
   roomId: string;
@@ -33,11 +41,12 @@ export interface RoomView {
 
 export function viewEvent(event: GameEvent, me: PlayerId): ViewEvent {
   if (event.type === 'Stolen' && me !== event.thief && me !== event.victim) return { ...event, resource: null };
+  if (event.type === 'DevCardBought' && me !== event.player) return { ...event, kind: null };
   return event;
 }
 
 export function gameView(state: GameState, me: PlayerId): GameView {
-  const { players, config, map, bank, vertexBuildings, edgeRoads, robber, phase, turn } = state; // lista explícita: un campo nuevo del estado no sale por defecto
+  const { players, config, map, bank, vertexBuildings, edgeRoads, robber, phase, turn, longestRoad, largestArmy } = state; // lista explícita: un campo nuevo del estado no sale por defecto
   return {
     config,
     map,
@@ -47,8 +56,18 @@ export function gameView(state: GameState, me: PlayerId): GameView {
     robber,
     phase,
     turn,
-    players: players.map((p, id) => ({ name: p.name, handCount: Object.values(p.hand).reduce((n, c) => n + c, 0), points: victoryPoints(state, id) })),
+    longestRoad,
+    largestArmy,
+    players: players.map((p, id) => ({
+      name: p.name,
+      handCount: Object.values(p.hand).reduce((n, c) => n + c, 0),
+      devCount: Object.values(p.dev).reduce((n, c) => n + c, 0),
+      knights: p.knightsPlayed,
+      points: id === me ? victoryPoints(state, id) : publicVictoryPoints(state, id),
+    })),
     hand: { ...players[me].hand },
+    dev: { hand: { ...players[me].dev }, fresh: { ...players[me].devNew }, played: state.devPlayed },
+    deckCount: state.devDeck.length,
   };
 }
 

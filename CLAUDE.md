@@ -166,6 +166,7 @@ Las de interfaz están en `docs/decisiones-interfaz.md`.
 - **Partida online (sept 2026):** sala por link `/sala/CODIGO` (6 caracteres sin letras ambiguas), identidad por token en `localStorage` y polling de 1,5 s con `?since=versión`; recargar recupera el estado exacto y no repite lo ya jugado. Detalle y límites en `docs/multijugador.md`.
 - **Almacén en Upstash sin librería (sept 2026):** habla con la API REST por `fetch` (no se sumó `@upstash/redis`); dos claves por sala, scripts Lua atómicos para crear y para guardar-si-la-versión-no-cambió, vencimiento de 6 horas sin actividad (cada guardado lo renueva; era de 7 días y se acortó en sept 2026 a pedido del desarrollador), eviction desactivada. Elegido por `instance.ts` según las variables de entorno. Si la base falla, la API responde 503.
 - **Versión visible (sept 2026):** el menú muestra `v` + la versión de `client/package.json` (hoy `0.1.0`). Se queda en `0.1.0` hasta salir a producción; todo lo anterior es prueba casera.
+- **Cartas de desarrollo, ejército y ruta más larga (sept 2026, motor):** nombres propios por propiedad intelectual: **Gaucho** (caballero), **Acopio** (monopolio), **Buena cosecha** (año de abundancia), **Vialidad** (2 caminos gratis), **Estancia** (punto de victoria), **Ruta más larga** y **Montonera más grande** (2 puntos cada una, mínimos 5 caminos y 3 gauchos, y solo se pierden si los superan estrictamente; si se corta la ruta y queda un empate entre otros, nadie la tiene). En el código: `knight`, `monopoly`, `yearOfPlenty`, `roadBuilding`, `victoryPoint`. Mazo de 25 (14/5/2/2/2, en `GameConfig.devDeck`) barajado con su propia semilla y guardado en el estado (nunca sale del servidor). Una carta por turno y no la comprada ese turno (`devNew`); el Gaucho se puede jugar **antes de tirar los dados** (`moveRobber`/`steal` recuerdan a qué fase volver con `after`), las de progreso solo después. La Estancia es un punto oculto que puede ganar la partida en el acto al comprarla. Vialidad es la fase `roadBuilding` (2 caminos sin pagar; termina sola si no hay dónde). La vista filtrada muestra cuántas cartas tiene cada uno, no cuáles; `DevCardBought` solo dice el tipo a quien compró. Código: `engine/awards.ts` y `engine/devcards.ts`.
 - **Ciclo de vida del motor en el servidor (sept 2026):** una sala = un documento JSON con versión; los bots juegan dentro de la misma petición que les deja el turno (Vercel no tiene procesos en segundo plano); el token del navegador se guarda solo como hash en la sala.
 
 ## Hoja de ruta
@@ -173,11 +174,11 @@ Las de interfaz están en `docs/decisiones-interfaz.md`.
 Las fases 1-4 del plan original (Java/Spring) quedan pospuestas: se hicieron en TypeScript dentro de `/client`.
 
 1. **Modelo del tablero** con tests de invariantes. — hecho
-2. **Motor de reglas** del juego base con tests. — hecho, salvo cartas de desarrollo, ejército, camino más largo y comercio entre jugadores
+2. **Motor de reglas** del juego base con tests. — hecho, salvo el comercio entre jugadores
 3. **Bots y simulación masiva.** — hecho (bot aleatorio, simulación, bots dentro de la sala)
 4. **Servidor de la prueba:** Route Handlers + almacén de salas. — hecho (almacén en memoria y en Upstash)
 5. **Cliente jugable:** partida local, contra bots y online por sala. — hecho (falta probar online con amigos en dos dispositivos)
-6. **Cartas de desarrollo y comercio entre jugadores** (motor, interfaz y bots).
+6. **Cartas de desarrollo y comercio entre jugadores** (motor, interfaz y bots). — cartas, ejército y ruta más larga: hechos (motor, vista, bots e interfaz); comercio entre jugadores: pendiente
 7. **Variantes configurables** (`GameConfig` por sala y módulos de reglas).
 8. **Arte y pulido:** modelos, iluminación, animaciones y sonido.
 9. **Deploy y portfolio:** README con capturas o GIF, demo online (Docker Compose y CI solo si se retoma el backend Java).
@@ -188,7 +189,7 @@ Las fases 1-4 del plan original (Java/Spring) quedan pospuestas: se hicieron en 
 
 **Hecho**
 - Tablero 3D con identidad argentina, luces día/atardecer/noche, dados, banner de recursos y jugadores, adornos de la mesa (pulido visual cerrado por ahora).
-- Motor (`client/src/engine/`): tablero, mapa con semilla, colocación inicial, dados y producción, construcción (caminos, poblados, ciudades), 7 con descarte, ladrón y robo, comercio con el banco (4:1, puertos 3:1 y 2:1), victoria.
+- Motor (`client/src/engine/`): tablero, mapa con semilla, colocación inicial, dados y producción, construcción (caminos, poblados, ciudades), 7 con descarte, ladrón y robo, comercio con el banco (4:1, puertos 3:1 y 2:1), victoria, **cartas de desarrollo** (comprar, Gaucho, Acopio, Buena cosecha, Vialidad, Estancia), **montonera más grande** y **ruta más larga** (motor, vista filtrada, bots e interfaz: «Mis cartas», compra con ✓/✕, modales de Acopio y Buena cosecha, insignias en los puestos).
 - Servidor de la prueba: salas, almacén en memoria **y en Upstash Redis** (probado contra la base real), vista filtrada, API completa (crear, unirse, bots, empezar, comando, estado) y bots dentro de la sala. Ver `docs/multijugador.md`.
 - Cliente conectado por `GameSession`: **menú de inicio en `/`** (bots, online, mesa local) y tablero sin red en `/jugar/bots` y `/jugar/local`, con reproducción de eventos.
 - **Partida online por sala (6b):** `/sala` (crear o unirse), `/sala/CODIGO` («Hola, presentate compañero», lobby con «Sumar bot» y «Empezar», partida), `RemoteSession` con polling, token en `localStorage`, «Salir al menú». Con las variables de Upstash funciona en cualquier entorno; las variables ya están cargadas en Vercel (Production y Preview), el código ya está subido y la API pública responde bien (probada); **falta probar con dos dispositivos**.
@@ -201,7 +202,7 @@ Las fases 1-4 del plan original (Java/Spring) quedan pospuestas: se hicieron en 
 
 **Siguiente (orden acordado)**
 1. **Tiempo límite por turno y reemplazo por un bot** de quien no responde. El diseño ya está propuesto en `docs/multijugador.md` («Diseño propuesto: tiempo límite por turno…») y **falta que el desarrollador conteste las 4 preguntas abiertas** (reloj de turno vs presencia, duración por defecto y opciones, reemplazo permanente o recuperable, aviso previo). Empezar por ahí y por los tests.
-2. Cartas de desarrollo (`buyDevCard`, ejército, camino más largo) y comercio entre jugadores. **Proponer el diseño primero**: hoy el botón «Carta» de la bandeja existe pero solo muestra un aviso, y el motor no tiene nada de esto.
+2. **Comercio entre jugadores** (con bots). **Proponer el diseño primero**: ofertas y contraofertas, quién puede aceptar, límites por turno y cómo responden los bots.
 3. Variantes configurables (`GameConfig` por sala).
 
 **Sin probar a mano:** sonido de aterrizaje y de comercio, ritmo de las pausas de los bots (650 ms por pieza, 800 el ladrón, 450 el cambio de turno), animaciones con la pestaña visible, la partida online con dos personas y en un ancho real de celular. Limitaciones conocidas: los bots son aleatorios y en la partida local contra bots comparten nombre con los puestos de siempre (en línea se llaman «Bot 1», «Bot 2»…); ver los límites de la parte online en `docs/multijugador.md`.

@@ -2,10 +2,11 @@
 // La construcción vive en build.ts y el ladrón en robber.ts; acá está el flujo de fases (colocación inicial, dados, turnos).
 
 import { topology } from './board';
-import { buildCity, buildRoad, buildSettlement, cityOptions, roadOptions, settlementOptions } from './build';
+import { buildCity, buildRoad, buildSettlement, cityOptions, roadOptions, roadPlaces, settlementOptions } from './build';
 import { defaultConfig } from './config';
+import { buyDevCard, devPlayOptions, playKnight, playMonopoly, playRoadBuilding, playYearOfPlenty, shuffledDeck, yearOfPlentyOptions } from './devcards';
 import { rollDiceFor } from './dice';
-import { bad, canSettleAt, emptyHand, give, type Err } from './helpers';
+import { bad, canAfford, canSettleAt, emptyDev, emptyHand, give, type Err } from './helpers';
 import { generateMap, RESOURCES, type Resource } from './map';
 import { mulberry32 } from './rng';
 import { bankTrade, bankTradeOptions } from './trade';
@@ -35,7 +36,7 @@ export function createGame(names: string[], seed: number, config?: Partial<GameC
   return {
     config: cfg,
     map,
-    players: names.map((name) => ({ name, hand: emptyHand() })),
+    players: names.map((name) => ({ name, hand: emptyHand(), dev: emptyDev(), devNew: emptyDev(), knightsPlayed: 0 })),
     bank,
     vertexBuildings: topo.vertices.map(() => null),
     edgeRoads: topo.edges.map(() => null),
@@ -44,6 +45,10 @@ export function createGame(names: string[], seed: number, config?: Partial<GameC
     turn: 0,
     dice: { seed: (seed ^ 0x5bd1e995) | 0, rolls: 0 }, // flujos de azar separados del del mapa
     random: { seed: (seed ^ 0x2545f491) | 0, count: 0 },
+    devDeck: shuffledDeck(cfg.devDeck, (seed ^ 0x3c6ef372) | 0), // flujo aparte, igual que dados y robos
+    devPlayed: false,
+    longestRoad: { holder: null, length: 0 },
+    largestArmy: { holder: null, size: 0 },
   };
 }
 
@@ -66,7 +71,7 @@ export function legalActions(state: GameState, player: PlayerId): LegalAction[] 
       return [{ type: 'placeRoad', edges: topo.vertices[phase.lastSettlement!].edges.filter((e) => state.edgeRoads[e] === null) }];
     }
     case 'roll':
-      return [{ type: 'rollDice' }];
+      return [{ type: 'rollDice' }, ...devActions(state, player)]; // antes de tirar solo se puede jugar el Gaucho
     case 'main': {
       const actions: LegalAction[] = [];
       const roads = roadOptions(state, player);
@@ -77,6 +82,8 @@ export function legalActions(state: GameState, player: PlayerId): LegalAction[] 
       if (cities.length) actions.push({ type: 'buildCity', vertices: cities });
       const trades = bankTradeOptions(state, player);
       if (trades.length) actions.push({ type: 'bankTrade', trades });
+      if (state.devDeck.length && canAfford(state.players[player].hand, state.config.costs.developmentCard)) actions.push({ type: 'buyDevCard' });
+      actions.push(...devActions(state, player));
       actions.push({ type: 'endTurn' });
       return actions;
     }
@@ -86,7 +93,17 @@ export function legalActions(state: GameState, player: PlayerId): LegalAction[] 
       return [{ type: 'moveRobber', tiles: state.map.terrains.map((_, id) => id).filter((id) => id !== state.robber) }];
     case 'steal':
       return [{ type: 'steal', victims: phase.victims }];
+    case 'roadBuilding':
+      return [{ type: 'buildRoad', edges: roadPlaces(state, player) }];
   }
+}
+
+/** Las cartas de desarrollo que el jugador puede jugar en la fase actual. */
+function devActions(state: GameState, player: PlayerId): LegalAction[] {
+  return devPlayOptions(state, player).map((type): LegalAction => {
+    if (type === 'playYearOfPlenty') return { type, resources: yearOfPlentyOptions(state) };
+    return { type };
+  });
 }
 
 // ---------------------------------------------------------------- comandos
@@ -132,6 +149,16 @@ function run(s: GameState, cmd: Command, events: GameEvent[]): Err {
       return steal(s, cmd.player, cmd.victim, events);
     case 'bankTrade':
       return bankTrade(s, cmd.player, cmd.give, cmd.get, events);
+    case 'buyDevCard':
+      return buyDevCard(s, cmd.player, events);
+    case 'playKnight':
+      return playKnight(s, cmd.player, events);
+    case 'playMonopoly':
+      return playMonopoly(s, cmd.player, cmd.resource, events);
+    case 'playYearOfPlenty':
+      return playYearOfPlenty(s, cmd.player, cmd.resources, events);
+    case 'playRoadBuilding':
+      return playRoadBuilding(s, cmd.player, events);
     case 'endTurn':
       return endTurn(s, cmd.player, events);
   }
@@ -209,6 +236,8 @@ function rollDice(s: GameState, player: PlayerId, events: GameEvent[]): Err {
 
 function endTurn(s: GameState, player: PlayerId, events: GameEvent[]): Err {
   if (s.phase.kind !== 'main') return bad('wrong-phase', 'Primero hay que tirar los dados.');
+  s.players[player].devNew = emptyDev(); // lo comprado en este turno ya se puede jugar desde el próximo
+  s.devPlayed = false;
   s.turn = (player + 1) % s.players.length;
   s.phase = { kind: 'roll' };
   events.push({ type: 'TurnChanged', player: s.turn, phase: 'roll' });

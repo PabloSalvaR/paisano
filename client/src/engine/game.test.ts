@@ -302,7 +302,7 @@ describe('dados y producción', () => {
     const handsBefore = JSON.stringify(s.players);
     const r = must(s, { type: 'rollDice', player: 0 });
     expect(JSON.stringify(r.state.players)).toBe(handsBefore);
-    expect(r.state.phase).toEqual({ kind: 'moveRobber' });
+    expect(r.state.phase).toEqual({ kind: 'moveRobber', after: 'main' });
     expect(r.events.some((e) => e.type === 'ResourcesDistributed')).toBe(false);
   });
 

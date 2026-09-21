@@ -16,5 +16,9 @@ export function defaultConfig(players: number): GameConfig {
     },
     maxPieces: { roads: 15, settlements: 5, cities: 4 },
     trade: { bank: 4, genericPort: 3, specificPort: 2 },
+    devDeck: { knight: 14, victoryPoint: 5, monopoly: 2, yearOfPlenty: 2, roadBuilding: 2 },
+    longestRoadMin: 5,
+    largestArmyMin: 3,
+    awardPoints: 2,
   };
 }

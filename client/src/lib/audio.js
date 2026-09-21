@@ -147,6 +147,19 @@ export function createAudio() {
     ting(t, 1568, 0.16); ting(t + 0.11, 2093, 0.14);
   }
 
+  // Carta que se da vuelta o se apoya: roce de papel (ruido filtrado que sube de tono) y un toquecito seco al final.
+  function card() {
+    if (!ctx) return;
+    var t = ctx.currentTime + 0.005;
+    var s = ctx.createBufferSource(); s.buffer = noiseBuffer();
+    var bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.2;
+    bp.frequency.setValueAtTime(1800, t); bp.frequency.exponentialRampToValueAtTime(5200, t + 0.09);
+    var g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.22, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+    s.connect(bp); bp.connect(g); g.connect(master); s.start(t, Math.random(), 0.12);
+    click(t + 0.09, 0.1, 620);
+  }
+
   // ---------------------------------------------------------------- control
   function applyGain() { if (master) fade(master.gain, volume, 0.05); }
   // Llamar desde un gesto del usuario: crea el contexto (una sola vez) y lo reanuda.
@@ -184,6 +197,7 @@ export function createAudio() {
     rollDice: rollDice,
     land: land,
     trade: trade,
+    card: card,
     dispose: function () {
       disposed = true; clearTimeout(birdTimer); clearTimeout(cricketTimer);
       document.removeEventListener('visibilitychange', onVisibility);

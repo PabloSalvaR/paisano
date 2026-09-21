@@ -23,7 +23,7 @@ function aboutToRollSeven(): GameState {
 /** Deja al ladrón fuera del desierto y pone poblados de los jugadores 1 y 2 en dos esquinas de la casilla `tile`. */
 function robberScene(): { s: GameState; tile: number } {
   const s = mainPhaseGame();
-  s.phase = { kind: 'moveRobber' };
+  s.phase = { kind: 'moveRobber', after: 'main' };
   s.vertexBuildings = s.vertexBuildings.map(() => null);
   const tile = topo.tiles.find((t) => t.id !== s.robber && s.map.terrains[t.id] !== 'desert')!.id;
   const t = topo.tiles[tile];
@@ -77,7 +77,7 @@ describe('el 7: descarte', () => {
     expect(g.phase.kind).toBe('discard');
     g = must(g, { type: 'discard', player: 2, cards: { pasture: 4 } }).state;
     expect(RESOURCES.reduce((n, r) => n + g.bank[r], 0)).toBe(bankBefore + 8);
-    expect(g.phase).toEqual({ kind: 'moveRobber' });
+    expect(g.phase).toEqual({ kind: 'moveRobber', after: 'main' });
     expect(g.turn).toBe(0);
     expectConserved(g);
   });
@@ -85,7 +85,7 @@ describe('el 7: descarte', () => {
   it('con exactamente 7 cartas no hay descarte', () => {
     const s = aboutToRollSeven();
     setHand(s, 1, { forest: 7 });
-    expect(must(s, { type: 'rollDice', player: 0 }).state.phase).toEqual({ kind: 'moveRobber' });
+    expect(must(s, { type: 'rollDice', player: 0 }).state.phase).toEqual({ kind: 'moveRobber', after: 'main' });
   });
 });
 
@@ -129,7 +129,7 @@ describe('el 7: mover al ladrón y robar', () => {
     setHand(s, 1, { forest: 1 });
     setHand(s, 2, { hills: 1 });
     let g = must(s, { type: 'moveRobber', player: 0, tile }).state;
-    expect(g.phase).toEqual({ kind: 'steal', victims: [1, 2] });
+    expect(g.phase).toEqual({ kind: 'steal', victims: [1, 2], after: 'main' });
     expect(legalActions(g, 0)).toEqual([{ type: 'steal', victims: [1, 2] }]);
     expect(errorOf(applyCommand(g, { type: 'steal', player: 0, victim: 3 }))).toBe('invalid-victim');
     expect(errorOf(applyCommand(g, { type: 'steal', player: 0, victim: 0 }))).toBe('invalid-victim');
@@ -188,7 +188,7 @@ describe('el 7 de punta a punta', () => {
     let g = must(s, { type: 'rollDice', player: 0 }).state;
     expect(g.phase.kind).toBe('discard');
     g = must(g, { type: 'discard', player: 1, cards: { forest: 3, hills: 2 } }).state;
-    expect(g.phase).toEqual({ kind: 'moveRobber' });
+    expect(g.phase).toEqual({ kind: 'moveRobber', after: 'main' });
     const victimTile = topo.tiles.find((t) => t.id !== g.robber && robberVictims(g, 0, t.id).includes(1));
     const target = victimTile ? victimTile.id : topo.tiles.find((t) => t.id !== g.robber)!.id;
     g = must(g, { type: 'moveRobber', player: 0, tile: target }).state;

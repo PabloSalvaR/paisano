@@ -14,7 +14,7 @@ export type Bot = (input: BotInput, rng: Rng) => Command;
 
 /** Convierte una acción legal en un comando concreto, eligiendo al azar entre sus opciones. */
 export function commandFor(a: LegalAction, player: PlayerId, hand: Hand, rng: Rng): Command {
-  const pick = <T>(xs: T[]): T => xs[Math.floor(rng() * xs.length)];
+  const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rng() * xs.length)];
   switch (a.type) {
     case 'placeSettlement':
     case 'buildSettlement':
@@ -42,15 +42,25 @@ export function commandFor(a: LegalAction, player: PlayerId, hand: Hand, rng: Rn
       const t = pick(a.trades);
       return { type: 'bankTrade', player, give: t.give, get: pick(t.get) };
     }
+    case 'playMonopoly':
+      return { type: a.type, player, resource: pick(RESOURCES) };
+    case 'playYearOfPlenty':
+      return { type: a.type, player, resources: [pick(a.resources), pick(a.resources)] };
     case 'rollDice':
     case 'endTurn':
+    case 'buyDevCard':
+    case 'playKnight':
+    case 'playRoadBuilding':
       return { type: a.type, player };
   }
 }
 
-/** Prefiere construir a terminar el turno (si no, casi nunca construiría); lo demás lo elige al azar. */
+/** Acciones «activas»: construir, comprar y jugar cartas (todo menos tirar, comerciar y terminar el turno). */
+export const isActive = (a: LegalAction): boolean => a.type.startsWith('build') || a.type === 'buyDevCard' || a.type.startsWith('play');
+
+/** Prefiere hacer algo a terminar el turno (si no, casi nunca construiría); lo demás lo elige al azar. */
 export const randomBot: Bot = ({ me, legal, hand }, rng) => {
-  const builds = legal.filter((a) => a.type.startsWith('build'));
-  const pool = builds.length && rng() < 0.85 ? builds : legal;
+  const active = legal.filter(isActive);
+  const pool = active.length && rng() < 0.85 ? active : legal;
   return commandFor(pool[Math.floor(rng() * pool.length)], me, hand, rng);
 };

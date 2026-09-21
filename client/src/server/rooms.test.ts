@@ -153,6 +153,30 @@ describe('vista filtrada', () => {
     expect(val(await getView(store, roomId, tokens[1], v1.version)).events).toHaveLength(0);
   });
 
+  it('cartas de desarrollo: el mazo no sale, las ajenas son cantidades y la Estancia ajena no suma a sus puntos', async () => {
+    const { store, roomId, tokens } = await started();
+    const room = (await store.get(roomId))!;
+    room.state!.players[1].dev.victoryPoint = 2;
+    room.state!.players[1].dev.knight = 1;
+    room.state!.devDeck = room.state!.devDeck.filter((_, i) => i > 2);
+    expect(await store.save(room, room.version)).toBe(true);
+    const ana = val(await getView(store, roomId, tokens[0]));
+    const beto = val(await getView(store, roomId, tokens[1]));
+    expect(ana.game).not.toHaveProperty('devDeck'); // (`config.devDeck` es solo la composición del mazo, no su orden)
+    expect(JSON.stringify(ana)).not.toContain(JSON.stringify(room.state!.devDeck));
+    expect(ana.game!.deckCount).toBe(room.state!.devDeck.length);
+    expect(ana.game!.players[1]).toMatchObject({ devCount: 3, knights: 0 });
+    expect(ana.game!.dev.hand).toMatchObject({ knight: 0, victoryPoint: 0 });
+    expect(beto.game!.dev.hand).toMatchObject({ knight: 1, victoryPoint: 2 });
+    expect(beto.game!.players[1].points).toBe(ana.game!.players[1].points + 2); // él sí cuenta sus Estancias
+  });
+
+  it('qué carta compró un jugador solo lo ve él', () => {
+    const bought = { type: 'DevCardBought', player: 1, kind: 'knight' } as const;
+    expect(viewEvent(bought, 1)).toEqual(bought);
+    expect(viewEvent(bought, 0)).toEqual({ ...bought, kind: null });
+  });
+
   it('el recurso robado solo lo ven el ladrón y la víctima', () => {
     const stolen = { type: 'Stolen', thief: 0, victim: 1, resource: 'forest' } as const;
     expect(viewEvent(stolen, 0)).toEqual(stolen);

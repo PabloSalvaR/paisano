@@ -46,6 +46,10 @@ export const MARKUP = `
       <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h20M19 5l6 6-6 6M27 21H7M13 15l-6 6 6 6"/></svg>
       <span>Comerciar</span><span class="cost"></span>
     </button>
+    <button type="button" id="btnCards" aria-pressed="false" title="Tus cartas de desarrollo">
+      <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><rect x="4" y="7" width="15" height="21" rx="3" transform="rotate(-12 11 17)"/><rect x="13" y="5" width="15" height="21" rx="3" transform="rotate(8 20 15)"/></svg>
+      <span>Mis cartas</span><span class="cost"><b id="cardsN"></b></span>
+    </button>
   </section>
 
   <!-- Botón único de turno: dados antes de tirar; flecha hacia el próximo jugador después. Lo arma board.js -->
@@ -1117,9 +1121,7 @@ export function initBoard(opts) {
       dialogEl.style.left = (sr.left - or.left + x) + 'px'; dialogEl.style.top = (sr.top - or.top + y) + 'px'; dialogEl.style.transform = 'none';
     }
     function confirmDrop(cmd) {
-      if (cmd.type === 'buyDevCard') { // el motor todavía no tiene cartas de desarrollo: se conecta en la próxima parte de las reglas
-        showStatus('Las cartas de desarrollo todavía no están en el motor: llegan en la próxima parte.', true); renderDialog(); return;
-      }
+      if (cmd.type === 'buyDevCard') { dispatch(cmd); return; } // no hay pieza que apoyar: se compra directo
       var g = ghostGroup && ghostGroup.children[0];
       if (!g || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) { dispatch(cmd); return; }
       var u = g.userData, a0 = (g.rotation.y - u.baseRot) % (2 * Math.PI), a1 = 2 * Math.PI * (a0 > 4 ? 2 : 1);
@@ -1178,7 +1180,7 @@ export function initBoard(opts) {
       }
       acts.forEach(function (a) {
         if (a.type === 'placeSettlement' || (a.type === 'buildSettlement' && buildMode === 'settlement') || (a.type === 'buildCity' && buildMode === 'city')) a.vertices.forEach(vertexMarker);
-        if (a.type === 'placeRoad' || (a.type === 'buildRoad' && buildMode === 'road')) a.edges.forEach(edgeMarker);
+        if (a.type === 'placeRoad' || (a.type === 'buildRoad' && (buildMode === 'road' || game.phase.kind === 'roadBuilding'))) a.edges.forEach(edgeMarker);
         if (a.type === 'moveRobber') a.tiles.forEach(tileMarker);
       });
       markersGroup.updateMatrixWorld(true); // que se puedan tocar de inmediato, sin esperar al próximo cuadro
@@ -1312,6 +1314,23 @@ export function initBoard(opts) {
     // (game); los iconos que vuelan hacia el banner actualizan `myHand` y `counts` a medida que llegan. Con multijugador, VIEWER será
     // siempre el jugador de este navegador y los nombres vendrán de la sala.
     var HAND_KINDS = ['forest', 'hills', 'pasture', 'fields', 'mountains'];
+    // Cartas de desarrollo (nombres propios). Lo que se puede jugar y cuándo lo decide el motor (legalActions); acá solo se explica.
+    var DEV_ORDER = ['knight', 'monopoly', 'yearOfPlenty', 'roadBuilding', 'victoryPoint'];
+    var DEV = {
+      knight: { name: 'Gaucho', desc: 'Mové el ladrón y robá una carta. Se puede jugar antes de tirar.', play: 'playKnight',
+        icon: '<path d="M3 21h26M8 21c0-9 3-13 8-13s8 4 8 13z" fill="currentColor"/>' },
+      monopoly: { name: 'Acopio', desc: 'Elegí un recurso: todos te entregan el que tengan.', play: 'playMonopoly',
+        icon: '<path d="M10 10h12l4 17H6zM11 10l-1.5-5h13L21 10" fill="currentColor"/>' },
+      yearOfPlenty: { name: 'Buena cosecha', desc: 'Tomá 2 recursos del banco.', play: 'playYearOfPlenty',
+        icon: '<path d="M16 29V10M16 10c-4-1-6-4-6-7 4 1 6 3 6 7zM16 10c4-1 6-4 6-7-4 1-6 3-6 7zM16 18c-4-1-6-4-6-7M16 18c4-1 6-4 6-7M16 25c-4-1-6-4-6-7M16 25c4-1 6-4 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>' },
+      roadBuilding: { name: 'Vialidad', desc: 'Poné 2 caminos gratis.', play: 'playRoadBuilding',
+        icon: '<path d="M8 28 13 4M24 28 19 4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M16 26v-4M16 17v-4M16 8V5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>' },
+      victoryPoint: { name: 'Estancia', desc: 'Vale 1 punto. Queda oculta hasta que ganes.', play: null,
+        icon: '<path d="M16 3l3.6 8.1 8.8.8-6.6 5.9 1.9 8.6L16 21.9 8.3 26.4l1.9-8.6-6.6-5.9 8.8-.8z" fill="currentColor"/>' }
+    };
+    function devIcon(k) { return '<svg viewBox="0 0 32 32" aria-hidden="true">' + DEV[k].icon + '</svg>'; }
+    var BADGE_ROAD = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="8" width="16" height="4.5" rx="1.5" transform="rotate(-25 10 10)" fill="currentColor"/></svg>';
+    var BADGE_ARMY = '<svg viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="10" cy="13.5" rx="8.5" ry="2.4" fill="currentColor"/><path d="M5 13.5c0-5 2-7.5 5-7.5s5 2.5 5 7.5z" fill="currentColor"/></svg>';
     var PLAYER_INFO = [
       { name: 'Tomás', css: '#d94141', text: '#ffffff', skin: '#f1c9a5', hair: '#5a3a22', hat: true },
       { name: 'Lucía', css: '#3b6fd6', text: '#ffffff', skin: '#c98f66', hair: '#2b2118', hat: false },
@@ -1330,12 +1349,15 @@ export function initBoard(opts) {
     }
     var handEl = stage.querySelector('.hand'), whoEl = document.getElementById('who'), seatsEl = document.getElementById('seats');
     var STAR = '<svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="10,1.5 12.6,7.2 18.8,7.8 14.1,12 15.5,18.2 10,15 4.5,18.2 5.9,12 1.2,7.8 7.4,7.2" fill="#f2c230" stroke="#7a5a10" stroke-width="1.4" stroke-linejoin="round"/></svg>';
-    var vps = [0, 0, 0, 0]; // puntos de victoria: 1 por poblado y 2 por ciudad (todavía sin cartas ni reconocimientos especiales)
+    var vps = [0, 0, 0, 0]; // puntos de victoria que se ven: poblados, ciudades y reconocimientos (las Estancias ajenas no se ven)
+    var devCounts = [0, 0, 0, 0], knights = [0, 0, 0, 0], awardRoad = { holder: null, length: 0 }, awardArmy = { holder: null, size: 0 }; // cartas de desarrollo por jugador (cuántas, no cuáles), caballeros jugados y quién tiene cada reconocimiento
     var myHand = {}, counts = [], turn = 0, VIEWER = 0; // myHand: la mano de quien mira; counts: cartas de cada jugador (de los demás solo se sabe cuántas); VIEWER: el jugador cuya mano muestra el banner (en la partida local, el de turno)
     seatsEl.innerHTML = PLAYER_INFO.map(function (pl, p) {
       return '<div class="seat" data-p="' + p + '" style="--pc:' + pl.css + '"><div class="av">' + avatarSVG(p) + '</div><span class="nm">' + pl.name + '</span>' +
         '<span class="vp" title="Puntos de victoria">' + STAR + '<b>0</b></span>' +
-        '<span class="cnt"><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#f6ecd4" stroke="#5b4630" stroke-width="1.6"/></svg><b>0</b></span></div>';
+        '<span class="cnt"><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#f6ecd4" stroke="#5b4630" stroke-width="1.6"/></svg><b>0</b></span>' +
+        '<span class="dv" title="Cartas de desarrollo" hidden><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#8f2a2a" stroke="#e8d6a0" stroke-width="1.6"/></svg><b>0</b></span>' +
+        '<span class="aw"><span class="bdg road" title="Ruta más larga" hidden>' + BADGE_ROAD + '<b></b></span><span class="bdg army" title="Montonera más grande" hidden>' + BADGE_ARMY + '<b></b></span></span></div>';
     }).join('');
     if (online) for (var si = opts.seats.length; si < seatsEl.children.length; si++) seatsEl.children[si].hidden = true; // partidas de 3: sin el 4.º puesto
     function handTotal(p) { return counts[p]; }
@@ -1346,13 +1368,23 @@ export function initBoard(opts) {
       HAND_KINDS.forEach(function (k) { handEl.querySelector('[data-res="' + k + '"] b').textContent = myHand[k]; });
     }
     function renderSeats() {
-      Array.prototype.forEach.call(seatsEl.children, function (s, p) { s.classList.toggle('on', p === turn); s.querySelector('.cnt b').textContent = handTotal(p); s.querySelector('.vp b').textContent = vps[p]; });
+      Array.prototype.forEach.call(seatsEl.children, function (s, p) {
+        s.classList.toggle('on', p === turn); s.querySelector('.cnt b').textContent = handTotal(p); s.querySelector('.vp b').textContent = vps[p];
+        var dv = s.querySelector('.dv'), rd = s.querySelector('.bdg.road'), ar = s.querySelector('.bdg.army');
+        dv.hidden = !devCounts[p]; dv.querySelector('b').textContent = devCounts[p];
+        rd.hidden = awardRoad.holder !== p; rd.querySelector('b').textContent = awardRoad.length;
+        ar.hidden = awardArmy.holder !== p; ar.querySelector('b').textContent = awardArmy.size;
+      });
     }
     // Copia las manos y los puntos del estado del motor a lo que se ve en pantalla.
     function syncHands() {
       myHand = {}; HAND_KINDS.forEach(function (k) { myHand[k] = game.hand[k]; });
       counts = game.players.map(function (pl) { return pl.handCount; });
       vps = game.players.map(function (pl) { return pl.points; });
+      devCounts = game.players.map(function (pl) { return pl.devCount; });
+      knights = game.players.map(function (pl) { return pl.knights; });
+      awardRoad = { holder: game.longestRoad.holder, length: game.longestRoad.length };
+      awardArmy = { holder: game.largestArmy.holder, size: game.largestArmy.size };
     }
     function resetPlayers() { VIEWER = me; turn = game.turn; syncHands(); renderHand(); renderSeats(); }
     // Pone la pantalla al día con el estado (banner del jugador de turno, puestos, ladrón, marcadores, botones y diálogos).
@@ -1371,7 +1403,7 @@ export function initBoard(opts) {
     }
 
     // Botón único de turno. Antes de tirar: dos dados. Después de tirar: flecha con el color de quien sigue.
-    var btnTurn = document.getElementById('btnTurn'), btnDev = document.getElementById('btnDev'), btnTrade = document.getElementById('btnTrade');
+    var btnTurn = document.getElementById('btnTurn'), btnDev = document.getElementById('btnDev'), btnTrade = document.getElementById('btnTrade'), btnCards = document.getElementById('btnCards'), cardsN = document.getElementById('cardsN');
     function dieSVG(x, y, rot, pips) {
       return '<g transform="translate(' + x + ' ' + y + ') rotate(' + rot + ' 13 13)"><rect width="26" height="26" rx="6" fill="#d94141" stroke="#7a1f1f" stroke-width="2"/>' +
         pips.map(function (i) { return '<circle cx="' + (6.5 + (i % 3) * 6.5) + '" cy="' + (6.5 + Math.floor(i / 3) * 6.5) + '" r="2.2" fill="#fff"/>'; }).join('') + '</g>';
@@ -1399,8 +1431,7 @@ export function initBoard(opts) {
     }
     // Carta de desarrollo: un botón más de la bandeja; se habilita en fase main si la mano alcanza para pagarla.
     function updateDevButton() {
-      var cost = game.config.costs.developmentCard, hand = game.hand;
-      var can = !busy && game.phase.kind === 'main' && game.turn === me && Object.keys(cost).every(function (k) { return hand[k] >= cost[k]; });
+      var can = !busy && game.turn === me && legal.some(function (a) { return a.type === 'buyDevCard'; }); // alcanza la mano y quedan cartas: lo dice el motor
       btnDev.disabled = !can;
       if (!can && pendingCmd && pendingCmd.type === 'buyDevCard') { pendingCmd = null; renderDialog(); }
     }
@@ -1410,11 +1441,14 @@ export function initBoard(opts) {
       updateTurnButton(); updateDevButton();
       if (tradeUI && (busy || !can.bankTrade)) tradeUI = null; // ya no se puede comerciar (otra fase, o la mano no alcanza)
       btnTrade.disabled = busy || !can.bankTrade; pressed(btnTrade, !!tradeUI);
+      var nDev = devTotal();
+      if (cardsUI && (busy || nDev === 0)) cardsUI = null; // no hay nada que mostrar (o corre una animación)
+      btnCards.disabled = busy || nDev === 0; pressed(btnCards, !!cardsUI); cardsN.textContent = nDev || '';
       buildEl.hidden = ph === 'setup' || ph === 'finished';
       if (!can[{ road: 'buildRoad', settlement: 'buildSettlement', city: 'buildCity' }[buildMode]]) buildMode = null; // ya no alcanza o no hay dónde
       Array.prototype.forEach.call(buildEl.querySelectorAll('[data-build]'), function (b) {
         var kind = b.getAttribute('data-build');
-        b.disabled = busy || !can[{ road: 'buildRoad', settlement: 'buildSettlement', city: 'buildCity' }[kind]];
+        b.disabled = busy || ph === 'roadBuilding' || !can[{ road: 'buildRoad', settlement: 'buildSettlement', city: 'buildCity' }[kind]]; // con Vialidad los caminos se ponen gratis, sin este botón
         pressed(b, buildMode === kind);
       });
     }
@@ -1433,6 +1467,7 @@ export function initBoard(opts) {
           return me ? 'Tu turno' : 'Turno de ' + name;
         case 'discard': return me ? 'Salió un 7: descartá ' + ph.queue[0].count + ' cartas' : name + ' descarta ' + ph.queue[0].count + ' cartas';
         case 'moveRobber': return me ? 'Mové el ladrón' : name + ' mueve el ladrón';
+        case 'roadBuilding': return me ? 'Vialidad: elegí dónde va el camino gratis (' + (ph.left === 2 ? 'faltan 2' : 'falta 1') + ')' : name + ' pone caminos gratis';
         case 'steal': return me ? 'Elegí a quién robarle una carta' : name + ' elige a quién robarle';
         default: return ph.winner === VIEWER ? '¡Ganaste la partida con ' + vps[ph.winner] + ' puntos!' : '¡' + PLAYER_INFO[ph.winner].name + ' ganó la partida con ' + vps[ph.winner] + ' puntos!';
       }
@@ -1464,6 +1499,7 @@ export function initBoard(opts) {
       clearGhost();
       dialogEl.className = 'panel dialog'; dialogEl.style.left = dialogEl.style.top = dialogEl.style.transform = '';
       if (tradeUI && !busy && ph.kind === 'main') { dialogKey = ''; renderTrade(); return; }
+      if (cardsUI && !busy) { dialogKey = ''; renderCards(); return; }
       if (busy || game.turn !== me || (ph.kind !== 'discard' && ph.kind !== 'steal')) { dialogEl.hidden = true; dialogKey = ''; return; } // descartar y elegir víctima solo lo ve quien actúa
       var key = ph.kind + ':' + game.turn + ':' + (ph.kind === 'discard' ? ph.queue.length : ph.victims.join(','));
       if (key !== dialogKey) { dialogKey = key; discardSel = {}; }
@@ -1489,6 +1525,53 @@ export function initBoard(opts) {
     // Comerciar con el banco: dos filas de fichas (doy / recibo). Lo que se puede entregar, la tasa y lo que se puede pedir salen de
     // la acción bankTrade de legalActions; acá no se calcula ninguna regla.
     var tradeUI = null; // { give, get } elegidos (null = panel cerrado)
+    // Mis cartas: las cartas de desarrollo de la mano y, para Acopio y Buena cosecha, la elección de recursos. Qué se puede jugar y
+    // cuándo lo dice el motor (legalActions); acá solo se explica por qué una carta no se puede jugar ahora.
+    var cardsUI = null; // { mode: 'hand' | 'monopoly' | 'plenty', res, picks } (null = panel cerrado)
+    function devTotal() { var n = 0; DEV_ORDER.forEach(function (k) { n += game.dev.hand[k]; }); return n; }
+    function cardReason(k, can) {
+      var d = game.dev, ph = game.phase.kind;
+      if (!DEV[k].play) return '';
+      if (game.turn !== me) return 'Esperá tu turno';
+      if (d.hand[k] - d.fresh[k] <= 0) return 'La compraste en este turno: se juega desde el próximo';
+      if (d.played) return 'Ya jugaste una carta en este turno';
+      if (k !== 'knight' && ph !== 'main') return 'Se juega después de tirar los dados';
+      if (ph !== 'main' && ph !== 'roll') return 'Ahora no se puede jugar';
+      if (!can[DEV[k].play]) return k === 'roadBuilding' ? 'No tenés dónde poner caminos' : k === 'yearOfPlenty' ? 'El banco casi no tiene cartas' : 'Ahora no se puede jugar';
+      return '';
+    }
+    function resChips(enabled, selected, count) {
+      return '<div class="pick">' + HAND_KINDS.map(function (k) {
+        return '<button type="button" data-res="' + k + '" aria-pressed="' + (selected(k) ? 'true' : 'false') + '"' + (enabled(k) ? '' : ' disabled') +
+          ' style="--c:' + handEl.querySelector('[data-res="' + k + '"]').style.getPropertyValue('--c') + '" title="' + TERRAINS[k].res + '"><span class="ico">' + resIcon(k) + '</span><small>' + (count(k) ? '×' + count(k) : '&nbsp;') + '</small></button>';
+      }).join('') + '</div>';
+    }
+    function renderCards() {
+      var can = {}, d = game.dev, html;
+      legal.forEach(function (a) { can[a.type] = a; });
+      dialogEl.className = 'panel dialog trade cards';
+      function yesno(ok) { return '<div class="yesno"><button type="button" class="no" data-cancel aria-label="Volver" title="Volver">✕</button><button type="button" class="yes" data-ok aria-label="Confirmar" title="Confirmar"' + (ok ? '' : ' disabled') + '>✓</button></div>'; }
+      if (cardsUI.mode === 'monopoly') {
+        html = '<h3>Acopio</h3><p>¿Qué recurso querés que te entreguen?</p>' +
+          resChips(function () { return true; }, function (k) { return cardsUI.res === k; }, function () { return 0; }) +
+          '<div class="sum">' + (cardsUI.res ? 'Todos te dan su ' + TERRAINS[cardsUI.res].res.toLowerCase() : 'Elegí un recurso') + '</div>' + yesno(!!cardsUI.res);
+      } else if (cardsUI.mode === 'plenty') {
+        var avail = can.playYearOfPlenty ? can.playYearOfPlenty.resources : [], picks = cardsUI.picks;
+        html = '<h3>Buena cosecha</h3><p>Elegí 2 recursos del banco.</p>' +
+          resChips(function (k) { return avail.indexOf(k) >= 0 && picks.length < 2; }, function (k) { return picks.indexOf(k) >= 0; }, function (k) { return picks.filter(function (x) { return x === k; }).length; }) +
+          '<div class="sum">' + (picks.length ? picks.map(function (k) { return TERRAINS[k].res; }).join(' + ') : 'Elegí 2 recursos') + '</div>' +
+          (picks.length ? '<button type="button" class="clear" data-clear>Borrar elección</button>' : '') + yesno(picks.length === 2);
+      } else {
+        html = '<button type="button" class="x" data-close aria-label="Cerrar" title="Cerrar">✕</button><h3>Tus cartas</h3><p>Una por turno, y no la que compraste en este mismo turno.</p><div class="rows">' +
+          DEV_ORDER.filter(function (k) { return d.hand[k] > 0; }).map(function (k) {
+            var reason = cardReason(k, can), extra = d.fresh[k] ? ' <em>(' + d.fresh[k] + (d.fresh[k] > 1 ? ' nuevas' : ' nueva') + ')</em>' : '';
+            return '<div class="crow' + (reason ? ' off' : '') + '"><span class="ico">' + devIcon(k) + '</span><span class="tx"><b>' + DEV[k].name + ' ×' + d.hand[k] + extra + '</b><small>' + (reason || DEV[k].desc) + '</small></span>' +
+              (DEV[k].play ? '<button type="button" data-play="' + k + '"' + (reason ? ' disabled' : '') + '>Jugar</button>' : '') + '</div>';
+          }).join('') + '</div>';
+      }
+      dialogEl.innerHTML = html;
+      dialogEl.hidden = false;
+    }
     function tradeOptions() {
       var a = legal.filter(function (x) { return x.type === 'bankTrade'; })[0];
       return a ? a.trades : [];
@@ -1522,6 +1605,26 @@ export function initBoard(opts) {
         if (b.hasAttribute('data-ok')) confirmDrop(cmd); else renderDialog();
         return;
       }
+      if (cardsUI) {
+        if (b.hasAttribute('data-close')) cardsUI = null;
+        else if (b.hasAttribute('data-cancel')) cardsUI = cardsUI.mode === 'hand' ? null : { mode: 'hand', res: null, picks: [] };
+        else if (b.hasAttribute('data-play')) {
+          var dk = b.getAttribute('data-play');
+          if (dk === 'monopoly') cardsUI = { mode: 'monopoly', res: null, picks: [] };
+          else if (dk === 'yearOfPlenty') cardsUI = { mode: 'plenty', res: null, picks: [] };
+          else { cardsUI = null; dispatch({ type: DEV[dk].play, player: game.turn }); return; } // Gaucho y Vialidad siguen sobre el tablero
+        } else if (b.hasAttribute('data-res')) {
+          var rk = b.getAttribute('data-res');
+          if (cardsUI.mode === 'monopoly') cardsUI.res = rk; else if (cardsUI.picks.length < 2) cardsUI.picks.push(rk);
+        } else if (b.hasAttribute('data-clear')) cardsUI.picks = [];
+        else if (b.hasAttribute('data-ok')) {
+          var ui = cardsUI; cardsUI = null;
+          dispatch(ui.mode === 'monopoly' ? { type: 'playMonopoly', player: game.turn, resource: ui.res } : { type: 'playYearOfPlenty', player: game.turn, resources: ui.picks.slice() });
+          return;
+        }
+        refreshUi();
+        return;
+      }
       if (tradeUI) {
         if (b.hasAttribute('data-give')) tradeUI.give = b.getAttribute('data-give');
         else if (b.hasAttribute('data-get')) tradeUI.get = b.getAttribute('data-get');
@@ -1547,6 +1650,7 @@ export function initBoard(opts) {
       if (e.key !== 'Escape') return;
       if (pendingCmd) { pendingCmd = null; renderDialog(); }
       else if (tradeUI) { tradeUI = null; refreshUi(); }
+      else if (cardsUI) { cardsUI = cardsUI.mode === 'hand' ? null : { mode: 'hand', res: null, picks: [] }; refreshUi(); }
     });
     function dispatch(cmd) {
       if (sending) return;
@@ -1557,7 +1661,8 @@ export function initBoard(opts) {
     // Respuesta de la sesión a un comando: la pantalla se pone al día (con animaciones) recién acá, no antes.
     function settle(cmd, r) {
       if (!r.ok) { showStatus(r.error.message, true); renderDialog(); return; }
-      tradeUI = null; buildMode = null;
+      tradeUI = null; cardsUI = null; buildMode = null;
+      if (cmd.type === 'buyDevCard') audio.card(); // la carta propia suena al comprarla (las de otros, al reproducir el evento)
       var landed = { placeRoad: 'road', buildRoad: 'road', placeSettlement: 'settlement', buildSettlement: 'settlement', buildCity: 'city' }[cmd.type];
       if (landed) audio.land(landed); // la pieza toca el tablero
       playEvents(r.events);
@@ -1648,6 +1753,83 @@ export function initBoard(opts) {
               if (p === VIEWER) tradeFx(ev); else if (animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
               pause(cont, foreign(p) ? 600 : 0);
             });
+          case 'DevCardBought':
+            return gap(p, function () {
+              devCounts[p]++; renderSeats();
+              if (foreign(p)) audio.card();
+              if (animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
+              if (ev.kind) showStatus('Compraste: ' + DEV[ev.kind].name, false, true, p);
+              else showStatus(PLAYER_INFO[p].name + ' compró una carta de desarrollo', false, true, p);
+              pause(cont, foreign(p) ? 650 : 0);
+            }, afterSpent(ev));
+          case 'KnightPlayed':
+            return gap(p, function () {
+              devCounts[p] = Math.max(0, devCounts[p] - 1); knights[p]++; renderSeats();
+              if (foreign(p)) audio.card();
+              if (animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
+              showStatus((p === VIEWER ? 'Jugaste un Gaucho' : PLAYER_INFO[p].name + ' jugó un Gaucho'), false, true, p);
+              pause(cont, foreign(p) ? 900 : 0);
+            });
+          case 'MonopolyPlayed':
+            return gap(p, function () {
+              var total = 0, css = PLAYER_INFO[p].css;
+              devCounts[p] = Math.max(0, devCounts[p] - 1);
+              ev.taken.forEach(function (t) {
+                total += t.amount; counts[t.player] -= t.amount;
+                if (t.player === VIEWER) myHand[ev.resource] -= t.amount;
+                if (animate) floatText(seatsEl.children[t.player], '−' + t.amount, PLAYER_INFO[t.player].css);
+              });
+              counts[p] += total; if (p === VIEWER) myHand[ev.resource] += total;
+              renderSeats(); renderHand();
+              if (foreign(p)) audio.card();
+              if (animate) { pop(seatsEl.children[p], css); if (total) floatText(seatsEl.children[p], '+' + total, css); }
+              showStatus((p === VIEWER ? 'Jugaste Acopio' : PLAYER_INFO[p].name + ' jugó Acopio') + ': ' + TERRAINS[ev.resource].res.toLowerCase() + (total ? ' (+' + total + ')' : ' (nadie tenía)'), false, true, p);
+              pause(cont, 1100);
+            });
+          case 'YearOfPlentyPlayed':
+            return gap(p, function () {
+              devCounts[p] = Math.max(0, devCounts[p] - 1);
+              ev.gains.forEach(function (g) {
+                counts[g.player] += g.amount;
+                if (g.player === VIEWER) myHand[g.resource] += g.amount;
+              });
+              renderSeats(); renderHand();
+              if (foreign(p)) audio.card();
+              if (animate) ev.gains.forEach(function (g) {
+                var card = g.player === VIEWER ? handEl.querySelector('[data-res="' + g.resource + '"]') : seatsEl.children[g.player], col = g.player === VIEWER ? card.style.getPropertyValue('--c') : PLAYER_INFO[g.player].css;
+                pop(card, col); floatText(card, '+' + g.amount, col);
+              });
+              showStatus((p === VIEWER ? 'Jugaste Buena cosecha' : PLAYER_INFO[p].name + ' jugó Buena cosecha'), false, true, p);
+              pause(cont, 900);
+            });
+          case 'RoadBuildingPlayed':
+            return gap(p, function () {
+              devCounts[p] = Math.max(0, devCounts[p] - 1); renderSeats();
+              if (foreign(p)) audio.card();
+              if (animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
+              showStatus((p === VIEWER ? 'Jugaste Vialidad' : PLAYER_INFO[p].name + ' jugó Vialidad') + ': 2 caminos gratis', false, true, p);
+              pause(cont, foreign(p) ? 700 : 0);
+            });
+          case 'LongestRoadChanged': {
+            var pts = game.config.awardPoints;
+            awardRoad = { holder: ev.player, length: ev.length };
+            if (ev.from !== null) vps[ev.from] -= pts;
+            if (ev.player !== null) vps[ev.player] += pts;
+            renderSeats(); renderHand();
+            if (animate && ev.player !== null) pop(seatsEl.children[ev.player], PLAYER_INFO[ev.player].css);
+            showStatus(ev.player === null ? PLAYER_INFO[ev.from].name + ' perdió la Ruta más larga' : (ev.player === VIEWER ? 'Tenés' : PLAYER_INFO[ev.player].name + ' tiene') + ' la Ruta más larga (' + ev.length + ' caminos)', false, true, ev.player === null ? ev.from : ev.player);
+            return pause(cont, 1000);
+          }
+          case 'LargestArmyChanged': {
+            var apts = game.config.awardPoints;
+            awardArmy = { holder: ev.player, size: ev.size };
+            if (ev.from !== null) vps[ev.from] -= apts;
+            vps[ev.player] += apts;
+            renderSeats(); renderHand();
+            if (animate) pop(seatsEl.children[ev.player], PLAYER_INFO[ev.player].css);
+            showStatus((ev.player === VIEWER ? 'Tenés' : PLAYER_INFO[ev.player].name + ' tiene') + ' la Montonera más grande (' + ev.size + ' gauchos)', false, true, ev.player);
+            return pause(cont, 1000);
+          }
           case 'Stolen': return stolen(ev, cont);
           case 'TurnChanged':
             turn = ev.player; renderSeats();
@@ -1794,18 +1976,25 @@ export function initBoard(opts) {
     });
     btnDev.addEventListener('click', function () {
       if (busy || !game) return;
+      cardsUI = null; tradeUI = null; buildMode = null;
       if (pendingCmd && pendingCmd.type === 'buyDevCard') { pendingCmd = null; renderDialog(); } else askConfirm({ type: 'buyDevCard', player: game.turn });
     });
     // los botones de construir activan (o desactivan) el modo: el tablero muestra dónde se puede
     buildEl.addEventListener('click', function (e) {
       var b = e.target.closest('[data-build]'); if (!b || b.disabled || busy) return;
-      var kind = b.getAttribute('data-build'); buildMode = buildMode === kind ? null : kind; tradeUI = null; refreshUi();
+      var kind = b.getAttribute('data-build'); buildMode = buildMode === kind ? null : kind; tradeUI = null; cardsUI = null; refreshUi();
     });
     // Comerciar: abre (o cierra) el panel; es excluyente con el modo de construir y con una confirmación abierta
     btnTrade.addEventListener('click', function () {
       if (busy || !game) return;
-      pendingCmd = null; buildMode = null;
+      pendingCmd = null; buildMode = null; cardsUI = null;
       tradeUI = tradeUI ? null : { give: null, get: null};
+      refreshUi();
+    });
+    btnCards.addEventListener('click', function () {
+      if (busy || !game) return;
+      pendingCmd = null; buildMode = null; tradeUI = null;
+      cardsUI = cardsUI ? null : { mode: 'hand', res: null, picks: [] };
       refreshUi();
     });
     var lightBtns = Array.prototype.slice.call(document.querySelectorAll('[data-light]'));
