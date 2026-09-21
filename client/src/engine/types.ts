@@ -17,7 +17,7 @@ export interface GameConfig {
   discardLimit: number; // con un 7, quien tiene MÁS de estas cartas descarta la mitad
   costs: { road: Cost; settlement: Cost; city: Cost; developmentCard: Cost };
   maxPieces: { roads: number; settlements: number; cities: number };
-  trade: { bank: number; genericPort: number; specificPort: number }; // cartas iguales que se entregan por 1 del banco
+  trade: { bank: number; genericPort: number; specificPort: number; maxOffersPerTurn: number }; // cartas iguales que se entregan por 1 del banco; ofertas a jugadores que puede abrir el de turno
   devDeck: DevHand; // composición del mazo de desarrollo
   longestRoadMin: number; // largo mínimo para el reconocimiento de la ruta más larga
   largestArmyMin: number; // caballeros jugados mínimos para el de la montonera más grande
@@ -37,6 +37,14 @@ export interface PlayerState {
   dev: DevHand; // cartas de desarrollo en la mano (incluye las de este turno y las de punto, que no se juegan)
   devNew: DevHand; // las compradas en este turno: todavía no se pueden jugar
   knightsPlayed: number;
+}
+
+/** Oferta de comercio entre jugadores: la abre quien tiene el turno y los demás responden; ella concreta el cambio con quien aceptó. */
+export interface TradeOffer {
+  from: PlayerId;
+  give: Partial<Hand>; // lo que entrega quien propone
+  get: Partial<Hand>; // lo que pide a cambio
+  responses: { player: PlayerId; status: 'pending' | 'accepted' | 'rejected' }[]; // una por jugador consultado
 }
 
 export interface Building {
@@ -73,6 +81,8 @@ export interface GameState {
   dice: { seed: number; rolls: number }; // cada tirada sale de seed + contador (ver dice.ts)
   random: { seed: number; count: number }; // otros sorteos (robo de cartas): mismo esquema que los dados, flujo aparte
   devDeck: DevCardKind[]; // mazo de desarrollo barajado; se roba del final. Nunca sale del servidor
+  trade: TradeOffer | null; // oferta abierta (solo en fase `main`; mientras haya una no se hace otra cosa)
+  tradeOffers: number; // ofertas abiertas en este turno (tope: config.trade.maxOffersPerTurn)
   devPlayed: boolean; // en este turno ya se jugó una carta (las de punto no cuentan)
   longestRoad: { holder: PlayerId | null; length: number };
   largestArmy: { holder: PlayerId | null; size: number };
@@ -96,6 +106,10 @@ export type Command =
   | { type: 'playMonopoly'; player: PlayerId; resource: Resource }
   | { type: 'playYearOfPlenty'; player: PlayerId; resources: Resource[] } // 2 recursos (1 si el banco solo tiene 1)
   | { type: 'playRoadBuilding'; player: PlayerId }
+  | { type: 'proposeTrade'; player: PlayerId; give: Partial<Hand>; get: Partial<Hand>; to?: PlayerId[] } // sin `to`, a todos los demás
+  | { type: 'respondTrade'; player: PlayerId; accept: boolean } // lo manda un jugador consultado (no el de turno)
+  | { type: 'confirmTrade'; player: PlayerId; with: PlayerId } // quien propuso concreta el cambio con uno que aceptó
+  | { type: 'cancelTrade'; player: PlayerId }
   | { type: 'endTurn'; player: PlayerId };
 
 // ---------------------------------------------------------------- eventos (lo que el servidor confirma)
@@ -118,6 +132,10 @@ export type GameEvent =
   | { type: 'RobberMoved'; player: PlayerId; tile: number }
   | { type: 'Stolen'; thief: PlayerId; victim: PlayerId; resource: Resource } // el recurso solo lo ven los dos implicados
   | { type: 'TurnChanged'; player: PlayerId; phase: 'setup' | 'roll' }
+  | { type: 'TradeProposed'; player: PlayerId; give: Partial<Hand>; get: Partial<Hand>; to: PlayerId[] }
+  | { type: 'TradeResponded'; player: PlayerId; accept: boolean }
+  | { type: 'TradeCompleted'; player: PlayerId; with: PlayerId; give: Partial<Hand>; get: Partial<Hand> }
+  | { type: 'TradeCancelled'; player: PlayerId; reason: 'cancelled' | 'rejected' | 'turn-ended' } // 'rejected': todos dijeron que no
   | { type: 'BankTraded'; player: PlayerId; give: Resource; giveCount: number; get: Resource }
   | { type: 'DevCardBought'; player: PlayerId; kind: DevCardKind } // el tipo solo lo ve quien la compró (ver server/view.ts)
   | { type: 'KnightPlayed'; player: PlayerId }
@@ -150,6 +168,9 @@ export type ErrorCode =
   | 'invalid-trade'
   | 'same-tile'
   | 'deck-empty'
+  | 'trade-open' // hay una oferta abierta: primero hay que cerrarla
+  | 'no-trade'
+  | 'trade-limit'
   | 'no-card' // no tiene esa carta o la compró en este turno
   | 'already-played'; // ya jugó una carta en este turno
 
@@ -179,4 +200,8 @@ export type LegalAction =
   | { type: 'playMonopoly' } // el recurso lo elige el jugador (cualquiera de los 5)
   | { type: 'playYearOfPlenty'; resources: Resource[]; count: number } // recursos que el banco tiene y cuántos hay que tomar (2, o 1 si queda una sola carta)
   | { type: 'playRoadBuilding' }
+  | { type: 'proposeTrade'; left: number } // ofertas que todavía puede abrir en este turno
+  | { type: 'respondTrade'; canAccept: boolean } // a un jugador consultado: aceptar solo si tiene lo que se pide
+  | { type: 'confirmTrade'; with: PlayerId[] } // los que aceptaron
+  | { type: 'cancelTrade' }
   | { type: 'endTurn' };

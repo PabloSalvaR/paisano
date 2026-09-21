@@ -2,12 +2,13 @@
 // (sus acciones legales y su mano) y devuelve un comando. Para uno más inteligente basta con otra función `Bot`.
 
 import { RESOURCES } from '../engine';
-import type { Command, Hand, LegalAction, PlayerId, Resource, Rng } from '../engine';
+import type { Command, GameState, Hand, LegalAction, PlayerId, Resource, Rng } from '../engine';
 
 export interface BotInput {
   me: PlayerId;
   legal: LegalAction[];
   hand: Hand;
+  state?: GameState; // el estado completo, para los bots que juzgan el tablero (el aleatorio no lo usa)
 }
 
 export type Bot = (input: BotInput, rng: Rng) => Command;
@@ -46,7 +47,17 @@ export function commandFor(a: LegalAction, player: PlayerId, hand: Hand, rng: Rn
       return { type: a.type, player, resource: pick(RESOURCES) };
     case 'playYearOfPlenty':
       return { type: a.type, player, resources: Array.from({ length: a.count }, () => pick(a.resources)) };
+    case 'proposeTrade': {
+      const own = RESOURCES.filter((r) => hand[r] > 0);
+      const give = pick(own);
+      return { type: 'proposeTrade', player, give: { [give]: 1 }, get: { [pick(RESOURCES.filter((r) => r !== give))]: 1 } };
+    }
+    case 'respondTrade':
+      return { type: 'respondTrade', player, accept: a.canAccept && rng() < 0.5 };
+    case 'confirmTrade':
+      return { type: 'confirmTrade', player, with: pick(a.with) };
     case 'rollDice':
+    case 'cancelTrade':
     case 'endTurn':
     case 'buyDevCard':
     case 'playKnight':

@@ -119,7 +119,7 @@ describe('RemoteSession', () => {
     let steps = 0;
     for (; steps < 300 && ana.view().game!.phase.kind !== 'finished'; steps++) {
       const v = ana.view();
-      expect(v.game!.turn).toBe(0);
+      expect(v.game!.turn === 0 || v.game!.trade !== null).toBe(true); // o le toca, o le consultan una oferta
       const r = await ana.send(randomBot({ me: 0, legal: v.legal, hand: v.game!.hand }, rng));
       expect(r.ok).toBe(true);
     }

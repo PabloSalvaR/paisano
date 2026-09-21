@@ -57,6 +57,15 @@ const SECTIONS: { title: string; items: string[]; open?: boolean }[] = [
     ],
   },
   {
+    title: "Comerciar con jugadores",
+    items: [
+      "En tu turno, después de tirar, podés ofrecer un cambio: qué das y qué pedís, a todos o a algunos.",
+      "Cada uno responde sí o no. Vos elegís con cuál de los que aceptaron cerrar el trato, o cancelás.",
+      "Hasta 5 ofertas por turno. Mientras una está abierta no podés construir ni pasar el turno.",
+      "Solo comercia quien tiene el turno: los demás nada más responden.",
+    ],
+  },
+  {
     title: "Cartas de desarrollo",
     items: [
       "Una por turno, y no la que compraste en ese mismo turno. Las podés jugar antes o después de tirar los dados.",

@@ -36,6 +36,17 @@ const readBody = (req: Request): Promise<Record<string, unknown> | null> =>
 const isInt = (x: unknown): x is number => Number.isInteger(x);
 const isResource = (x: unknown): x is Resource => RESOURCES.includes(x as Resource);
 
+/** Cartas de una oferta: objeto de recurso → entero ≥ 0 (el motor valida el resto). */
+function parseCards(x: unknown): Partial<Hand> | null {
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+  const cards: Partial<Hand> = {};
+  for (const [k, v] of Object.entries(x)) {
+    if (!isResource(k) || !isInt(v) || v < 0 || v > 99) return null;
+    cards[k] = v;
+  }
+  return cards;
+}
+
 export function parseCommand(raw: unknown): Command | null {
   if (!raw || typeof raw !== 'object') return null;
   const c = raw as Record<string, unknown>;
@@ -63,6 +74,17 @@ export function parseCommand(raw: unknown): Command | null {
     }
     case 'bankTrade':
       return isResource(c.give) && isResource(c.get) ? { type: 'bankTrade', player, give: c.give, get: c.get } : null;
+    case 'proposeTrade': {
+      const give = parseCards(c.give);
+      const get = parseCards(c.get);
+      if (!give || !get) return null;
+      if (c.to === undefined) return { type: 'proposeTrade', player, give, get };
+      return Array.isArray(c.to) && c.to.length <= 3 && c.to.every(isInt) ? { type: 'proposeTrade', player, give, get, to: c.to as number[] } : null;
+    }
+    case 'respondTrade':
+      return typeof c.accept === 'boolean' ? { type: 'respondTrade', player, accept: c.accept } : null;
+    case 'confirmTrade':
+      return isInt(c.with) ? { type: 'confirmTrade', player, with: c.with } : null;
     case 'playMonopoly':
       return isResource(c.resource) ? { type: 'playMonopoly', player, resource: c.resource } : null;
     case 'playYearOfPlenty': {
@@ -74,6 +96,7 @@ export function parseCommand(raw: unknown): Command | null {
     case 'buyDevCard':
     case 'playKnight':
     case 'playRoadBuilding':
+    case 'cancelTrade':
       return { type: c.type, player };
     default:
       return null;

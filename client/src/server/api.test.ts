@@ -113,6 +113,21 @@ describe('parseCommand', () => {
     expect(parseCommand({ type: 'playYearOfPlenty', resources: 'hills' })).toBeNull();
   });
 
+  it('acepta los comandos del comercio entre jugadores y rechaza los mal formados', () => {
+    expect(parseCommand({ type: 'proposeTrade', give: { forest: 1 }, get: { hills: 2 } })).toEqual({ type: 'proposeTrade', player: 0, give: { forest: 1 }, get: { hills: 2 } });
+    expect(parseCommand({ type: 'proposeTrade', give: { forest: 1 }, get: { hills: 1 }, to: [2] })).toEqual({ type: 'proposeTrade', player: 0, give: { forest: 1 }, get: { hills: 1 }, to: [2] });
+    expect(parseCommand({ type: 'respondTrade', accept: true })).toEqual({ type: 'respondTrade', player: 0, accept: true });
+    expect(parseCommand({ type: 'confirmTrade', with: 2 })).toEqual({ type: 'confirmTrade', player: 0, with: 2 });
+    expect(parseCommand({ type: 'cancelTrade' })).toEqual({ type: 'cancelTrade', player: 0 });
+    expect(parseCommand({ type: 'proposeTrade', give: { forest: 1 } })).toBeNull();
+    expect(parseCommand({ type: 'proposeTrade', give: { oro: 1 }, get: { hills: 1 } })).toBeNull();
+    expect(parseCommand({ type: 'proposeTrade', give: { forest: -1 }, get: { hills: 1 } })).toBeNull();
+    expect(parseCommand({ type: 'proposeTrade', give: [1], get: { hills: 1 } })).toBeNull();
+    expect(parseCommand({ type: 'proposeTrade', give: { forest: 1 }, get: { hills: 1 }, to: 'todos' })).toBeNull();
+    expect(parseCommand({ type: 'respondTrade', accept: 'si' })).toBeNull();
+    expect(parseCommand({ type: 'confirmTrade' })).toBeNull();
+  });
+
   it('rechaza formas inválidas', () => {
     expect(parseCommand(null)).toBeNull();
     expect(parseCommand({ type: 'buildCity', vertex: 1.5 })).toBeNull();

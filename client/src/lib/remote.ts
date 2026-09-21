@@ -146,6 +146,7 @@ export class RemoteSession implements GameSession {
 
   private currentInterval(): number {
     if (this.hidden) return this.hiddenMs;
+    if (this.current?.game?.trade) return this.visibleMs; // con una oferta abierta se espera a otras personas (o te esperan a vos): consulta al ritmo normal
     return (this.current?.legal.length ?? 0) > 0 ? this.myTurnMs : this.visibleMs; // con jugadas legales, solo vos podés mover
   }
 

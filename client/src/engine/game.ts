@@ -10,6 +10,7 @@ import { bad, canAfford, canSettleAt, checkWin, emptyDev, emptyHand, give, type 
 import { generateMap, RESOURCES, type Resource } from './map';
 import { mulberry32 } from './rng';
 import { bankTrade, bankTradeOptions } from './trade';
+import { cancelTrade, confirmTrade, proposeTrade, respondTrade, tradeActions } from './offers';
 import { discard, moveRobber, startSeven, steal } from './robber';
 import type {
   Command,
@@ -51,6 +52,8 @@ export function createGame(names: string[], seed: number, config?: Partial<GameC
     dice: { seed: (seed ^ 0x5bd1e995) | 0, rolls: 0 }, // flujos de azar separados del del mapa
     random: { seed: (seed ^ 0x2545f491) | 0, count: 0 },
     devDeck: shuffledDeck(cfg.devDeck, (seed ^ 0x3c6ef372) | 0), // flujo aparte, igual que dados y robos
+    trade: null,
+    tradeOffers: 0,
     devPlayed: false,
     longestRoad: { holder: null, length: 0 },
     largestArmy: { holder: null, size: 0 },
@@ -89,7 +92,9 @@ export function setupPlayer(step: number, players: number, first = 0): PlayerId 
 
 export function legalActions(state: GameState, player: PlayerId): LegalAction[] {
   const phase = state.phase;
-  if (phase.kind === 'finished' || player !== state.turn) return [];
+  if (phase.kind === 'finished') return [];
+  if (player !== state.turn) return tradeActions(state, player); // fuera de turno solo se puede responder una oferta
+  if (state.trade) return tradeActions(state, player); // con una oferta abierta, quien propuso solo puede concretarla o cancelarla
   switch (phase.kind) {
     case 'setup': {
       const topo = topology();
@@ -112,6 +117,7 @@ export function legalActions(state: GameState, player: PlayerId): LegalAction[] 
       if (trades.length) actions.push({ type: 'bankTrade', trades });
       if (state.devDeck.length && canAfford(state.players[player].hand, state.config.costs.developmentCard)) actions.push({ type: 'buyDevCard' });
       actions.push(...devActions(state, player));
+      actions.push(...tradeActions(state, player));
       actions.push({ type: 'endTurn' });
       return actions;
     }
@@ -147,7 +153,8 @@ export function applyCommand(state: GameState, cmd: Command): Result {
   if (!Number.isInteger(cmd.player) || cmd.player < 0 || cmd.player >= state.players.length) {
     return fail('unknown-player', 'Jugador desconocido.');
   }
-  if (cmd.player !== state.turn) return fail('not-your-turn', 'No es tu turno.');
+  if (cmd.player !== state.turn && cmd.type !== 'respondTrade') return fail('not-your-turn', 'No es tu turno.'); // responder una oferta es lo único que se hace fuera de turno
+  if (state.trade && !['respondTrade', 'confirmTrade', 'cancelTrade'].includes(cmd.type)) return fail('trade-open', 'Hay una oferta de comercio abierta: primero hay que cerrarla.');
 
   const next = structuredClone(state); // mutación encapsulada: el estado original queda intacto
   const events: GameEvent[] = [];
@@ -187,6 +194,14 @@ function run(s: GameState, cmd: Command, events: GameEvent[]): Err {
       return playYearOfPlenty(s, cmd.player, cmd.resources, events);
     case 'playRoadBuilding':
       return playRoadBuilding(s, cmd.player, events);
+    case 'proposeTrade':
+      return proposeTrade(s, cmd.player, cmd.give, cmd.get, cmd.to, events);
+    case 'respondTrade':
+      return respondTrade(s, cmd.player, cmd.accept, events);
+    case 'confirmTrade':
+      return confirmTrade(s, cmd.player, cmd.with, events);
+    case 'cancelTrade':
+      return cancelTrade(s, cmd.player, events);
     case 'endTurn':
       return endTurn(s, cmd.player, events);
   }
@@ -266,6 +281,7 @@ function endTurn(s: GameState, player: PlayerId, events: GameEvent[]): Err {
   if (s.phase.kind !== 'main') return bad('wrong-phase', 'Primero hay que tirar los dados.');
   s.players[player].devNew = emptyDev(); // lo comprado en este turno ya se puede jugar desde el próximo
   s.devPlayed = false;
+  s.tradeOffers = 0;
   s.turn = (player + 1) % s.players.length;
   s.phase = { kind: 'roll' };
   events.push({ type: 'TurnChanged', player: s.turn, phase: 'roll' });

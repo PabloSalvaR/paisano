@@ -68,7 +68,7 @@ describe('comercio con el banco: tasa', () => {
 
   it('la tasa sale de la configuración', () => {
     const s = emptyBoard();
-    s.config.trade = { bank: 5, genericPort: 4, specificPort: 3 };
+    s.config.trade = { bank: 5, genericPort: 4, specificPort: 3, maxOffersPerTurn: 5 };
     expect(tradeRate(s, 0, 'forest')).toBe(5);
     settleOnPort(s, 0, genericPort(s));
     expect(tradeRate(s, 0, 'forest')).toBe(4);

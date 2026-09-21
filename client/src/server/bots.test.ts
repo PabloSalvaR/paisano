@@ -32,7 +32,7 @@ async function playThrough(seed: number, bots: number, victoryPoints: number) {
     const view = val(await getView(store, roomId, token));
     const game = view.game!;
     if (game.phase.kind === 'finished') break;
-    expect(game.turn).toBe(0); // los bots ya jugaron todo lo suyo: solo queda esperar al anfitrión
+    expect(game.turn === 0 || game.trade !== null).toBe(true); // los bots ya jugaron todo lo suyo: solo queda esperar al anfitrión (de turno o consultado)
     expect(view.legal.length).toBeGreaterThan(0);
     val(await submitCommand(store, roomId, token, randomBot({ me: 0, legal: view.legal, hand: game.hand }, rng), { rng }));
     expectConserved((await store.get(roomId))!.state!);

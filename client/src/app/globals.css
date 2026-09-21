@@ -465,3 +465,38 @@ body{
 .opening .oroll{margin-left:auto;padding:5px 12px;font-weight:800;font-size:.85rem;border-radius:999px;background:var(--accent);color:#2b1a05;border:2px solid rgba(0,0,0,.25);cursor:pointer;animation:oroll-pulse 1.2s ease-in-out infinite}
 @keyframes oroll-pulse{0%,100%{box-shadow:0 0 0 0 rgba(240,147,43,.6)}50%{box-shadow:0 0 0 7px rgba(240,147,43,0)}}
 @media (prefers-reduced-motion:reduce){.opening .oroll{animation:none}}
+
+/* Comercio entre jugadores: pestañas, filas doy/pido, oferta recibida y respuestas a la propia */
+.dialog .tabs{display:flex;gap:6px;justify-content:center;margin:2px 0 10px}
+.dialog .tabs button{padding:5px 16px;font-size:.85rem}
+.dialog .tabs button[aria-pressed="true"]{background:var(--btn-on);color:var(--btn-on-text);border-color:var(--btn-on)}
+.dialog.trade .cols{display:flex;align-items:center;gap:8px;padding:0 8px;margin-bottom:2px;font-size:.72rem;font-weight:700;color:var(--muted)}
+.dialog.trade .cols span{flex:0 0 92px;text-align:center}
+.dialog.trade .cols span:first-child{flex:1}
+.dialog.trade .row{gap:4px;padding:3px 6px}
+.dialog.trade .row .nm{font-size:.82rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dialog.trade .row b{min-width:20px;text-align:center}
+.dialog.trade .row .gap{width:6px}
+.dialog.trade .row button{width:28px;height:28px;font-size:1.05rem}
+.dialog.trade .rows{margin-bottom:8px}
+.dialog .tos{display:flex;gap:8px;justify-content:center;margin-bottom:8px}
+.dialog .tos .to{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 8px;border-bottom:3px solid var(--pc)}
+.dialog .tos .to .av{width:32px;height:32px;border-radius:50%;overflow:hidden}
+.dialog .tos .to .av svg{display:block;width:100%;height:100%}
+.dialog .tos .to small{font-size:.7rem;font-weight:700}
+.dialog .tos .to[aria-pressed="false"]{opacity:.45}
+.dialog .primary small{font-weight:600;opacity:.75}
+.dialog.offer .swap{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.dialog.offer .chips{display:inline-flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.dialog.offer .chip{display:inline-flex;align-items:center;gap:2px;padding:3px 8px 3px 4px;border-radius:10px;background:var(--btn);border-bottom:3px solid var(--c)}
+.dialog.offer .chip .ico svg{display:block;width:26px;height:26px;stroke:#3b2a18;stroke-width:2.2;stroke-linejoin:round}
+.dialog.offer .chip b{font-size:.95rem}
+.dialog.offer .arrow{font-size:1.3rem;color:var(--muted)}
+.dialog.offer .yesno{justify-content:center;margin-top:8px}
+.dialog.offer .row .av{width:28px;height:28px;border-radius:50%;overflow:hidden;box-shadow:0 0 0 2px var(--pc);flex:none}
+.dialog.offer .row .av svg{display:block;width:100%;height:100%}
+.dialog.offer .row em{font-style:normal;font-size:.8rem;color:var(--muted);font-weight:700}
+.dialog.offer .row.st-accepted em{color:#2e9e4f}
+.dialog.offer .row.st-rejected em{color:#d94141}
+.dialog.offer .row button.deal{width:auto;height:28px;padding:0 10px;font-size:.8rem;background:#2e9e4f;color:#fff;border:0}
+.dialog.offer p{text-align:center}

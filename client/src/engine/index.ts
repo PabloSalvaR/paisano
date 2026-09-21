@@ -7,6 +7,7 @@ export * from './dice';
 export * from './game';
 export * from './helpers';
 export * from './map';
+export * from './offers';
 export * from './rng';
 export * from './robber';
 export * from './trade';

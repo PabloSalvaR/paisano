@@ -43,7 +43,11 @@ export class LocalSession implements GameSession {
 
   /** Quién mira: en la partida contra bots, el humano (asiento 0); en la de varios en la misma pantalla, quien tiene el turno. */
   private viewer(): number {
-    return this.opts.bots ? 0 : this.state.turn;
+    if (this.opts.bots) return 0;
+    // en la misma pantalla, con una oferta abierta mira primero cada jugador consultado y al final quien propuso
+    const offer = this.state.trade;
+    if (offer) return offer.responses.find((r) => r.status === 'pending')?.player ?? offer.from;
+    return this.state.turn;
   }
 
   view(): RoomView {
@@ -73,7 +77,7 @@ export class LocalSession implements GameSession {
       all.push(...played.events);
     }
     this.version++;
-    const who = this.opts.bots ? 0 : cmd.player; // en la misma pantalla mira quien jugó; contra bots, el humano
+    const who = this.opts.bots ? 0 : this.viewer(); // en la misma pantalla mira quien tiene que actuar ahora; contra bots, el humano
     const events = all.map((e) => viewEvent(e, who));
     this.listeners.forEach((fn) => fn(this.view(), events));
     return { ok: true, events };

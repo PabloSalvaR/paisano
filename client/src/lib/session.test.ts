@@ -140,7 +140,7 @@ describe('LocalSession contra bots', () => {
     for (let i = 0; i < 300; i++) {
       const v = session.view();
       if (v.game!.phase.kind === 'finished') break;
-      expect(v.game!.turn).toBe(0);
+      expect(v.game!.turn === 0 || v.game!.trade !== null).toBe(true); // o le toca, o le consultan una oferta
       expect(v.legal.length).toBeGreaterThan(0);
       const r = await session.send(randomBot({ me: 0, legal: v.legal, hand: v.game!.hand }, rng));
       expect(r.ok).toBe(true);
