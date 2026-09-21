@@ -16,11 +16,12 @@ board.js ──► GameSession ──┬─► LocalSession   (motor en el naveg
 | Módulo | Qué hace |
 |---|---|
 | `server/room.ts` | Documento JSON de una sala: asientos (nombre, hash del token, `bot`), estado del motor, log de eventos con versión, número de versión. |
-| `server/store.ts` | Interfaz `RoomStore` (`get`, `create`, `save(sala, versiónEsperada)`) y `MemoryStore` (en `globalThis`, copia al entrar y salir). Después: `UpstashStore` con las mismas operaciones. |
+| `server/store.ts` | Interfaz `RoomStore` (`get`, `create`, `save(sala, versiónEsperada)`) y `MemoryStore` (en `globalThis`, copia al entrar y salir; solo desarrollo). |
+| `server/upstash.ts` | `UpstashStore`: el mismo contrato sobre Upstash Redis, por su API REST con `fetch` (sin librería). |
 | `server/rooms.ts` | Servicio: `createRoom`, `joinRoom`, `addBot`, `startGame`, `submitCommand`, `getView`. Sin nada de Next: se prueba con Vitest. |
 | `server/view.ts` | Vista filtrada de un jugador (`RoomView`). Es lo único que sale del servidor. |
 | `server/api.ts` | Capa HTTP (Request → Response) y validación de la forma de los comandos (`parseCommand`). |
-| `server/instance.ts` | El almacén que usan las rutas (hoy en memoria). |
+| `server/instance.ts` | El almacén que usan las rutas: Upstash si están las variables de entorno, si no memoria. |
 | `app/api/rooms/**` | Route Handlers de una línea, delegan en `api.ts`. |
 | `bots/random.ts`, `bots/play.ts` | Bot aleatorio (`Bot`) y `playBots` (puro: lo usan la sala y la partida local). |
 | `lib/session.ts` | `GameSession` y `LocalSession`. |
@@ -73,11 +74,20 @@ Después de un comando llega una lista de eventos (los propios y, con bots o en 
 - **Polling:** `RemoteSession.load()` deja la vista lista **sin reproducir** lo ocurrido antes (al recargar se recupera el estado exacto); después consulta con `?since=versión`. Una consulta que arrancó antes de enviar un comando se descarta (`epoch`), y un comando propio no vuelve a llegar por polling: no hay eventos duplicados.
 - **Tablero en línea:** `initBoard({ session, seats, seed })`. Los nombres salen de los asientos (el 4.º puesto se oculta en partidas de 3), `VIEWER` es siempre tu asiento, el botón de turno, el de carta y los diálogos de descarte/robo solo aparecen cuando actúa uno, y no hay «Nuevo mapa» ni partidas locales. Lo que hacen los demás entra por `session.subscribe`; si llega mientras se reproduce otra tanda, se encola. El `seed` del decorado (árboles, vacas, rocas) sale del código de la sala, así todos ven el mismo mapa.
 
+## Almacén en Upstash Redis
+
+- **Variables** (nunca en el repo): `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN` (con la integración de Vercel pueden llamarse `KV_REST_API_URL` / `KV_REST_API_TOKEN`; se aceptan las dos). En desarrollo van en `client/.env.local` (Git lo ignora; hay que reiniciar `npm run dev` al cambiarlo); en Vercel, en Settings → Environment Variables (Production y Preview).
+- **Datos:** cada sala son dos claves, `paisano:sala:CODIGO` (el documento JSON) y `paisano:sala:CODIGO:v` (su versión). Crear y guardar-si-la-versión-no-cambió son **scripts Lua atómicos** (`CREATE_SCRIPT`, `SAVE_SCRIPT`); las salas vencen a los **7 días** sin actividad (cada guardado renueva el plazo).
+- **Configuración de la base:** Redis gratuito, región cerca de donde corren las funciones de Vercel (por defecto Washington D.C., o sea US East), sin read regions, TLS activado y **eviction desactivada**: con eviction, una base llena borraría salas en silencio; sin ella, el error se ve (503).
+- **Errores:** si la base falla (caída, credenciales mal puestas), la API responde **503** con `{ error: { code: 'storage' } }` en vez de un error sin cuerpo.
+- **Pruebas:** `upstash.test.ts` corre en `npm test` contra un Upstash simulado. `upstash.live.test.ts` corre contra la base real con **`npm run test:upstash`** (lee `.env.local`; usa un prefijo propio y salas que vencen en 2 minutos; incluye ocho guardados simultáneos donde tiene que ganar uno solo). Se salta sola si no hay credenciales.
+- **Costo por consulta:** cada consulta de polling es un comando (`GET`). A 1,5 s son unos **2.400 comandos por hora y por jugador**: una partida de 4 personas durante 2 horas ronda los 19.000. Comparar con el límite del plan gratis (cambia con el tiempo). Optimizaciones a mano si hace falta: consultar solo la clave de versión y pedir el documento si cambió, y bajar el ritmo cuando no es tu turno o la pestaña está oculta.
+
 ## Límites conocidos
 
-- **El almacén en memoria no sirve en Vercel** (cada función tiene su propia memoria): las salas solo funcionan con `npm run dev` o `next start`. Para jugar con amigos fuera de la máquina del desarrollador hace falta el `UpstashStore`. En desarrollo, reiniciar el servidor borra las salas (la pantalla lo avisa: «Esa sala no existe…»).
-- El polling es fijo (1,5 s), sin frenar cuando no es tu turno ni cuando la pestaña está oculta; hay que revisar la cuota gratis de Upstash con el ritmo real.
+- **Sin las variables de Upstash el almacén es la memoria del proceso**: no sirve en Vercel (cada función tiene la suya) y reiniciar el servidor borra las salas (la pantalla lo avisa: «Esa sala no existe…»). Con Upstash, las salas sobreviven a los reinicios (probado: se reinició el servidor y la partida seguía en el mismo estado).
+- El polling es fijo (1,5 s), sin frenar cuando no es tu turno ni cuando la pestaña está oculta; ver el costo por consulta en la sección de Upstash.
 - Si se cae la conexión, el polling sigue intentando; solo un 404 (sala perdida) corta la partida con un mensaje.
 - Sin salir de la sala, expulsar, ni cambiar de nombre una vez adentro.
-- Probado con Chrome: un jugador con la interfaz y el otro (más un bot) por la API, ronda completa, recarga a mitad de partida, entrar por link, sala inexistente. **No** se probó con dos personas en dos dispositivos ni en un ancho real de celular (no se pudo achicar la ventana).
+- Probado con Chrome: un jugador con la interfaz y el otro (más un bot) por la API, ronda completa, recarga a mitad de partida, entrar por link, sala inexistente. Probado contra Upstash real: tests en vivo y una partida por la API con el servidor reiniciado. **No** se probó con dos personas en dos dispositivos, ni en Vercel, ni en un ancho real de celular (no se pudo achicar la ventana).
 

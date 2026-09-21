@@ -24,7 +24,8 @@ export type RoomErrorCode =
   | 'invalid-name'
   | 'invalid-command'
   | 'name-taken'
-  | 'conflict';
+  | 'conflict'
+  | 'storage';
 
 export interface ServiceError {
   code: ErrorCode | RoomErrorCode;

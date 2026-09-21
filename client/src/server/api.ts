@@ -13,6 +13,7 @@ const STATUS: Partial<Record<ServiceError['code'], number>> = {
   'not-in-room': 401,
   'not-host': 403,
   conflict: 409,
+  storage: 503,
 };
 
 function respond<T>(res: Res<T>): Response {
@@ -72,7 +73,7 @@ export function parseCommand(raw: unknown): Command | null {
 
 // ---------------------------------------------------------------- endpoints
 
-export const api = {
+const handlers = {
   /** POST /api/rooms  { name } → { roomId, token } */
   async create(store: RoomStore, req: Request): Promise<Response> {
     const body = await readBody(req);
@@ -108,4 +109,25 @@ export const api = {
     const since = Number(new URL(req.url).searchParams.get('since') ?? 0);
     return respond(await getView(store, roomIdOf(id), tokenOf(req), Number.isInteger(since) && since > 0 ? since : 0));
   },
+};
+
+// Si el almacén falla (la base no responde, credenciales mal puestas) la respuesta es un 503 claro, no un error de servidor sin cuerpo.
+function guard<A extends unknown[]>(fn: (...args: A) => Promise<Response>): (...args: A) => Promise<Response> {
+  return async (...args) => {
+    try {
+      return await fn(...args);
+    } catch (e) {
+      console.error('Paisano: falló el almacén de salas', e);
+      return respond({ ok: false, error: { code: 'storage', message: 'No se pudo hablar con la base de datos de salas. Probá de nuevo en un momento.' } });
+    }
+  };
+}
+
+export const api = {
+  create: guard(handlers.create),
+  join: guard(handlers.join),
+  addBot: guard(handlers.addBot),
+  start: guard(handlers.start),
+  command: guard(handlers.command),
+  view: guard(handlers.view),
 };
