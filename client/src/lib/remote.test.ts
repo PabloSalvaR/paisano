@@ -160,6 +160,62 @@ describe('RemoteSession', () => {
   });
 });
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+describe('ahorro de consultas (cada una gasta un comando de la base)', () => {
+  it('con la pestaña oculta consulta casi nada, y al volver consulta enseguida', async () => {
+    const { fetchFn, beto } = await setup(2, 1);
+    const views = () => fetchFn.calls.filter((c) => c.startsWith('GET')).length;
+    beto!.start(10, 500);
+    await sleep(80);
+    expect(views()).toBeGreaterThan(3); // visible: consulta seguido
+    beto!.setHidden(true);
+    await sleep(40); // termina la consulta en curso
+    const hiddenFrom = views();
+    await sleep(200);
+    expect(views() - hiddenFrom).toBeLessThanOrEqual(1); // oculta: casi no consulta
+    const before = views();
+    beto!.setHidden(false);
+    await sleep(40);
+    expect(views()).toBeGreaterThan(before); // al volver, consulta ya (no espera el intervalo largo)
+    beto!.stop();
+  });
+
+  it('deja de consultar cuando la partida terminó (y avisa una sola vez)', async () => {
+    const { store, roomId, fetchFn, beto } = await setup(2, 1);
+    const seen: string[] = [];
+    beto!.subscribe((v) => seen.push(v.game!.phase.kind));
+    const room = (await store.get(roomId))!;
+    room.state!.phase = { kind: 'finished', winner: 0 };
+    expect(await store.save({ ...room, version: room.version + 1 }, room.version)).toBe(true);
+    beto!.start(10);
+    await sleep(80);
+    expect(seen).toEqual(['finished']);
+    const after = fetchFn.calls.length;
+    await sleep(80);
+    expect(fetchFn.calls.length).toBe(after); // detenido
+  });
+
+  it('deja de consultar si la sala no existe o el token ya no vale', async () => {
+    const { client, roomId, fetchFn } = await setup(1, 2);
+    const lost = new RemoteSession('ZZZZZZ', 'x', client);
+    const errs: number[] = [];
+    lost.onError((status) => errs.push(status));
+    lost.start(10);
+    await sleep(100);
+    expect(errs).toEqual([404]); // una sola vez: después se detuvo
+
+    const stranger = new RemoteSession(roomId, 'token-ajeno', client);
+    const errs2: number[] = [];
+    stranger.onError((status) => errs2.push(status));
+    const before = fetchFn.calls.length;
+    stranger.start(10);
+    await sleep(100);
+    expect(errs2).toEqual([401]);
+    expect(fetchFn.calls.length - before).toBe(1);
+  });
+});
+
 describe('identidad en el navegador', () => {
   const memory = () => {
     const m = new Map<string, string>();

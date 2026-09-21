@@ -195,8 +195,9 @@ Las fases 1-4 del plan original (Java/Spring) quedan pospuestas: se hicieron en 
 
 **Siguiente (orden acordado)**
 1. **Jugar con amigos de verdad:** el desarrollador carga `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN` en Vercel (Settings → Environment Variables, Production y Preview; **nunca pegar el token en el chat**), se redeploya y se prueba con dos dispositivos. Antes, mirar el límite de comandos del plan gratis de Upstash (el polling gasta ~2.400 por hora y por jugador) y decidir si hace falta la optimización descrita en `docs/multijugador.md`.
-2. Cartas de desarrollo (`buyDevCard`, ejército, camino más largo) y comercio entre jugadores. **Proponer el diseño primero**: hoy el botón «Carta» de la bandeja existe pero solo muestra un aviso, y el motor no tiene nada de esto.
-3. Variantes configurables (`GameConfig` por sala).
+2. **Tiempo límite por turno y reemplazo por un bot** de quien no responde (el desarrollador lo pidió, en detalle, para jugar online en serio). **Proponer el diseño primero** (reloj de turno evaluado en el servidor al atender cualquier consulta, porque Vercel no tiene procesos en segundo plano; duración configurable por sala; reemplazo permanente, sin dejar a la partida sin humanos).
+3. Cartas de desarrollo (`buyDevCard`, ejército, camino más largo) y comercio entre jugadores. **Proponer el diseño primero**: hoy el botón «Carta» de la bandeja existe pero solo muestra un aviso, y el motor no tiene nada de esto.
+4. Variantes configurables (`GameConfig` por sala).
 
 **Sin probar a mano:** sonido de aterrizaje y de comercio, ritmo de las pausas de los bots (650 ms por pieza, 800 el ladrón, 450 el cambio de turno), animaciones con la pestaña visible, la partida online con dos personas y en un ancho real de celular. Limitaciones conocidas: los bots son aleatorios y en la partida local contra bots comparten nombre con los puestos de siempre (en línea se llaman «Bot 1», «Bot 2»…); ver los límites de la parte online en `docs/multijugador.md`.
 

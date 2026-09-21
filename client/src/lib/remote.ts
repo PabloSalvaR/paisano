@@ -8,6 +8,7 @@ import type { ApiError, RoomsApi } from './roomsApi';
 import type { GameSession, SendResult } from './session';
 
 export const POLL_MS = 1500;
+export const HIDDEN_POLL_MS = 20000; // con la pestaña oculta: casi no se consulta (cada consulta gasta un comando de la base)
 
 type Listener = (view: RoomView, events: ViewEvent[]) => void;
 
@@ -18,6 +19,10 @@ export class RemoteSession implements GameSession {
   private errorListeners = new Set<(status: number, error: ApiError) => void>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private running = false;
+  private hidden = false; // pestaña oculta: se consulta mucho más despacio
+  private inflight = false; // hay una consulta en curso
+  private visibleMs = POLL_MS;
+  private hiddenMs = HIDDEN_POLL_MS;
   private sending = false;
   private epoch = 0; // sube cada vez que se envía un comando: una consulta que empezó antes ya no vale
 
@@ -50,6 +55,7 @@ export class RemoteSession implements GameSession {
       const known = this.version;
       this.current = r.value;
       this.version = Math.max(this.version, r.value.version);
+      if (isFinished(r.value)) this.stop(); // terminó la partida: nada más que consultar
       // la respuesta trae también lo que hicieron los bots a continuación; no se vuelve a entregar por polling
       return { ok: true, events: r.value.events.filter((e) => e.version > known).map((e) => e.event) };
     } finally {
@@ -73,10 +79,17 @@ export class RemoteSession implements GameSession {
   async refresh(): Promise<void> {
     if (this.sending) return;
     const epoch = this.epoch;
-    const r = await this.api.view(this.roomId, this.token, this.version);
+    this.inflight = true;
+    let r;
+    try {
+      r = await this.api.view(this.roomId, this.token, this.version);
+    } finally {
+      this.inflight = false;
+    }
     if (epoch !== this.epoch || this.sending) return; // mientras tanto se envió un comando: esa respuesta ya no aplica
     if (!r.ok) {
       this.errorListeners.forEach((fn) => fn(r.status, r.error));
+      if (r.status === 404 || r.status === 401) this.stop(); // sala perdida o token que ya no vale: insistir solo gasta consultas
       return;
     }
     if (r.value.version <= this.version) return; // nada nuevo
@@ -84,16 +97,36 @@ export class RemoteSession implements GameSession {
     this.current = r.value;
     this.version = r.value.version;
     this.listeners.forEach((fn) => fn(r.value, fresh));
+    if (isFinished(r.value)) this.stop(); // terminó la partida: no cambia más
   }
 
-  start(intervalMs = POLL_MS): void {
+  /** Empieza a consultar. Al terminar la partida, o si la sala se pierde, se detiene sola. */
+  start(intervalMs = POLL_MS, hiddenMs = HIDDEN_POLL_MS): void {
     if (this.running) return;
     this.running = true;
-    const tick = async () => {
+    this.visibleMs = intervalMs;
+    this.hiddenMs = hiddenMs;
+    this.schedule(this.currentInterval());
+  }
+
+  /** La pestaña se ocultó o volvió a verse. Al volver se consulta enseguida, para no mostrar un estado viejo. */
+  setHidden(hidden: boolean): void {
+    if (hidden === this.hidden) return;
+    this.hidden = hidden;
+    if (this.running && !hidden && !this.inflight) this.schedule(0);
+  }
+
+  private currentInterval(): number {
+    return this.hidden ? this.hiddenMs : this.visibleMs;
+  }
+
+  private schedule(delay: number): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(async () => {
+      this.timer = null;
       await this.refresh();
-      if (this.running) this.timer = setTimeout(tick, intervalMs);
-    };
-    this.timer = setTimeout(tick, intervalMs);
+      if (this.running) this.schedule(this.currentInterval());
+    }, delay);
   }
 
   stop(): void {
@@ -101,4 +134,8 @@ export class RemoteSession implements GameSession {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
   }
+}
+
+function isFinished(view: RoomView): boolean {
+  return view.game?.phase.kind === 'finished';
 }

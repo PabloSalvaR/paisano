@@ -85,6 +85,15 @@ export default function RoomPage() {
     return () => sessionRef.current?.stop();
   }, [roomId, connect]);
 
+  // Con la pestaña oculta se consulta muy despacio (cada consulta gasta un comando de la base); al volver, enseguida.
+  useEffect(() => {
+    if (!session) return;
+    const sync = () => session.setHidden(document.hidden);
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => document.removeEventListener("visibilitychange", sync);
+  }, [session]);
+
   async function enter() {
     setError("");
     setBusy(true);
