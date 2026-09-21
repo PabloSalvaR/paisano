@@ -67,7 +67,7 @@ export function parseCommand(raw: unknown): Command | null {
       return isResource(c.resource) ? { type: 'playMonopoly', player, resource: c.resource } : null;
     case 'playYearOfPlenty': {
       const r = c.resources;
-      return Array.isArray(r) && r.length === 2 && isResource(r[0]) && isResource(r[1]) ? { type: 'playYearOfPlenty', player, resources: [r[0], r[1]] } : null;
+      return Array.isArray(r) && (r.length === 1 || r.length === 2) && r.every(isResource) ? { type: 'playYearOfPlenty', player, resources: r as Resource[] } : null;
     }
     case 'rollDice':
     case 'endTurn':

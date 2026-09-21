@@ -401,6 +401,9 @@ body{
 .seat .bdg svg{width:12px;height:12px}
 .seat .bdg b{color:inherit;font-size:.72rem}
 .seat .dv[hidden],.seat .bdg[hidden]{display:none}
+/* siempre a la vista: apagados si no tiene el reconocimiento, encendidos (con el color del jugador) si lo tiene */
+.seat .bdg:not(.held){opacity:.62;background:var(--btn);color:var(--text);box-shadow:none}
+.seat .bdg.held{box-shadow:0 0 8px var(--pc),0 1px 4px rgba(0,0,0,.35)}
 .build .cost b{font-size:.68rem;line-height:8px;font-weight:800;color:var(--muted)}
 .dialog.cards .x{position:absolute;top:8px;right:8px;width:30px;height:30px;font-size:1rem;line-height:1}
 .dialog.cards .clear{display:block;margin:0 auto 6px;padding:3px 10px;font-size:.78rem}

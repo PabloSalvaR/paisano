@@ -4,7 +4,7 @@ import { bad, type Err } from './helpers';
 import { RESOURCES, type Resource } from './map';
 import type { GameEvent, GameState, PlayerId } from './types';
 
-/** Cuántas cartas iguales hay que entregar por 1 del banco: la mejor tasa que le dan al jugador sus poblados y ciudades. */
+/** Cuántas cartas iguales hay que entregar por 1 del banco: la mejor tasa que le dan al jugador sus casas y estancias. */
 export function tradeRate(s: GameState, player: PlayerId, resource: Resource): number {
   const { bank, genericPort, specificPort } = s.config.trade;
   let rate = bank;

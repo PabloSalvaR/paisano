@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Command } from '../engine';
 import { MemoryStore } from './store';
 import { createRoom, getView, hashToken, joinRoom, startGame, submitCommand, type Res } from './rooms';
-import { viewEvent } from './view';
+import { createGame } from '../engine';
+import { gameView, viewEvent } from './view';
 
 const newStore = () => new MemoryStore(new Map());
 
@@ -182,5 +183,15 @@ describe('vista filtrada', () => {
     expect(viewEvent(stolen, 0)).toEqual(stolen);
     expect(viewEvent(stolen, 1)).toEqual(stolen);
     expect(viewEvent(stolen, 2)).toEqual({ ...stolen, resource: null });
+  });
+});
+
+describe('vista: contadores públicos de cada jugador', () => {
+  it('trae los gauchos jugados y el largo de ruta de todos (públicos), para verlos siempre en los puestos', () => {
+    const s = createGame(['A', 'B', 'C'], 5);
+    s.players[1].knightsPlayed = 2;
+    const v = gameView(s, 0);
+    expect(v.players.map((p) => p.knights)).toEqual([0, 2, 0]);
+    expect(v.players.map((p) => p.roadLength)).toEqual([0, 0, 0]);
   });
 });

@@ -1,6 +1,6 @@
 // Ilustraciones de las cartas, dibujadas a mano con canvas (arte propio, sin imágenes). Todo se dibuja en un lienzo de 128 × 200:
 //   - drawBastos11: el naipe español de adorno de la mesa (caballero de bastos: jinete a caballo con una maza verde).
-//   - drawDevCard: las cartas de desarrollo del juego (Gaucho, Acopio, Buena cosecha, Vialidad, Estancia).
+//   - drawDevCard: las cartas de desarrollo del juego (Gaucho, Acopio, Buena cosecha, Vialidad, Punto de victoria).
 // Los dos llevan el estilo de las láminas de referencia: colores planos, contorno oscuro y figuras simples.
 // `devCardURL` devuelve la carta como imagen (cacheada) para usarla en el panel «Mis cartas».
 
@@ -163,7 +163,7 @@ var KIND_STYLE = {
   monopoly: { title: 'ACOPIO', accent: '#9a6a2a' },
   yearOfPlenty: { title: 'BUENA COSECHA', accent: '#b98a1c' },
   roadBuilding: { title: 'VIALIDAD', accent: '#3a6ea5' },
-  victoryPoint: { title: 'ESTANCIA', accent: '#3e7d3a' }
+  victoryPoint: { title: 'PUNTO DE VICTORIA', accent: '#3e7d3a' }
 };
 
 // Marco común: papel crema, ventana de ilustración (recortada) y cinta con el nombre.
@@ -303,11 +303,20 @@ function vialidadArt(x) {
   x.fillStyle = OL; x.font = 'bold 9px Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('RUTA', 65, 51.5);
 }
 
-// Estancia: casco con techo de tejas, ombú, alambrado y una estrella sobre un cielo de atardecer.
+// Punto de victoria: casco con techo de tejas, ombú, alambrado y un sol brillante sobre un cielo de atardecer.
 function estanciaArt(x) {
   var sky = x.createLinearGradient(0, 12, 0, 110); sky.addColorStop(0, '#f2a15a'); sky.addColorStop(0.55, '#f7cf8a'); sky.addColorStop(1, '#fbe9bd');
   x.fillStyle = sky; x.fillRect(12, 12, 104, 100);
-  x.beginPath(); x.moveTo(64, 18); for (var i = 1; i < 10; i++) { var a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 4.5 : 10; x.lineTo(64 + Math.cos(a) * r, 26 + Math.sin(a) * r); } x.closePath(); fillStroke(x, '#fff3b0', '#8a5a10', 1.2);
+  // sol brillante: halo, rayos largos y disco con brillo, sobre la casa
+  var glow = x.createRadialGradient(64, 42, 4, 64, 42, 80); glow.addColorStop(0, 'rgba(255,250,200,.95)'); glow.addColorStop(0.35, 'rgba(255,214,110,.6)'); glow.addColorStop(1, 'rgba(255,170,70,0)');
+  x.fillStyle = glow; x.fillRect(12, 12, 104, 100);
+  for (var k = 0; k < 16; k++) {
+    var ang = k * Math.PI / 8, long = k % 2 ? 34 : 50, w = 0.09;
+    x.beginPath(); x.moveTo(64 + Math.cos(ang - w) * 17, 42 + Math.sin(ang - w) * 17); x.lineTo(64 + Math.cos(ang) * long, 42 + Math.sin(ang) * long); x.lineTo(64 + Math.cos(ang + w) * 17, 42 + Math.sin(ang + w) * 17); x.closePath();
+    x.fillStyle = k % 2 ? 'rgba(255,236,150,.75)' : 'rgba(255,248,205,.9)'; x.fill();
+  }
+  var disc = x.createRadialGradient(60, 38, 2, 64, 42, 17); disc.addColorStop(0, '#fffbe0'); disc.addColorStop(0.6, '#ffe27a'); disc.addColorStop(1, '#f7b731');
+  ell(x, 64, 42, 16, 16, 0, disc, '#c9821a', 1.5);
   x.fillStyle = '#6f9d3e'; x.fillRect(12, 104, 104, 50); x.fillStyle = '#5b8a34'; poly(x, [[12, 108], [50, 100], [90, 108], [116, 102], [116, 112], [12, 114]], '#5f9137', null);
   // ombú: tronco ancho y copa amplia
   poly(x, [[22, 118], [30, 94], [34, 94], [42, 118]], '#6b4a2a', OL, 1.3);

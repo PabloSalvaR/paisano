@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { api, parseCommand } from './api';
+import { gameDefaults } from './rooms';
 import { MemoryStore } from './store';
+
+gameDefaults.firstPlayer = 0; // los tests suponen que abre quien creó la sala
 
 const URL0 = 'http://localhost/api/rooms';
 const newStore = () => new MemoryStore(new Map());
@@ -98,12 +101,13 @@ describe('parseCommand', () => {
     expect(parseCommand({ type: 'playRoadBuilding' })).toEqual({ type: 'playRoadBuilding', player: 0 });
     expect(parseCommand({ type: 'playMonopoly', resource: 'forest' })).toEqual({ type: 'playMonopoly', player: 0, resource: 'forest' });
     expect(parseCommand({ type: 'playYearOfPlenty', resources: ['hills', 'fields'] })).toEqual({ type: 'playYearOfPlenty', player: 0, resources: ['hills', 'fields'] });
+    expect(parseCommand({ type: 'playYearOfPlenty', resources: ['hills'] })).toEqual({ type: 'playYearOfPlenty', player: 0, resources: ['hills'] }); // con el banco casi vacío; el motor valida cuántos
   });
 
   it('rechaza cartas mal formadas', () => {
     expect(parseCommand({ type: 'playMonopoly' })).toBeNull();
     expect(parseCommand({ type: 'playMonopoly', resource: 'oro' })).toBeNull();
-    expect(parseCommand({ type: 'playYearOfPlenty', resources: ['hills'] })).toBeNull();
+    expect(parseCommand({ type: 'playYearOfPlenty', resources: [] })).toBeNull();
     expect(parseCommand({ type: 'playYearOfPlenty', resources: ['hills', 'oro'] })).toBeNull();
     expect(parseCommand({ type: 'playYearOfPlenty', resources: ['hills', 'fields', 'forest'] })).toBeNull();
     expect(parseCommand({ type: 'playYearOfPlenty', resources: 'hills' })).toBeNull();

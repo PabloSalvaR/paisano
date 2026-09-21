@@ -1,8 +1,8 @@
 // Cartas de desarrollo: el mazo, comprarlas y jugarlas.
 //   Gaucho (knight): mueve al ladrón y roba, sin descarte. Se puede jugar antes de tirar los dados.
 //   Acopio (monopoly): todos los rivales entregan el recurso elegido. Buena cosecha (yearOfPlenty): 2 recursos del banco.
-//   Vialidad (roadBuilding): 2 caminos gratis. Estancia (victoryPoint): 1 punto oculto, no se «juega».
-// Una carta por turno, y no la que se compró ese mismo turno.
+//   Vialidad (roadBuilding): 2 caminos gratis. Punto de victoria (victoryPoint): 1 punto oculto, no se «juega».
+// Una carta por turno, y no la que se compró ese mismo turno. Todas se pueden jugar antes o después de tirar los dados.
 
 import { roadPlaces } from './build';
 import { updateLargestArmy } from './awards';
@@ -35,15 +35,17 @@ const canPlay = (s: GameState, player: PlayerId, kind: DevCardKind): boolean => 
 /** Recursos que el banco todavía tiene (los que se pueden pedir con Buena cosecha). */
 const bankHas = (s: GameState): Resource[] => RESOURCES.filter((r) => s.bank[r] > 0);
 
+/** Cuántas cartas se toman con Buena cosecha: 2, o las que queden si el banco casi no tiene. */
+export const plentyCount = (s: GameState): number => Math.min(2, RESOURCES.reduce((n, r) => n + s.bank[r], 0));
+
 /** Qué cartas puede jugar el jugador en la fase actual (para `legalActions`). */
 export function devPlayOptions(s: GameState, player: PlayerId): ('playKnight' | 'playMonopoly' | 'playYearOfPlenty' | 'playRoadBuilding')[] {
   const out: ('playKnight' | 'playMonopoly' | 'playYearOfPlenty' | 'playRoadBuilding')[] = [];
   const phase = s.phase.kind;
   if (phase !== 'roll' && phase !== 'main') return out;
   if (canPlay(s, player, 'knight')) out.push('playKnight');
-  if (phase !== 'main') return out; // antes de tirar solo el Gaucho
   if (canPlay(s, player, 'monopoly')) out.push('playMonopoly');
-  if (canPlay(s, player, 'yearOfPlenty') && bankHas(s).reduce((n, r) => n + s.bank[r], 0) >= 2) out.push('playYearOfPlenty');
+  if (canPlay(s, player, 'yearOfPlenty') && plentyCount(s) > 0) out.push('playYearOfPlenty');
   if (canPlay(s, player, 'roadBuilding') && roadPlaces(s, player).length > 0) out.push('playRoadBuilding');
   return out;
 }
@@ -90,7 +92,7 @@ export function playKnight(s: GameState, player: PlayerId, events: GameEvent[]):
 }
 
 export function playMonopoly(s: GameState, player: PlayerId, resource: Resource, events: GameEvent[]): Err {
-  if (s.phase.kind !== 'main') return bad('wrong-phase', 'Esa carta se juega después de tirar los dados.');
+  if (s.phase.kind !== 'roll' && s.phase.kind !== 'main') return bad('wrong-phase', 'Ahora no se puede jugar esa carta.');
   if (!RESOURCES.includes(resource)) return bad('invalid-target', 'Ese recurso no existe.');
   const err = spend(s, player, 'monopoly');
   if (err) return err;
@@ -105,10 +107,12 @@ export function playMonopoly(s: GameState, player: PlayerId, resource: Resource,
   return null;
 }
 
-export function playYearOfPlenty(s: GameState, player: PlayerId, resources: [Resource, Resource], events: GameEvent[]): Err {
-  if (s.phase.kind !== 'main') return bad('wrong-phase', 'Esa carta se juega después de tirar los dados.');
-  if (!Array.isArray(resources) || resources.length !== 2 || !resources.every((r) => RESOURCES.includes(r))) {
-    return bad('invalid-target', 'Tenés que elegir 2 recursos.');
+export function playYearOfPlenty(s: GameState, player: PlayerId, resources: Resource[], events: GameEvent[]): Err {
+  if (s.phase.kind !== 'roll' && s.phase.kind !== 'main') return bad('wrong-phase', 'Ahora no se puede jugar esa carta.');
+  const count = plentyCount(s);
+  if (count === 0) return bad('bank-empty', 'El banco no tiene cartas.');
+  if (!Array.isArray(resources) || resources.length !== count || !resources.every((r) => RESOURCES.includes(r))) {
+    return bad('invalid-target', count === 2 ? 'Tenés que elegir 2 recursos.' : 'El banco solo tiene 1 carta: elegí 1 recurso.');
   }
   const need = new Map<Resource, number>();
   for (const r of resources) need.set(r, (need.get(r) ?? 0) + 1);
@@ -121,11 +125,12 @@ export function playYearOfPlenty(s: GameState, player: PlayerId, resources: [Res
 }
 
 export function playRoadBuilding(s: GameState, player: PlayerId, events: GameEvent[]): Err {
-  if (s.phase.kind !== 'main') return bad('wrong-phase', 'Esa carta se juega después de tirar los dados.');
+  const phase = s.phase.kind;
+  if (phase !== 'roll' && phase !== 'main') return bad('wrong-phase', 'Ahora no se puede jugar esa carta.');
   if (roadPlaces(s, player).length === 0) return bad('no-pieces-left', 'No tenés dónde poner caminos.');
   const err = spend(s, player, 'roadBuilding');
   if (err) return err;
-  s.phase = { kind: 'roadBuilding', left: Math.min(2, s.config.maxPieces.roads - pieceCounts(s, player).roads) };
+  s.phase = { kind: 'roadBuilding', left: Math.min(2, s.config.maxPieces.roads - pieceCounts(s, player).roads), after: phase };
   events.push({ type: 'RoadBuildingPlayed', player });
   return null;
 }

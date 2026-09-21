@@ -39,6 +39,8 @@ export class LocalSession implements GameSession {
   ) {
     if (opts.bots?.[0]) throw new Error('LocalSession: el primer asiento tiene que ser humano');
     this.state = createGame(names, seed, config);
+    const bots = opts.bots;
+    if (bots?.[this.state.turn]) this.state = playBots(this.state, (p) => bots[p], opts.rng ?? Math.random, opts.bot).state; // si el sorteo le da la apertura a un bot, juega ya
   }
 
   /** Quién mira: en la partida contra bots, el humano (asiento 0); en la de varios en la misma pantalla, quien tiene el turno. */

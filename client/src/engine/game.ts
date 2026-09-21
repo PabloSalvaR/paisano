@@ -4,9 +4,9 @@
 import { topology } from './board';
 import { buildCity, buildRoad, buildSettlement, cityOptions, roadOptions, roadPlaces, settlementOptions } from './build';
 import { defaultConfig } from './config';
-import { buyDevCard, devPlayOptions, playKnight, playMonopoly, playRoadBuilding, playYearOfPlenty, shuffledDeck, yearOfPlentyOptions } from './devcards';
+import { buyDevCard, devPlayOptions, playKnight, playMonopoly, playRoadBuilding, playYearOfPlenty, plentyCount, shuffledDeck, yearOfPlentyOptions } from './devcards';
 import { rollDiceFor } from './dice';
-import { bad, canAfford, canSettleAt, emptyDev, emptyHand, give, type Err } from './helpers';
+import { bad, canAfford, canSettleAt, checkWin, emptyDev, emptyHand, give, type Err } from './helpers';
 import { generateMap, RESOURCES, type Resource } from './map';
 import { mulberry32 } from './rng';
 import { bankTrade, bankTradeOptions } from './trade';
@@ -33,6 +33,7 @@ export function createGame(names: string[], seed: number, config?: Partial<GameC
   const map = generateMap(topo, mulberry32(seed));
   const bank = emptyHand();
   for (const r of RESOURCES) bank[r] = cfg.bankPerResource;
+  const first = cfg.firstPlayer ?? Math.floor(mulberry32((seed ^ 0x1b873593) | 0)() * names.length); // flujo aparte, como los demás
   return {
     config: cfg,
     map,
@@ -42,7 +43,8 @@ export function createGame(names: string[], seed: number, config?: Partial<GameC
     edgeRoads: topo.edges.map(() => null),
     robber: map.desert,
     phase: { kind: 'setup', step: 0, part: 'settlement', lastSettlement: null },
-    turn: 0,
+    first,
+    turn: first,
     dice: { seed: (seed ^ 0x5bd1e995) | 0, rolls: 0 }, // flujos de azar separados del del mapa
     random: { seed: (seed ^ 0x2545f491) | 0, count: 0 },
     devDeck: shuffledDeck(cfg.devDeck, (seed ^ 0x3c6ef372) | 0), // flujo aparte, igual que dados y robos
@@ -52,9 +54,13 @@ export function createGame(names: string[], seed: number, config?: Partial<GameC
   };
 }
 
-/** Jugador que actúa en el paso `step` de la colocación inicial: 0..n-1 y luego n-1..0 (el último juega dos veces seguidas). */
-export function setupPlayer(step: number, players: number): PlayerId {
-  return step < players ? step : 2 * players - 1 - step;
+/**
+ * Jugador que actúa en el paso `step` de la colocación inicial: desde `first` en sentido horario (el orden de mesa) y
+ * después al revés (el último juega dos veces seguidas). Con first = 0: 0..n-1 y luego n-1..0.
+ */
+export function setupPlayer(step: number, players: number, first = 0): PlayerId {
+  const k = step < players ? step : 2 * players - 1 - step;
+  return (first + k) % players;
 }
 
 // ---------------------------------------------------------------- acciones legales
@@ -71,7 +77,7 @@ export function legalActions(state: GameState, player: PlayerId): LegalAction[] 
       return [{ type: 'placeRoad', edges: topo.vertices[phase.lastSettlement!].edges.filter((e) => state.edgeRoads[e] === null) }];
     }
     case 'roll':
-      return [{ type: 'rollDice' }, ...devActions(state, player)]; // antes de tirar solo se puede jugar el Gaucho
+      return [{ type: 'rollDice' }, ...devActions(state, player)]; // antes de tirar también se puede jugar una carta de desarrollo
     case 'main': {
       const actions: LegalAction[] = [];
       const roads = roadOptions(state, player);
@@ -101,7 +107,7 @@ export function legalActions(state: GameState, player: PlayerId): LegalAction[] 
 /** Las cartas de desarrollo que el jugador puede jugar en la fase actual. */
 function devActions(state: GameState, player: PlayerId): LegalAction[] {
   return devPlayOptions(state, player).map((type): LegalAction => {
-    if (type === 'playYearOfPlenty') return { type, resources: yearOfPlentyOptions(state) };
+    if (type === 'playYearOfPlenty') return { type, resources: yearOfPlentyOptions(state), count: plentyCount(state) };
     return { type };
   });
 }
@@ -166,16 +172,16 @@ function run(s: GameState, cmd: Command, events: GameEvent[]): Err {
 
 function placeSettlement(s: GameState, player: PlayerId, vertex: number, events: GameEvent[]): Err {
   const phase = s.phase;
-  if (phase.kind !== 'setup' || phase.part !== 'settlement') return bad('wrong-phase', 'Ahora no corresponde colocar un poblado.');
+  if (phase.kind !== 'setup' || phase.part !== 'settlement') return bad('wrong-phase', 'Ahora no corresponde colocar una casa.');
   const topo = topology();
   if (!Number.isInteger(vertex) || vertex < 0 || vertex >= topo.vertices.length) return bad('invalid-vertex', 'Ese vértice no existe.');
   if (s.vertexBuildings[vertex] !== null) return bad('occupied', 'Ya hay una pieza en ese vértice.');
-  if (!canSettleAt(s, vertex)) return bad('too-close', 'Hay que dejar al menos dos caminos de distancia a otro poblado o ciudad.');
+  if (!canSettleAt(s, vertex)) return bad('too-close', 'Hay que dejar al menos dos caminos de distancia a otra casa o estancia.');
 
   s.vertexBuildings[vertex] = { player, city: false };
   events.push({ type: 'SettlementBuilt', player, vertex });
 
-  // El 2.º poblado (segunda vuelta) da un recurso por cada casilla que toca; el desierto no da nada.
+  // La 2.ª casa (segunda vuelta) da un recurso por cada casilla que toca; el desierto no da nada.
   if (phase.step >= s.players.length) {
     const gains: Gain[] = [];
     for (const t of topo.vertices[vertex].tiles) {
@@ -198,7 +204,7 @@ function placeRoad(s: GameState, player: PlayerId, edge: number, events: GameEve
   if (s.edgeRoads[edge] !== null) return bad('occupied', 'Ya hay un camino ahí.');
   const e = topo.edges[edge];
   if (e.a !== phase.lastSettlement && e.b !== phase.lastSettlement) {
-    return bad('not-connected', 'El camino inicial tiene que salir del poblado que acabás de colocar.');
+    return bad('not-connected', 'El camino inicial tiene que salir de la casa que acabás de colocar.');
   }
 
   s.edgeRoads[edge] = player;
@@ -207,12 +213,12 @@ function placeRoad(s: GameState, player: PlayerId, edge: number, events: GameEve
   const n = s.players.length;
   const step = phase.step + 1;
   if (step === 2 * n) {
-    s.phase = { kind: 'roll' }; // termina la colocación: empieza la primera ronda de dados desde el jugador 1
-    s.turn = 0;
-    events.push({ type: 'TurnChanged', player: 0, phase: 'roll' });
+    s.phase = { kind: 'roll' }; // termina la colocación: el primer turno es de quien la abrió y sigue el sentido horario
+    s.turn = s.first;
+    events.push({ type: 'TurnChanged', player: s.first, phase: 'roll' });
   } else {
     s.phase = { kind: 'setup', step, part: 'settlement', lastSettlement: null };
-    s.turn = setupPlayer(step, n);
+    s.turn = setupPlayer(step, n, s.first);
     events.push({ type: 'TurnChanged', player: s.turn, phase: 'setup' });
   }
   return null;
@@ -241,14 +247,15 @@ function endTurn(s: GameState, player: PlayerId, events: GameEvent[]): Err {
   s.turn = (player + 1) % s.players.length;
   s.phase = { kind: 'roll' };
   events.push({ type: 'TurnChanged', player: s.turn, phase: 'roll' });
+  checkWin(s, s.turn, events); // quien ya llegó a los puntos (por un reconocimiento que ganó en turno ajeno) gana al llegarle el turno, sin tirar
   return null;
 }
 
 // ---------------------------------------------------------------- producción
 
 /**
- * Producción de una tirada (distinta de 7): cada casilla con esa ficha, salvo la del ladrón, da 1 carta por poblado
- * y 2 por ciudad. Si el banco no alcanza para un recurso: si lo cobra un solo jugador recibe lo que quede;
+ * Producción de una tirada (distinta de 7): cada casilla con esa ficha, salvo la del ladrón, da 1 carta por casa
+ * y 2 por estancia. Si el banco no alcanza para un recurso: si lo cobra un solo jugador recibe lo que quede;
  * si lo cobran varios, nadie recibe ese recurso (regla oficial).
  */
 function produce(s: GameState, total: number): Gain[] {

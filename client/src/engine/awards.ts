@@ -1,12 +1,12 @@
 // Reconocimientos con puntos: la ruta más larga y la montonera más grande.
-// Se recalculan cuando algo puede cambiarlos (un camino, un poblado que corta, un caballero) y avisan solo si cambia quién los tiene.
+// Se recalculan cuando algo puede cambiarlos (un camino, una casa que corta, un caballero) y avisan solo si cambia quién los tiene.
 
 import { topology } from './board';
 import type { GameEvent, GameState, PlayerId } from './types';
 
 /**
  * Largo del camino continuo más largo del jugador: aristas suyas encadenadas, sin repetir ninguna (un ciclo cuenta todas sus
- * aristas). Un poblado o ciudad rival en un vértice corta el camino: se puede llegar hasta ahí, pero no seguir.
+ * aristas). Una casa o estancia rival en un vértice corta el camino: se puede llegar hasta ahí, pero no seguir.
  */
 export function longestRoad(s: GameState, player: PlayerId): number {
   const topo = topology();

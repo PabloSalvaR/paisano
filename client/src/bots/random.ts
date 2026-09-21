@@ -45,7 +45,7 @@ export function commandFor(a: LegalAction, player: PlayerId, hand: Hand, rng: Rn
     case 'playMonopoly':
       return { type: a.type, player, resource: pick(RESOURCES) };
     case 'playYearOfPlenty':
-      return { type: a.type, player, resources: [pick(a.resources), pick(a.resources)] };
+      return { type: a.type, player, resources: Array.from({ length: a.count }, () => pick(a.resources)) };
     case 'rollDice':
     case 'endTurn':
     case 'buyDevCard':

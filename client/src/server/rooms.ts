@@ -42,6 +42,9 @@ const MAX_TRIES = 4;
 const MAX_NAME = 20;
 
 /** Opciones que se inyectan en los tests: semilla y reglas de la partida, azar y elección de los bots. */
+/** Reglas por defecto de las salas reales: quién abre se sortea. Los tests que van por HTTP (sin opciones) lo fijan en 0. */
+export const gameDefaults: Partial<GameConfig> = { firstPlayer: null };
+
 export interface PlayOptions {
   seed?: number;
   config?: Partial<GameConfig>;
@@ -153,7 +156,7 @@ export async function startGame(store: RoomStore, roomId: string, token: string,
     if (me !== 0) return { code: 'not-host', message: 'Solo quien creó la sala puede empezar.' };
     if (room.status !== 'lobby') return { code: 'already-started', message: 'La partida ya empezó.' };
     if (room.seats.length < MIN_SEATS) return { code: 'not-enough-players', message: `Hacen falta al menos ${MIN_SEATS} jugadores.` };
-    room.state = createGame(room.seats.map((s) => s.name), opts.seed ?? newSeed(), opts.config);
+    room.state = createGame(room.seats.map((s) => s.name), opts.seed ?? newSeed(), { ...gameDefaults, ...opts.config });
     room.status = 'playing';
     runBots(room, opts);
     return null;

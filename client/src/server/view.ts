@@ -1,9 +1,9 @@
 // Vista filtrada: lo que un jugador puede ver de la sala. Es lo único que sale del servidor.
 // Se oculta: las manos rivales (solo la cantidad), las semillas de dados y robos (permitirían predecir el azar),
 // el recurso robado cuando el jugador no es ni el ladrón ni la víctima, y de las cartas de desarrollo el mazo (solo se
-// cuenta cuántas quedan), las cartas ajenas (solo cuántas), qué carta compró otro y los puntos de Estancia ajenos.
+// cuenta cuántas quedan), las cartas ajenas (solo cuántas), qué carta compró otro y los puntos de victoria ocultos ajenos.
 
-import { legalActions, publicVictoryPoints, victoryPoints } from '../engine';
+import { legalActions, longestRoad as roadLengthOf, publicVictoryPoints, victoryPoints } from '../engine';
 import type { DevCardKind, DevHand, GameEvent, GameState, Hand, LegalAction, PlayerId, Resource } from '../engine';
 import type { LoggedEvent, Room } from './room';
 
@@ -12,7 +12,8 @@ export interface PlayerView {
   handCount: number;
   devCount: number; // cartas de desarrollo en la mano (cuántas, no cuáles)
   knights: number; // caballeros ya jugados (público)
-  points: number; // los que ve todo el mundo; el de quien mira incluye sus Estancias
+  roadLength: number; // su ruta más larga hoy (público: los caminos están a la vista)
+  points: number; // los que ve todo el mundo; el de quien mira incluye sus Puntos de victoria
 }
 
 export type GameView = Pick<GameState, 'config' | 'map' | 'bank' | 'vertexBuildings' | 'edgeRoads' | 'robber' | 'phase' | 'turn' | 'longestRoad' | 'largestArmy'> & {
@@ -63,6 +64,7 @@ export function gameView(state: GameState, me: PlayerId): GameView {
       handCount: Object.values(p.hand).reduce((n, c) => n + c, 0),
       devCount: Object.values(p.dev).reduce((n, c) => n + c, 0),
       knights: p.knightsPlayed,
+      roadLength: roadLengthOf(state, id),
       points: id === me ? victoryPoints(state, id) : publicVictoryPoints(state, id),
     })),
     hand: { ...players[me].hand },

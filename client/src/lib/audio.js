@@ -117,7 +117,7 @@ export function createAudio() {
 
   // ---------------------------------------------------------------- piezas
   // Una pieza de madera que se apoya con suavidad: "tum" redondo y grave, sin el chasquido seco (arranque suave, sin ruido agudo).
-  // El camino es liviano; el poblado, más lleno; la ciudad, más grave y con un segundo apoyo tenue.
+  // El camino es liviano; la casa, más llena; la estancia, más grave y con un segundo apoyo tenue.
   var LAND = { road: [225, 0.32, 0.13], settlement: [165, 0.42, 0.17], city: [120, 0.52, 0.22] }; // [frecuencia, volumen, duración]
   function thump(t, freq, vol, dur) {
     var o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
@@ -160,6 +160,53 @@ export function createAudio() {
     click(t + 0.09, 0.1, 620);
   }
 
+  // ---------------------------------------------------------------- ladrón y victoria
+  // Salió un 7: un retumbo grave y corto (dos golpes sordos que bajan de tono), a bajo volumen para que no cansen.
+  function seven() {
+    if (!ctx) return;
+    var t = ctx.currentTime + 0.005;
+    thump(t, 95, 0.3, 0.22); thump(t + 0.2, 72, 0.26, 0.3);
+  }
+  // Otro jugador mueve el ladrón: un golpecito seco y bajo.
+  function robberMoved() {
+    if (!ctx) return;
+    var t = ctx.currentTime + 0.005;
+    thump(t, 150, 0.3, 0.1); click(t, 0.1, 340);
+  }
+  // Nota suave de campanita (seno + armónico) para las melodías cortas.
+  function bell(t, freq, vol, dur) {
+    [1, 2].forEach(function (m, i) {
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = freq * m;
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol / (i + 1.6), t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+    });
+  }
+  // Te robaron una carta: tres notas que bajan (mi, do, la), tristes pero cortas.
+  function robbed() {
+    if (!ctx) return;
+    var t = ctx.currentTime + 0.05;
+    bell(t, 659, 0.2, 0.32); bell(t + 0.17, 523, 0.2, 0.32); bell(t + 0.34, 392, 0.22, 0.55);
+  }
+  // Trompeta: diente de sierra con filtro que se abre al atacar (el "brillo" del metal) y un vibrato leve al sostener.
+  function trumpet(t, freq, dur, vol) {
+    var o = ctx.createOscillator(), o2 = ctx.createOscillator(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
+    o.type = 'sawtooth'; o2.type = 'square'; o.frequency.value = freq; o2.frequency.value = freq * 1.003;
+    lp.type = 'lowpass'; lp.Q.value = 2;
+    lp.frequency.setValueAtTime(freq * 2, t); lp.frequency.exponentialRampToValueAtTime(freq * 7, t + 0.05); lp.frequency.exponentialRampToValueAtTime(freq * 3.5, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.03); g.gain.setValueAtTime(vol * 0.85, t + dur * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    if (dur > 0.5) { var lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 5.5; lg.gain.value = freq * 0.006; lfo.connect(lg); lg.connect(o.frequency); lg.connect(o2.frequency); lfo.start(t + 0.25); lfo.stop(t + dur); }
+    o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(master);
+    o.start(t); o2.start(t); o.stop(t + dur + 0.02); o2.stop(t + dur + 0.02);
+  }
+  // Ganaste: "ta-ta-ta-taaaan" (sol, sol, sol, do agudo largo).
+  function victory() {
+    if (!ctx) return;
+    var t = ctx.currentTime + 0.05;
+    trumpet(t, 392, 0.16, 0.16); trumpet(t + 0.2, 392, 0.16, 0.16); trumpet(t + 0.4, 392, 0.16, 0.16); trumpet(t + 0.62, 523, 1.5, 0.2);
+    trumpet(t + 0.62, 659, 1.5, 0.1); trumpet(t + 0.62, 784, 1.5, 0.08); // el acorde se abre sobre la última nota
+  }
+
   // ---------------------------------------------------------------- control
   function applyGain() { if (master) fade(master.gain, volume, 0.05); }
   // Llamar desde un gesto del usuario: crea el contexto (una sola vez) y lo reanuda.
@@ -198,6 +245,10 @@ export function createAudio() {
     land: land,
     trade: trade,
     card: card,
+    seven: seven,
+    robberMoved: robberMoved,
+    robbed: robbed,
+    victory: victory,
     dispose: function () {
       disposed = true; clearTimeout(birdTimer); clearTimeout(cricketTimer);
       document.removeEventListener('visibilitychange', onVisibility);

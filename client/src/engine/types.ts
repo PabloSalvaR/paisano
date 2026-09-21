@@ -6,7 +6,7 @@ export type PlayerId = number; // índice del jugador en el orden de mesa (0 = p
 export type Hand = Record<Resource, number>;
 export type Cost = Partial<Record<Resource, number>>;
 
-/** Cartas de desarrollo. En pantalla: Gaucho (knight), Acopio (monopoly), Buena cosecha (yearOfPlenty), Vialidad (roadBuilding), Estancia (victoryPoint). */
+/** Cartas de desarrollo. En pantalla: Gaucho (knight), Acopio (monopoly), Buena cosecha (yearOfPlenty), Vialidad (roadBuilding), Punto de victoria (victoryPoint). */
 export type DevCardKind = 'knight' | 'monopoly' | 'yearOfPlenty' | 'roadBuilding' | 'victoryPoint';
 export type DevHand = Record<DevCardKind, number>;
 
@@ -22,6 +22,7 @@ export interface GameConfig {
   longestRoadMin: number; // largo mínimo para el reconocimiento de la ruta más larga
   largestArmyMin: number; // caballeros jugados mínimos para el de la montonera más grande
   awardPoints: number; // puntos de cada reconocimiento
+  firstPlayer: PlayerId | null; // quién abre la colocación y la partida; null = se sortea con la semilla
 }
 
 export interface PlayerState {
@@ -47,7 +48,7 @@ export type Phase =
   | { kind: 'discard'; roller: PlayerId; queue: { player: PlayerId; count: number }[] }
   | { kind: 'moveRobber'; after: 'roll' | 'main' } // `after`: fase a la que se vuelve (con un caballero antes de tirar, `roll`)
   | { kind: 'steal'; victims: PlayerId[]; after: 'roll' | 'main' } // hay que elegir a quién robarle (más de un candidato)
-  | { kind: 'roadBuilding'; left: number } // carta Vialidad: caminos gratis que faltan poner
+  | { kind: 'roadBuilding'; left: number; after: 'roll' | 'main' } // carta Vialidad: caminos gratis que faltan poner; `after`: fase a la que se vuelve (antes de tirar, `roll`)
 
   | { kind: 'finished'; winner: PlayerId };
 
@@ -60,6 +61,7 @@ export interface GameState {
   edgeRoads: (PlayerId | null)[]; // por id de arista
   robber: number; // id de casilla
   phase: Phase;
+  first: PlayerId; // quien abrió la colocación inicial (y el primer turno); el orden de mesa es el horario
   turn: PlayerId; // a quién le toca actuar
   dice: { seed: number; rolls: number }; // cada tirada sale de seed + contador (ver dice.ts)
   random: { seed: number; count: number }; // otros sorteos (robo de cartas): mismo esquema que los dados, flujo aparte
@@ -85,7 +87,7 @@ export type Command =
   | { type: 'buyDevCard'; player: PlayerId }
   | { type: 'playKnight'; player: PlayerId }
   | { type: 'playMonopoly'; player: PlayerId; resource: Resource }
-  | { type: 'playYearOfPlenty'; player: PlayerId; resources: [Resource, Resource] }
+  | { type: 'playYearOfPlenty'; player: PlayerId; resources: Resource[] } // 2 recursos (1 si el banco solo tiene 1)
   | { type: 'playRoadBuilding'; player: PlayerId }
   | { type: 'endTurn'; player: PlayerId };
 
@@ -168,6 +170,6 @@ export type LegalAction =
   | { type: 'buyDevCard' }
   | { type: 'playKnight' }
   | { type: 'playMonopoly' } // el recurso lo elige el jugador (cualquiera de los 5)
-  | { type: 'playYearOfPlenty'; resources: Resource[] } // recursos que el banco tiene
+  | { type: 'playYearOfPlenty'; resources: Resource[]; count: number } // recursos que el banco tiene y cuántos hay que tomar (2, o 1 si queda una sola carta)
   | { type: 'playRoadBuilding' }
   | { type: 'endTurn' };

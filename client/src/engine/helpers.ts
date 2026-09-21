@@ -12,7 +12,7 @@ export const emptyHand = (): Hand => ({ forest: 0, hills: 0, pasture: 0, fields:
 export const emptyDev = (): DevHand => ({ knight: 0, monopoly: 0, yearOfPlenty: 0, roadBuilding: 0, victoryPoint: 0 });
 export const handTotal = (h: Hand): number => RESOURCES.reduce((n, r) => n + h[r], 0);
 
-/** Un poblado necesita el vértice libre y a 2 aristas o más de cualquier otro poblado o ciudad (regla de distancia). */
+/** Una casa necesita el vértice libre y a 2 aristas o más de cualquier otra casa o estancia (regla de distancia). */
 export function canSettleAt(state: GameState, vertex: number): boolean {
   const v = topology().vertices[vertex];
   return !!v && state.vertexBuildings[vertex] === null && v.neighbors.every((n) => state.vertexBuildings[n] === null);
@@ -26,14 +26,14 @@ export function pieceCounts(state: GameState, player: PlayerId) {
   };
 }
 
-/** Puntos que ven todos: poblados (1), ciudades (2) y los reconocimientos de ruta y montonera. */
+/** Puntos que ven todos: casas (1), estancias (2) y los reconocimientos de ruta y montonera. */
 export function publicVictoryPoints(state: GameState, player: PlayerId): number {
   const c = pieceCounts(state, player);
   const awards = (state.longestRoad.holder === player ? 1 : 0) + (state.largestArmy.holder === player ? 1 : 0);
   return c.settlements + 2 * c.cities + awards * state.config.awardPoints;
 }
 
-/** Puntos reales: los públicos más las cartas de Estancia, que solo conoce su dueño. */
+/** Puntos reales: los públicos más las cartas de Punto de victoria, que solo conoce su dueño. */
 export function victoryPoints(state: GameState, player: PlayerId): number {
   return publicVictoryPoints(state, player) + state.players[player].dev.victoryPoint;
 }

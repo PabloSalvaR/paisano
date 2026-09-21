@@ -5,11 +5,14 @@ import { randomBot } from '../bots/random';
 import { mulberry32 } from '../engine';
 import type { Command } from '../engine';
 import { api } from '../server/api';
+import { gameDefaults } from '../server/rooms';
 import { MemoryStore } from '../server/store';
 import type { ViewEvent } from '../server/view';
 import { forgetIdentity, lastName, loadIdentity, saveIdentity } from './identity';
 import { RemoteSession } from './remote';
 import { roomsApi, type FetchFn } from './roomsApi';
+
+gameDefaults.firstPlayer = 0; // los tests suponen que abre quien creó la sala
 
 function fakeFetch(store: MemoryStore): FetchFn & { calls: string[] } {
   const calls: string[] = [];

@@ -333,3 +333,48 @@ describe('dados y producción', () => {
     expect(r2.state.bank[two.res]).toBe(1);
   });
 });
+
+describe('quién abre la partida', () => {
+  it('con first = 2: fase 1 horaria 2-3-0-1 y fase 2 antihoraria 1-0-3-2; el primer turno es del 2', () => {
+    expect([0, 1, 2, 3, 4, 5, 6, 7].map((i) => setupPlayer(i, 4, 2))).toEqual([2, 3, 0, 1, 1, 0, 3, 2]);
+    const log: { player: PlayerId; kind: string }[] = [];
+    const s = playSetup(createGame(NAMES, 7, { firstPlayer: 2 }), log);
+    expect(log.filter((l) => l.kind === 'settlement').map((l) => l.player)).toEqual([2, 3, 0, 1, 1, 0, 3, 2]);
+    expect(s.first).toBe(2);
+    expect(s.turn).toBe(2);
+    expect(s.phase).toEqual({ kind: 'roll' });
+  });
+
+  it('con firstPlayer null se sortea con la semilla: reproducible y con todos los asientos posibles', () => {
+    const firsts = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((seed) => createGame(NAMES, seed, { firstPlayer: null }).first);
+    expect(firsts).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((seed) => createGame(NAMES, seed, { firstPlayer: null }).first));
+    expect(new Set(firsts).size).toBeGreaterThan(1);
+    firsts.forEach((f) => expect(f >= 0 && f < NAMES.length).toBe(true));
+  });
+});
+
+describe('victoria al empezar el turno', () => {
+  const almostWon = (): GameState => {
+    const s = playSetup(createGame(NAMES, 7, { victoryPoints: 3 })); // todos tienen 2 puntos
+    s.phase = { kind: 'main' };
+    s.turn = 0;
+    s.largestArmy = { holder: 2, size: 3 }; // el jugador 2 llegó a 4 por un reconocimiento, sin que fuera su turno
+    return s;
+  };
+
+  it('quien ya tiene los puntos gana al llegarle el turno, sin tirar los dados', () => {
+    let s = almostWon();
+    s = must(s, { type: 'endTurn', player: 0 }).state; // le toca al 1: tiene 2, la partida sigue
+    expect(s.phase).toEqual({ kind: 'roll' });
+    s.phase = { kind: 'main' };
+    const r = must(s, { type: 'endTurn', player: 1 }); // le toca al 2: tiene 4
+    expect(r.state.phase).toEqual({ kind: 'finished', winner: 2 });
+    expect(r.events.map((e) => e.type)).toEqual(['TurnChanged', 'GameWon']);
+  });
+
+  it('en el turno de otro no gana: solo cuando le llega el suyo', () => {
+    const s = almostWon();
+    expect(s.phase.kind).toBe('main');
+    expect(s.turn).toBe(0);
+  });
+});

@@ -1,4 +1,4 @@
-// Construcción en el turno normal: caminos, poblados y ciudades.
+// Construcción en el turno normal: caminos, casas y estancias.
 
 import { topology } from './board';
 import { updateLongestRoad } from './awards';
@@ -7,7 +7,7 @@ import type { GameEvent, GameState, Phase, PlayerId } from './types';
 
 // ---------------------------------------------------------------- opciones (qué se puede construir y dónde)
 
-/** ¿La arista se conecta con la red del jugador? Sirve un poblado/ciudad propio en un extremo, o un camino propio que
+/** ¿La arista se conecta con la red del jugador? Sirve una casa/estancia propia en un extremo, o un camino propio que
  *  llegue a un extremo que no esté ocupado por un rival (un rival "corta" el camino). */
 function roadConnects(s: GameState, player: PlayerId, edge: number): boolean {
   const topo = topology();
@@ -55,11 +55,12 @@ export function cityOptions(s: GameState, player: PlayerId): number[] {
 /** Tras cada camino gratis: si no queda ninguno por poner, o no hay dónde, se vuelve a la fase principal. */
 export function afterFreeRoad(s: GameState, player: PlayerId, events: GameEvent[]): void {
   if (s.phase.kind !== 'roadBuilding') return;
+  const { after } = s.phase;
   const left = s.phase.left - 1;
   updateLongestRoad(s, events);
   checkWin(s, player, events);
   if ((s.phase as Phase).kind === 'finished') return; // ganó con el reconocimiento
-  s.phase = left > 0 && roadPlaces(s, player).length > 0 ? { kind: 'roadBuilding', left } : { kind: 'main' };
+  s.phase = left > 0 && roadPlaces(s, player).length > 0 ? { kind: 'roadBuilding', left, after } : { kind: after };
 }
 
 export function buildRoad(s: GameState, player: PlayerId, edge: number, events: GameEvent[]): Err {
@@ -68,7 +69,7 @@ export function buildRoad(s: GameState, player: PlayerId, edge: number, events: 
   const topo = topology();
   if (!Number.isInteger(edge) || edge < 0 || edge >= topo.edges.length) return bad('invalid-edge', 'Esa arista no existe.');
   if (s.edgeRoads[edge] !== null) return bad('occupied', 'Ya hay un camino ahí.');
-  if (!roadConnects(s, player, edge)) return bad('not-connected', 'El camino tiene que salir de tu red (un poblado, una ciudad u otro camino tuyo).');
+  if (!roadConnects(s, player, edge)) return bad('not-connected', 'El camino tiene que salir de tu red (una casa, una estancia u otro camino tuyo).');
   if (pieceCounts(s, player).roads >= s.config.maxPieces.roads) return bad('no-pieces-left', 'No te quedan caminos.');
   const cost = s.config.costs.road;
   if (!free && !canAfford(s.players[player].hand, cost)) return bad('insufficient-resources', 'Un camino cuesta 1 madera y 1 ladrillo.');
@@ -89,15 +90,15 @@ export function buildSettlement(s: GameState, player: PlayerId, vertex: number, 
   const topo = topology();
   if (!Number.isInteger(vertex) || vertex < 0 || vertex >= topo.vertices.length) return bad('invalid-vertex', 'Ese vértice no existe.');
   if (s.vertexBuildings[vertex] !== null) return bad('occupied', 'Ya hay una pieza en ese vértice.');
-  if (!canSettleAt(s, vertex)) return bad('too-close', 'Hay que dejar al menos dos caminos de distancia a otro poblado o ciudad.');
-  if (!settlementConnects(s, player, vertex)) return bad('not-connected', 'El poblado tiene que estar al final de un camino tuyo.');
-  if (pieceCounts(s, player).settlements >= s.config.maxPieces.settlements) return bad('no-pieces-left', 'No te quedan poblados (mejorá alguno a ciudad).');
+  if (!canSettleAt(s, vertex)) return bad('too-close', 'Hay que dejar al menos dos caminos de distancia a otra casa o estancia.');
+  if (!settlementConnects(s, player, vertex)) return bad('not-connected', 'La casa tiene que estar al final de un camino tuyo.');
+  if (pieceCounts(s, player).settlements >= s.config.maxPieces.settlements) return bad('no-pieces-left', 'No te quedan casas (mejorá alguna a estancia).');
   const cost = s.config.costs.settlement;
-  if (!canAfford(s.players[player].hand, cost)) return bad('insufficient-resources', 'Un poblado cuesta 1 madera, 1 ladrillo, 1 vaca y 1 maíz.');
+  if (!canAfford(s.players[player].hand, cost)) return bad('insufficient-resources', 'Una casa cuesta 1 madera, 1 ladrillo, 1 vaca y 1 maíz.');
   pay(s, player, cost);
   s.vertexBuildings[vertex] = { player, city: false };
   events.push({ type: 'ResourcesSpent', player, cost }, { type: 'SettlementBuilt', player, vertex });
-  updateLongestRoad(s, events); // un poblado puede cortar el camino de un rival
+  updateLongestRoad(s, events); // una casa puede cortar el camino de un rival
   checkWin(s, player, events);
   return null;
 }
@@ -107,12 +108,12 @@ export function buildCity(s: GameState, player: PlayerId, vertex: number, events
   const topo = topology();
   if (!Number.isInteger(vertex) || vertex < 0 || vertex >= topo.vertices.length) return bad('invalid-vertex', 'Ese vértice no existe.');
   const b = s.vertexBuildings[vertex];
-  if (!b || b.player !== player || b.city) return bad('invalid-target', 'Una ciudad se construye sobre un poblado tuyo.');
-  if (pieceCounts(s, player).cities >= s.config.maxPieces.cities) return bad('no-pieces-left', 'No te quedan ciudades.');
+  if (!b || b.player !== player || b.city) return bad('invalid-target', 'Una estancia se construye sobre una casa tuya.');
+  if (pieceCounts(s, player).cities >= s.config.maxPieces.cities) return bad('no-pieces-left', 'No te quedan estancias.');
   const cost = s.config.costs.city;
-  if (!canAfford(s.players[player].hand, cost)) return bad('insufficient-resources', 'Una ciudad cuesta 2 maíz y 3 piedras.');
+  if (!canAfford(s.players[player].hand, cost)) return bad('insufficient-resources', 'Una estancia cuesta 2 maíz y 3 piedras.');
   pay(s, player, cost);
-  b.city = true; // el poblado vuelve a la reserva del jugador (se cuenta por lo que hay en el tablero)
+  b.city = true; // la casa vuelve a la reserva del jugador (se cuenta por lo que hay en el tablero)
   events.push({ type: 'ResourcesSpent', player, cost }, { type: 'CityBuilt', player, vertex });
   checkWin(s, player, events);
   return null;

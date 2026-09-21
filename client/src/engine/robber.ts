@@ -56,7 +56,7 @@ export function discard(s: GameState, player: PlayerId, cards: Partial<Hand>, ev
   return null;
 }
 
-/** Rivales con poblado o ciudad junto a la casilla y al menos una carta en la mano (a esos se les puede robar). */
+/** Rivales con casa o estancia junto a la casilla y al menos una carta en la mano (a esos se les puede robar). */
 export function robberVictims(s: GameState, mover: PlayerId, tile: number): PlayerId[] {
   const found = new Set<PlayerId>();
   for (const v of topology().tiles[tile].vertices) {
@@ -86,7 +86,7 @@ export function moveRobber(s: GameState, player: PlayerId, tile: number, events:
 export function steal(s: GameState, player: PlayerId, victim: PlayerId, events: GameEvent[]): Err {
   const phase = s.phase;
   if (phase.kind !== 'steal') return bad('wrong-phase', 'Ahora no se roba.');
-  if (!phase.victims.includes(victim)) return bad('invalid-victim', 'Ese jugador no tiene un poblado junto al ladrón (o no tiene cartas).');
+  if (!phase.victims.includes(victim)) return bad('invalid-victim', 'Ese jugador no tiene una casa junto al ladrón (o no tiene cartas).');
   stealFrom(s, player, victim, events);
   s.phase = { kind: phase.after };
   return null;

@@ -31,13 +31,13 @@ export const MARKUP = `
       <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="12" width="26" height="8" rx="2" transform="rotate(-25 16 16)" fill="currentColor"/></svg>
       <span>Camino</span><span class="cost"><i style="--c:#3f8f45"></i><i style="--c:#c96a3b"></i></span>
     </button>
-    <button type="button" data-build="settlement" title="Poblado: 1 madera + 1 ladrillo + 1 vaca + 1 maíz">
+    <button type="button" data-build="settlement" title="Casa: 1 madera + 1 ladrillo + 1 vaca + 1 maíz">
       <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 28V15L16 5l10 10v13z" fill="currentColor"/></svg>
-      <span>Poblado</span><span class="cost"><i style="--c:#3f8f45"></i><i style="--c:#c96a3b"></i><i style="--c:#a7d15c"></i><i style="--c:#e8bf45"></i></span>
+      <span>Casa</span><span class="cost"><i style="--c:#3f8f45"></i><i style="--c:#c96a3b"></i><i style="--c:#a7d15c"></i><i style="--c:#e8bf45"></i></span>
     </button>
-    <button type="button" data-build="city" title="Ciudad: 2 maíz + 3 piedras (mejora un poblado)">
+    <button type="button" data-build="city" title="Estancia: 2 maíz + 3 piedras (mejora una casa)">
       <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 28V17l7-6 7 6v11zM17 28V12l6-8 6 8v16z" fill="currentColor"/></svg>
-      <span>Ciudad</span><span class="cost"><i style="--c:#e8bf45"></i><i style="--c:#e8bf45"></i><i style="--c:#8d949c"></i><i style="--c:#8d949c"></i><i style="--c:#8d949c"></i></span>
+      <span>Estancia</span><span class="cost"><i style="--c:#e8bf45"></i><i style="--c:#e8bf45"></i><i style="--c:#8d949c"></i><i style="--c:#8d949c"></i><i style="--c:#8d949c"></i></span>
     </button>
     <button type="button" id="btnDev" title="Carta de desarrollo: 1 vaca + 1 maíz + 1 piedra">
       <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="7" y="3" width="18" height="26" rx="3.5" fill="none" stroke="currentColor" stroke-width="2.4" transform="rotate(-6 16 16)"/><polygon points="16,9 17.7,13.2 22,13.6 18.8,16.4 19.8,20.7 16,18.4 12.2,20.7 13.2,16.4 10,13.6 14.3,13.2" fill="currentColor" transform="rotate(-6 16 16)"/></svg>
@@ -207,6 +207,16 @@ export function initBoard(opts) {
     // vista por defecto (botón "Centrar"): vuelve con una transición suave; si el usuario toca la cámara se cancela
     var HOME_POS = camera.position.clone(), HOME_TARGET = controls.target.clone(), homing = false;
     controls.addEventListener('start', function () { homing = false; });
+    // Fin de la partida: la cámara gira sola, muy despacio y cambiando de altura y de distancia. Si el usuario toca el tablero se
+    // detiene y retoma a los pocos segundos. Con una partida nueva (o cualquier estado no terminado) vuelve a la vista de siempre.
+    var orbit = { on: false, resumeAt: 0, t: 0 }, orbitSph = new THREE.Spherical(), orbitOff = new THREE.Vector3();
+    function setOrbit(on) {
+      if (orbit.on === on) return;
+      orbit.on = on; orbit.t = 0; orbit.resumeAt = 0;
+      homing = !on; // al cortarla, la cámara vuelve suavemente a la vista inicial
+    }
+    controls.addEventListener('start', function () { orbit.resumeAt = Infinity; });
+    controls.addEventListener('end', function () { orbit.resumeAt = performance.now() + 6000; });
 
     // ------------------------------------------------------------------ materiales
     var allMats = [];
@@ -405,34 +415,121 @@ export function initBoard(opts) {
     // Puro adorno: mate con bombilla, pava de hierro, mazo de cartas españolas y facón. Se ven al alejar la cámara.
     function place(g, x, z, rotY) { g.position.set(x, 0, z); g.rotation.y = rotY || 0; scene.add(g); return g; }
 
+    // Números pseudoaleatorios con semilla: el mate se ve siempre igual (las texturas y las hojuelas no cambian entre cargas).
+    function seeded(seed) { var a = seed | 0; return function () { a = (a + 0x6d2b79f5) | 0; var t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+    // Piel de calabaza: marrón con manchas suaves, vetas finas, puntitos y rayones de uso. Las manchas se repiten a los lados
+    // para que la costura de la vuelta no se note.
+    function gourdCanvas() {
+      var W = 512, H = 256, c = makeCanvas(W, H), x = c.getContext('2d'), rnd = seeded(11), i, k;
+      x.fillStyle = '#7c5127'; x.fillRect(0, 0, W, H);
+      for (i = 0; i < 260; i++) {
+        var bx = rnd() * W, by = rnd() * H, br = 8 + rnd() * 46, dark = rnd() < 0.55;
+        for (k = -1; k <= 1; k++) {
+          var g = x.createRadialGradient(bx + k * W, by, 0, bx + k * W, by, br);
+          g.addColorStop(0, dark ? 'rgba(70,40,14,' + (0.1 + rnd() * 0.16) + ')' : 'rgba(190,130,70,' + (0.08 + rnd() * 0.12) + ')'); g.addColorStop(1, 'rgba(0,0,0,0)');
+          x.fillStyle = g; x.fillRect(bx + k * W - br, by - br, br * 2, br * 2);
+        }
+      }
+      for (i = 0; i < 5200; i++) { x.fillStyle = rnd() < 0.5 ? 'rgba(50,28,10,' + (0.1 + rnd() * 0.2) + ')' : 'rgba(210,160,100,' + (0.08 + rnd() * 0.14) + ')'; x.fillRect(rnd() * W, rnd() * H, 1 + rnd() * 1.6, 1 + rnd() * 1.6); }
+      x.lineCap = 'round';
+      for (i = 0; i < 46; i++) { // vetas y rayones de tanto uso
+        var sx = rnd() * W, sy = rnd() * H, len = 14 + rnd() * 60, an = rnd() * Math.PI;
+        x.strokeStyle = rnd() < 0.6 ? 'rgba(45,25,8,' + (0.12 + rnd() * 0.16) + ')' : 'rgba(215,165,105,' + (0.1 + rnd() * 0.1) + ')'; x.lineWidth = 0.6 + rnd() * 1.1;
+        x.beginPath(); x.moveTo(sx, sy); x.quadraticCurveTo(sx + Math.cos(an) * len * 0.5 + rnd() * 6, sy + Math.sin(an) * len * 0.5 + rnd() * 6, sx + Math.cos(an) * len, sy + Math.sin(an) * len); x.stroke();
+      }
+      return c;
+    }
+
+    // Yerba vista de arriba: fondo oscuro (los huecos entre hojas) cubierto de hojuelas irregulares, de verde oliva a marrón,
+    // con algún palito claro. El mismo lienzo sirve de relieve para que cada hojuela tenga su borde.
+    function yerbaCanvas() {
+      var S = 512, c = makeCanvas(S, S), x = c.getContext('2d'), rnd = seeded(23), i;
+      x.fillStyle = '#48561a'; x.fillRect(0, 0, S, S);
+      var pal = ['#6f8231', '#7f9038', '#5d6f24', '#8d9a43', '#4d5e1c', '#93a04a', '#6a5a2c', '#7a6a34', '#a3ac5c', '#566a20'];
+      for (i = 0; i < 6200; i++) {
+        var px = rnd() * S, py = rnd() * S, len = 3 + rnd() * rnd() * 16, wid = 1.6 + rnd() * 3.4, an = rnd() * Math.PI, stem = rnd() < 0.06;
+        x.save(); x.translate(px, py); x.rotate(an);
+        if (stem) { x.fillStyle = 'rgba(190,180,110,.9)'; x.fillRect(-len * 0.7, -0.7, len * 1.4, 1.4); }
+        else {
+          x.beginPath(); x.moveTo(-len / 2, 0); x.quadraticCurveTo(-len * 0.15, -wid, len / 2, -wid * 0.2 * (rnd() - 0.3)); x.quadraticCurveTo(len * 0.1, wid * 0.9, -len / 2, 0); x.closePath();
+          x.fillStyle = pal[(rnd() * pal.length) | 0]; x.fill();
+          x.strokeStyle = 'rgba(25,32,8,.55)'; x.lineWidth = 0.6; x.stroke();
+          if (len > 8) { x.strokeStyle = 'rgba(200,205,120,.28)'; x.beginPath(); x.moveTo(-len * 0.4, 0); x.lineTo(len * 0.4, 0); x.stroke(); } // nervadura
+        }
+        x.restore();
+      }
+      for (i = 0; i < 900; i++) { x.fillStyle = 'rgba(' + (150 + rnd() * 50 | 0) + ',' + (155 + rnd() * 40 | 0) + ',' + (80 + rnd() * 40 | 0) + ',.55)'; x.fillRect(rnd() * S, rnd() * S, 1, 1); } // polvillo
+      return c;
+    }
+
     function makeMate() {
-      var g = new THREE.Group();
-      var gourd = M(0x8a5a2b, 0.55, 0, { env: 0.45 }), silver = M(0xd3d8de, 0.28, 0.85, { env: 0.9 });
-      var prof = [[0, 0], [0.16, 0], [0.27, 0.1], [0.34, 0.27], [0.33, 0.45], [0.27, 0.58], [0.25, 0.6], [0.22, 0.6], [0.21, 0.45], [0.16, 0.22], [0, 0.18]]; // afuera hacia arriba, borde y pared interior hueca
-      g.add(mesh(new THREE.LatheGeometry(prof.map(function (p) { return new THREE.Vector2(p[0], p[1]); }), 24), gourd));
-      var rim = mesh(new THREE.TorusGeometry(0.235, 0.032, 8, 28), silver); rim.rotation.x = Math.PI / 2; rim.position.y = 0.6; g.add(rim);
-      var base = mesh(new THREE.TorusGeometry(0.17, 0.03, 8, 24), silver); base.rotation.x = Math.PI / 2; base.position.y = 0.03; g.add(base);
-      // yerba: queda adentro, por debajo del borde. Superficie inclinada: alta del lado contrario a la bombilla (+x),
-      // baja junto a ella (-x), con un pozo más oscuro y húmedo pegado al caño.
+      var g = new THREE.Group(), rnd = seeded(5), i;
+      var gTex = tex(gourdCanvas(), 1, 1);
+      var gourd = M(0xffffff, 0.62, 0, { env: 0.4, map: gTex });
+      var silver = M(0xd3d8de, 0.32, 0.9, { env: 1.0 }), gold = M(0xc9a15a, 0.3, 0.9, { env: 0.9 });
+      // Calabaza: pie chico, panza redonda y cuello más cerrado. La boca queda dentro de la virola de metal (sube hasta y = 0.52).
+      var prof = [[0, 0], [0.13, 0], [0.15, 0.02], [0.163, 0.06], [0.2, 0.09], [0.265, 0.15], [0.318, 0.23], [0.34, 0.31], [0.335, 0.39], [0.305, 0.46], [0.268, 0.52],
+        [0.25, 0.52], [0.238, 0.46], [0.246, 0.36], [0.215, 0.26], [0.13, 0.19], [0, 0.18]]; // afuera hacia arriba, y después la pared interior
+      g.add(mesh(new THREE.LatheGeometry(prof.map(function (p) { return new THREE.Vector2(p[0], p[1]); }), 40), gourd));
+      // Virola: banda ancha de acero cepillado en la boca, con el borde enrollado hacia adentro, y un aro fino en la base.
+      var band = [[0.268, 0.49], [0.276, 0.5], [0.277, 0.62], [0.271, 0.636], [0.258, 0.64], [0.247, 0.632], [0.246, 0.5]];
+      var bandM = mesh(new THREE.LatheGeometry(band.map(function (p) { return new THREE.Vector2(p[0], p[1]); }), 40), silver); bandM.material.side = THREE.DoubleSide; g.add(bandM);
+      var seam = mesh(new THREE.TorusGeometry(0.276, 0.005, 6, 40), M(0x3a3d42, 0.5, 0.6, { env: 0.4 })); seam.rotation.x = Math.PI / 2; seam.position.y = 0.492; g.add(seam);
+      var base = mesh(new THREE.TorusGeometry(0.157, 0.02, 8, 32), silver); base.rotation.x = Math.PI / 2; base.position.y = 0.035; g.add(base);
+
+      // Yerba: MISMA montañita de antes. Alta del lado contrario a la bombilla (+x), baja junto a ella (-x), con el pozo casi al medio
+      // (más oscuro y húmedo) pegado al caño. Ahora con textura de hojuelas, relieve y hojuelas sueltas en 3D para el borde.
+      var YR = 0.246, YB = 0.52, YT = 0.595, PX = -0.1, PIT = 0.095;           // radio, altura junto a la bombilla, altura del lado alto y profundidad del pozo
+      function ySurf(vx, vz) {
+        var pd = Math.exp(-Math.pow(Math.hypot(vx - PX, vz) / 0.105, 2));
+        var bump = 0.006 * Math.sin(vx * 61 + vz * 23) * Math.cos(vz * 47 - vx * 17) + 0.004 * Math.sin(vx * 113 - vz * 89);
+        return YB + (YT - YB) * (vx + YR) / (2 * YR) - PIT * pd + bump * (1 - 0.6 * pd);
+      }
       var yR = [], ri;
-      for (ri = 0; ri <= 12; ri++) yR.push(new THREE.Vector2(0.215 * (1 - ri / 12), 0)); // de afuera hacia el centro: normales hacia arriba
-      var yGeo = new THREE.LatheGeometry(yR, 32), yp = yGeo.attributes.position, yc = [];
-      var dry = col(0x8a9a3a), wet = col(0x46561f), PX = -0.125;
+      for (ri = 0; ri <= 16; ri++) yR.push(new THREE.Vector2(YR * (1 - ri / 16), 0)); // de afuera hacia el centro: normales hacia arriba
+      var yGeo = new THREE.LatheGeometry(yR, 48), yp = yGeo.attributes.position, yc = [], yuv = [];
+      var dry = col(0xe6e6c4), wet = col(0x7c8a54);
       for (var vi = 0; vi < yp.count; vi++) {
         var vx = yp.getX(vi), vz = yp.getZ(vi);
-        var pd = Math.exp(-Math.pow(Math.hypot(vx - PX, vz) / 0.115, 2));      // 1 en el centro del pozo
-        yp.setY(vi, 0.49 + 0.095 * (vx + 0.215) / 0.43 - 0.12 * pd);          // de 0.49 (junto a la bombilla) a 0.585 (borde en 0.6), menos el pozo
-        var cc = dry.clone().lerp(wet, Math.min(1, pd * 1.5)); yc.push(cc.r, cc.g, cc.b);
+        var pd = Math.exp(-Math.pow(Math.hypot(vx - PX, vz) / 0.105, 2));
+        yp.setY(vi, ySurf(vx, vz));
+        var cc = dry.clone().lerp(wet, Math.min(1, pd * 1.4)); yc.push(cc.r, cc.g, cc.b); // el pozo se ve más húmedo y oscuro
+        yuv.push(vx / (2 * YR) * 0.92 + 0.5, vz / (2 * YR) * 0.92 + 0.5);
       }
-      yGeo.setAttribute('color', new THREE.Float32BufferAttribute(yc, 3)); yGeo.computeVertexNormals();
-      var yMat = M(0xffffff, 0.95, 0, { env: 0.1 }); yMat.vertexColors = true;
-      g.add(mesh(yGeo, yMat));
-      // bombilla: casi vertical, apoyada contra la pared; entra en el pozo y sobresale por arriba del borde
+      yGeo.setAttribute('color', new THREE.Float32BufferAttribute(yc, 3)); yGeo.setAttribute('uv', new THREE.Float32BufferAttribute(yuv, 2)); yGeo.computeVertexNormals();
+      var yTex = tex(yerbaCanvas(), 1, 1);
+      var yMat = M(0xffffff, 0.95, 0, { env: 0.1, map: yTex }); yMat.vertexColors = true;
+      yMat.bumpMap = yTex; yMat.bumpScale = 1.4;
+      g.add(mesh(yGeo, yMat, false, true));
+      // hojuelas sueltas: chiquitas y planas, en cualquier ángulo; hacen que el borde y la silueta se vean de grano y no de pasta
+      var N = 1300, flakeGeo = new THREE.BoxGeometry(0.014, 0.0014, 0.006);
+      var flakeMat = M(0xffffff, 0.9, 0, { env: 0.1 });
+      var flakes = new THREE.InstancedMesh(flakeGeo, flakeMat, N), dm = new THREE.Object3D(), fp = [0x4f5f26, 0x5b6c2e, 0x445320, 0x66743a, 0x3a481a, 0x54462a, 0x74803f], fc = new THREE.Color();
+      for (i = 0; i < N; i++) {
+        var a = rnd() * Math.PI * 2, r = (YR - 0.006) * Math.sqrt(rnd()), fx = Math.cos(a) * r, fz = Math.sin(a) * r, s = 0.6 + rnd() * 0.9;
+        dm.position.set(fx, ySurf(fx, fz) + 0.002, fz);
+        dm.rotation.set((rnd() - 0.5) * 0.9, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.9);
+        dm.scale.set(s, 1, s * (0.7 + rnd() * 0.6)); dm.updateMatrix();
+        flakes.setMatrixAt(i, dm.matrix); flakes.setColorAt(i, fc.copy(col(fp[(rnd() * fp.length) | 0])));
+      }
+      flakes.castShadow = false; flakes.receiveShadow = false; g.add(flakes);
+
+      // Bombilla: caño de acero curvado arriba con la boquilla aplastada, tres aros dorados y el filtro abajo, dentro del pozo.
       var b = new THREE.Group();
-      var tube = mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.82, 8), silver); tube.position.y = 0.41; b.add(tube);
-      var bulb = mesh(new THREE.SphereGeometry(0.05, 10, 8), silver); bulb.scale.y = 0.7; b.add(bulb);
-      var mouth = mesh(new THREE.CylinderGeometry(0.03, 0.017, 0.09, 10), silver); mouth.position.y = 0.85; b.add(mouth);
-      b.position.set(-0.09, 0.3, 0); b.rotation.z = 0.16;
+      var curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-0.006, 0.2, 0), new THREE.Vector3(-0.018, 0.4, 0), new THREE.Vector3(-0.04, 0.55, 0), new THREE.Vector3(-0.085, 0.635, 0), new THREE.Vector3(-0.125, 0.66, 0)]);
+      b.add(mesh(new THREE.TubeGeometry(curve, 36, 0.0125, 10, false), silver));
+      var filter = mesh(new THREE.SphereGeometry(0.043, 14, 10), silver); filter.scale.set(1, 0.62, 1); b.add(filter);
+      var neck = mesh(new THREE.CylinderGeometry(0.018, 0.03, 0.05, 12), silver); neck.position.y = 0.04; b.add(neck);
+      [0.5, 0.526, 0.552].forEach(function (t) { // aros: perpendiculares al caño en ese punto
+        var u = t / 0.66, pt = curve.getPointAt(Math.min(0.99, u)), tg = curve.getTangentAt(Math.min(0.99, u));
+        var ring = mesh(new THREE.TorusGeometry(0.0155, 0.0045, 6, 14), gold); ring.position.copy(pt);
+        ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tg); b.add(ring);
+      });
+      var tip = curve.getPointAt(1), tipDir = curve.getTangentAt(1);
+      var mouth = mesh(new THREE.CylinderGeometry(0.0125, 0.0125, 0.035, 10), silver); mouth.scale.set(1.5, 1, 0.55); // boquilla aplastada
+      mouth.position.copy(tip).addScaledVector(tipDir, 0.012); mouth.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tipDir); b.add(mouth);
+      b.position.set(PX - 0.005, 0.315, 0); b.rotation.z = 0.14; // apoyada contra la pared de la calabaza, inclinada hacia -x; el pico curva hacia afuera
       g.add(b);
       return g;
     }
@@ -514,21 +611,65 @@ export function initBoard(opts) {
       return g;
     }
 
+    // Hoja del facón vista de arriba (textura de la chapa plana: u = largo, v = ancho, con el filo abajo y el lomo arriba):
+    // acero liso y opaco, filo fino y más claro (afilado), lomo algo más oscuro, algunas manchas grises y unas pocas grietas finas. Sin óxido.
+    function faconCanvas() {
+      var W = 1024, H = 160, c = makeCanvas(W, H), x = c.getContext('2d'), rnd = seeded(31), i, k;
+      var g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#8f979f'); g.addColorStop(0.3, '#b7bec6'); g.addColorStop(0.8, '#c6ccd3'); g.addColorStop(1, '#dde2e7');
+      x.fillStyle = g; x.fillRect(0, 0, W, H);
+      for (i = 0; i < 1100; i++) { // rayitas de afilado y de uso, en el sentido de la hoja
+        var y = rnd() * H, len = 30 + rnd() * 260, sx = rnd() * W;
+        x.strokeStyle = rnd() < 0.5 ? 'rgba(235,240,245,' + (0.05 + rnd() * 0.1) + ')' : 'rgba(50,58,68,' + (0.05 + rnd() * 0.1) + ')'; x.lineWidth = 0.5 + rnd() * 0.8;
+        x.beginPath(); x.moveTo(sx, y); x.lineTo(sx + len, y + (rnd() - 0.5) * 1.4); x.stroke();
+      }
+      // pátina: zonas más oscuras y apagadas, sobre todo hacia el lomo y la base
+      for (i = 0; i < 40; i++) {
+        var px = rnd() * W, py = rnd() * H * 0.8, pr = 20 + rnd() * 80, pg = x.createRadialGradient(px, py, 0, px, py, pr);
+        pg.addColorStop(0, 'rgba(60,64,60,' + (0.1 + rnd() * 0.14) + ')'); pg.addColorStop(1, 'rgba(60,64,60,0)');
+        x.fillStyle = pg; x.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+      }
+      // manchas: zonas grisáceas y opacas, suaves (de uso, no de óxido)
+      for (i = 0; i < 26; i++) {
+        var rx = rnd() * W, ry = rnd() * H * 0.85, rr = 10 + rnd() * 50, rg = x.createRadialGradient(rx, ry, 0, rx, ry, rr);
+        rg.addColorStop(0, 'rgba(84,88,86,' + (0.12 + rnd() * 0.16) + ')'); rg.addColorStop(1, 'rgba(84,88,86,0)');
+        x.fillStyle = rg; x.fillRect(rx - rr, ry - rr, rr * 2, rr * 2);
+      }
+      for (i = 0; i < 110; i++) { x.fillStyle = 'rgba(62,64,64,' + (0.25 + rnd() * 0.3) + ')'; x.beginPath(); x.arc(rnd() * W, rnd() * H * 0.9, 0.5 + rnd() * 1.1, 0, Math.PI * 2); x.fill(); } // puntitos de uso
+      x.lineCap = 'round'; x.lineJoin = 'round';
+      for (i = 0; i < 10; i++) { // grietas finas: cortas y quebradas, con un reflejo claro al lado
+        var cx0 = rnd() * W * 0.9, cy0 = H * (0.12 + rnd() * 0.65), pts = [[cx0, cy0]], n = 4 + (rnd() * 5 | 0);
+        for (k = 1; k <= n; k++) pts.push([pts[k - 1][0] + 4 + rnd() * 10, pts[k - 1][1] + (rnd() - 0.5) * 8]);
+        x.strokeStyle = 'rgba(40,44,48,.7)'; x.lineWidth = 0.9; x.beginPath(); pts.forEach(function (q, j) { if (j) x.lineTo(q[0], q[1]); else x.moveTo(q[0], q[1]); }); x.stroke();
+        x.strokeStyle = 'rgba(240,244,248,.45)'; x.lineWidth = 0.6; x.beginPath(); pts.forEach(function (q, j) { if (j) x.lineTo(q[0], q[1] + 1.2); else x.moveTo(q[0], q[1] + 1.2); }); x.stroke();
+      }
+      var edgeG = x.createLinearGradient(0, H * 0.86, 0, H); edgeG.addColorStop(0, 'rgba(255,255,255,0)'); edgeG.addColorStop(0.6, 'rgba(250,252,255,.7)'); edgeG.addColorStop(1, 'rgba(200,208,216,.9)');
+      x.fillStyle = edgeG; x.fillRect(0, H * 0.86, W, H * 0.14); // filo: franja fina y brillante (es lo que está afilado y no se oxida)
+      x.fillStyle = 'rgba(45,52,60,.6)'; x.fillRect(0, H - 1.5, W, 1.5);
+      x.fillStyle = 'rgba(50,56,62,.45)'; x.fillRect(0, 0, W, H * 0.05); // lomo
+      for (i = 0; i < 14; i++) { x.fillStyle = 'rgba(60,44,32,.75)'; x.fillRect(rnd() * W, H - 5 - rnd() * 3, 2 + rnd() * 5, 4); } // mellitas en el filo
+      return c;
+    }
+
     function makeFacon() {
       var g = new THREE.Group();
-      var steel = M(0xdfe4ea, 0.22, 0.9, { env: 1.0 }), brass = M(0xc9a23a, 0.35, 0.8, { env: 0.8 }), wood = M(0x4a2c17, 0.7, 0, { env: 0.25 });
+      var bTex = tex(faconCanvas(), 1 / 1.78, 1 / 0.17); bTex.offset.set(0, 0.5); // v = 0 en el filo (y = -0.085) y 1 en el lomo
+      var steel = M(0xffffff, 0.5, 0.7, { env: 0.8, map: bTex }), brass = M(0xc9a23a, 0.35, 0.8, { env: 0.8 }), wood = M(0x4a2c17, 0.7, 0, { env: 0.25 });
       var s = new THREE.Shape();
-      s.moveTo(0, -0.085); s.lineTo(1.1, -0.085); s.quadraticCurveTo(1.5, -0.07, 1.7, 0.03); s.lineTo(1.35, 0.085); s.lineTo(0, 0.085); s.closePath();
-      var bladeGeo = new THREE.ExtrudeGeometry(s, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 1 });
+      s.moveTo(0, -0.085); s.lineTo(1.1, -0.085); s.quadraticCurveTo(1.5, -0.07, 1.78, 0.03); s.quadraticCurveTo(1.55, 0.075, 1.35, 0.085); s.lineTo(0, 0.085); s.closePath(); // filo recto que sube a la punta y lomo con contrafilo
+      var bladeGeo = new THREE.ExtrudeGeometry(s, { depth: 0.012, bevelEnabled: false }); // chapa plana y fina: el filo, las manchas y las grietas van pintados en la textura
       bladeGeo.rotateX(-Math.PI / 2);
-      var blade = mesh(bladeGeo, steel); blade.position.y = 0.02; g.add(blade);
-      var guard = mesh(new THREE.BoxGeometry(0.07, 0.07, 0.44), brass); guard.position.set(-0.02, 0.06, 0); g.add(guard);
-      var hGeo = new THREE.CylinderGeometry(0.052, 0.07, 0.78, 12); hGeo.rotateZ(Math.PI / 2);
+      var blade = mesh(bladeGeo, steel); blade.position.y = 0.057; g.add(blade); // centrada en el eje del mango
+      // guarda: barra con las puntas redondeadas, y un tope de bronce sobre la hoja
+      var guard = mesh(new THREE.BoxGeometry(0.06, 0.06, 0.4), brass); guard.position.set(-0.02, 0.06, 0); g.add(guard);
+      [-0.2, 0.2].forEach(function (pz) { var e = mesh(new THREE.SphereGeometry(0.038, 12, 10), brass); e.position.set(-0.02, 0.06, pz); g.add(e); });
+      var stop = mesh(new THREE.BoxGeometry(0.05, 0.07, 0.15), brass); stop.position.set(0.03, 0.065, 0); g.add(stop);
+      // empuñadura: madera oscura y cuatro anillos de bronce
+      var hGeo = new THREE.CylinderGeometry(0.052, 0.07, 0.78, 14); hGeo.rotateZ(Math.PI / 2);
       var handle = mesh(hGeo, wood); handle.position.set(-0.43, 0.07, 0); g.add(handle);
-      [-0.2, -0.45, -0.7].forEach(function (px) {
-        var ring = mesh(new THREE.TorusGeometry(0.066, 0.011, 6, 16), brass); ring.rotation.y = Math.PI / 2; ring.position.set(px, 0.07, 0); g.add(ring);
+      [-0.16, -0.32, -0.54, -0.72].forEach(function (px) {
+        var ring = mesh(new THREE.TorusGeometry(px < -0.5 ? 0.068 : 0.059, 0.011, 6, 16), brass); ring.rotation.y = Math.PI / 2; ring.position.set(px, 0.07, 0); g.add(ring);
       });
-      var pommel = mesh(new THREE.SphereGeometry(0.085, 12, 10), brass); pommel.position.set(-0.84, 0.07, 0); g.add(pommel);
+      var pommel = mesh(new THREE.SphereGeometry(0.085, 14, 10), brass); pommel.position.set(-0.84, 0.07, 0); g.add(pommel);
       return g;
     }
 
@@ -704,7 +845,7 @@ export function initBoard(opts) {
       return o;
     }
 
-    // ------------------------------------------------------------------ piezas (casas, ciudades, caminos, ladrón)
+    // ------------------------------------------------------------------ piezas (casas, estancias, caminos, ladrón)
     function houseGeo(w, h, d, roof) {
       var s = new THREE.Shape();
       s.moveTo(-w / 2, 0); s.lineTo(w / 2, 0); s.lineTo(w / 2, h); s.lineTo(0, h + roof); s.lineTo(-w / 2, h); s.closePath();
@@ -740,7 +881,7 @@ export function initBoard(opts) {
     // Cada objeto se trata como un círculo de radio `rad` que debe caber en la casilla sin pisar:
     //  - la ficha del número (centro),
     //  - los caminos (van sobre las aristas; mitad de su ancho = 0.0425, más 0.02 de aire),
-    //  - los poblados y ciudades (van en los vértices; la ciudad ocupa ~0.26, más 0.02 de aire).
+    //  - las casas y estancias (van en los vértices; la estancia ocupa ~0.26, más 0.02 de aire).
     var TOKEN_R = 0.335, EDGE_CLEAR = 0.0625, VERT_CLEAR = 0.28;
     var TILE_VERTS = [[0, 1], [0, -1], [SQ3 / 2, 0.5], [SQ3 / 2, -0.5], [-SQ3 / 2, 0.5], [-SQ3 / 2, -0.5]];
     function fitsTile(x, z, rad) {
@@ -974,10 +1115,10 @@ export function initBoard(opts) {
     function buildBoard(seed) {
       if (board) scene.remove(board);
       var rnd = mulberry32(seed);
-      session = online ? opts.session : new LocalSession(PLAYER_INFO.map(function (p) { return p.name; }), seed, undefined, withOthers ? { bots: [false, true, true, true] } : {}); pull();
+      session = online ? opts.session : new LocalSession(PLAYER_INFO.map(function (p) { return p.name; }), seed, { firstPlayer: null }, withOthers ? { bots: [false, true, true, true] } : {}); pull();
       var topo = topology();
       board = new THREE.Group(); scene.add(board);
-      tiles = []; tileMeshes = []; ships = []; robber = null; hoverTile = null; busy = false; sending = false; pieceSeen = {};
+      setOrbit(false); tiles = []; tileMeshes = []; ships = []; robber = null; hoverTile = null; busy = false; sending = false; pieceSeen = {};
 
       // casillas (mismo orden e ids que las del motor)
       topo.tiles.forEach(function (et) {
@@ -1030,7 +1171,7 @@ export function initBoard(opts) {
       refreshUi();
     }
 
-    // Dibuja las piezas del estado del motor (caminos, poblados y ciudades). Las que son nuevas "brotan" con una animación corta.
+    // Dibuja las piezas del estado del motor (caminos, casas y estancias). Las que son nuevas "brotan" con una animación corta.
     var pieceSeen = {};
     function syncPieces() {
       while (piecesGroup.children.length) {
@@ -1131,7 +1272,7 @@ export function initBoard(opts) {
       }
     }
 
-    // Marcadores de las jugadas legales del jugador de turno (vértices para el poblado, aristas para el camino).
+    // Marcadores de las jugadas legales del jugador de turno (vértices para la casa, aristas para el camino).
     // Salen de legalActions del motor: el cliente no decide qué es legal.
     var markerMat = null, hitMat = new THREE.MeshBasicMaterial({ visible: false });
     function refreshMarkers() {
@@ -1310,11 +1451,11 @@ export function initBoard(opts) {
     // Cartas de desarrollo (nombres propios). Lo que se puede jugar y cuándo lo decide el motor (legalActions); acá solo se explica.
     var DEV_ORDER = ['knight', 'monopoly', 'yearOfPlenty', 'roadBuilding', 'victoryPoint'];
     var DEV = {
-      knight: { name: 'Gaucho', desc: 'Mové el ladrón y robá una carta. Se puede jugar antes de tirar.', play: 'playKnight' },
+      knight: { name: 'Gaucho', desc: 'Mové el ladrón y robá una carta.', play: 'playKnight' },
       monopoly: { name: 'Acopio', desc: 'Elegí un recurso: todos te entregan el que tengan.', play: 'playMonopoly' },
-      yearOfPlenty: { name: 'Buena cosecha', desc: 'Tomá 2 recursos del banco.', play: 'playYearOfPlenty' },
+      yearOfPlenty: { name: 'Buena cosecha', desc: 'Tomá 2 recursos del banco (o 1 si queda una sola carta).', play: 'playYearOfPlenty' },
       roadBuilding: { name: 'Vialidad', desc: 'Poné 2 caminos gratis.', play: 'playRoadBuilding' },
-      victoryPoint: { name: 'Estancia', desc: 'Vale 1 punto. Queda oculta hasta que ganes.', play: null }
+      victoryPoint: { name: 'Punto de victoria', desc: 'Vale 1 punto. Queda oculta hasta que ganes.', play: null }
     };
     var BADGE_ROAD = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="8" width="16" height="4.5" rx="1.5" transform="rotate(-25 10 10)" fill="currentColor"/></svg>';
     var BADGE_ARMY = '<svg viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="10" cy="13.5" rx="8.5" ry="2.4" fill="currentColor"/><path d="M5 13.5c0-5 2-7.5 5-7.5s5 2.5 5 7.5z" fill="currentColor"/></svg>';
@@ -1336,15 +1477,15 @@ export function initBoard(opts) {
     }
     var handEl = stage.querySelector('.hand'), whoEl = document.getElementById('who'), seatsEl = document.getElementById('seats');
     var STAR = '<svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="10,1.5 12.6,7.2 18.8,7.8 14.1,12 15.5,18.2 10,15 4.5,18.2 5.9,12 1.2,7.8 7.4,7.2" fill="#f2c230" stroke="#7a5a10" stroke-width="1.4" stroke-linejoin="round"/></svg>';
-    var vps = [0, 0, 0, 0]; // puntos de victoria que se ven: poblados, ciudades y reconocimientos (las Estancias ajenas no se ven)
-    var devCounts = [0, 0, 0, 0], knights = [0, 0, 0, 0], awardRoad = { holder: null, length: 0 }, awardArmy = { holder: null, size: 0 }; // cartas de desarrollo por jugador (cuántas, no cuáles), caballeros jugados y quién tiene cada reconocimiento
+    var vps = [0, 0, 0, 0]; // puntos de victoria que se ven: casas, estancias y reconocimientos (los Puntos de victoria ajenos no se ven)
+    var devCounts = [0, 0, 0, 0], knights = [0, 0, 0, 0], roadLens = [0, 0, 0, 0], awardRoad = { holder: null, length: 0 }, awardArmy = { holder: null, size: 0 }; // cartas de desarrollo por jugador (cuántas, no cuáles), caballeros jugados y quién tiene cada reconocimiento
     var myHand = {}, counts = [], turn = 0, VIEWER = 0; // myHand: la mano de quien mira; counts: cartas de cada jugador (de los demás solo se sabe cuántas); VIEWER: el jugador cuya mano muestra el banner (en la partida local, el de turno)
     seatsEl.innerHTML = PLAYER_INFO.map(function (pl, p) {
       return '<div class="seat" data-p="' + p + '" style="--pc:' + pl.css + '"><div class="av">' + avatarSVG(p) + '</div><span class="nm">' + pl.name + '</span>' +
         '<span class="vp" title="Puntos de victoria">' + STAR + '<b>0</b></span>' +
         '<span class="cnt"><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#f6ecd4" stroke="#5b4630" stroke-width="1.6"/></svg><b>0</b></span>' +
         '<span class="dv" title="Cartas de desarrollo" hidden><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#8f2a2a" stroke="#e8d6a0" stroke-width="1.6"/></svg><b>0</b></span>' +
-        '<span class="aw"><span class="bdg road" title="Ruta más larga" hidden>' + BADGE_ROAD + '<b></b></span><span class="bdg army" title="Montonera más grande" hidden>' + BADGE_ARMY + '<b></b></span></span></div>';
+        '<span class="aw"><span class="bdg road" title="Ruta más larga">' + BADGE_ROAD + '<b></b></span><span class="bdg army" title="Gauchos jugados">' + BADGE_ARMY + '<b></b></span></span></div>';
     }).join('');
     if (online) for (var si = opts.seats.length; si < seatsEl.children.length; si++) seatsEl.children[si].hidden = true; // partidas de 3: sin el 4.º puesto
     function handTotal(p) { return counts[p]; }
@@ -1359,8 +1500,8 @@ export function initBoard(opts) {
         s.classList.toggle('on', p === turn); s.querySelector('.cnt b').textContent = handTotal(p); s.querySelector('.vp b').textContent = vps[p];
         var dv = s.querySelector('.dv'), rd = s.querySelector('.bdg.road'), ar = s.querySelector('.bdg.army');
         dv.hidden = !devCounts[p]; dv.querySelector('b').textContent = devCounts[p];
-        rd.hidden = awardRoad.holder !== p; rd.querySelector('b').textContent = awardRoad.length;
-        ar.hidden = awardArmy.holder !== p; ar.querySelector('b').textContent = awardArmy.size;
+        rd.classList.toggle('held', awardRoad.holder === p); rd.querySelector('b').textContent = roadLens[p]; rd.title = awardRoad.holder === p ? 'Tiene la Ruta más larga (' + roadLens[p] + ')' : 'Ruta más larga propia: ' + roadLens[p] + ' (hacen falta ' + game.config.longestRoadMin + ' y superar al resto)';
+        ar.classList.toggle('held', awardArmy.holder === p); ar.querySelector('b').textContent = knights[p]; ar.title = awardArmy.holder === p ? 'Tiene la Montonera más grande (' + knights[p] + ' gauchos)' : 'Gauchos jugados: ' + knights[p] + ' (hacen falta ' + game.config.largestArmyMin + ' y superar al resto)';
       });
     }
     // Copia las manos y los puntos del estado del motor a lo que se ve en pantalla.
@@ -1370,12 +1511,13 @@ export function initBoard(opts) {
       vps = game.players.map(function (pl) { return pl.points; });
       devCounts = game.players.map(function (pl) { return pl.devCount; });
       knights = game.players.map(function (pl) { return pl.knights; });
+      roadLens = game.players.map(function (pl) { return pl.roadLength; });
       awardRoad = { holder: game.longestRoad.holder, length: game.longestRoad.length };
       awardArmy = { holder: game.largestArmy.holder, size: game.largestArmy.size };
     }
     function resetPlayers() { VIEWER = me; turn = game.turn; syncHands(); renderHand(); renderSeats(); }
     // Pone la pantalla al día con el estado (banner del jugador de turno, puestos, ladrón, marcadores, botones y diálogos).
-    function applyView() { VIEWER = me; turn = game.turn; syncHands(); renderHand(); renderSeats(); syncRobber(); refreshUi(); }
+    function applyView() { VIEWER = me; turn = game.turn; syncHands(); renderHand(); renderSeats(); syncRobber(); refreshUi(); setOrbit(game.phase.kind === 'finished'); } // al recargar una partida terminada gira; con una nueva vuelve a la vista de siempre
     function refreshUi() { refreshMarkers(); updateControls(); renderDialog(); showStatus(statusText(), false); }
 
     // El ladrón se dibuja sobre la casilla del estado (con un saltito al llegar). Fuera del desierto va corrido hacia adelante
@@ -1445,12 +1587,12 @@ export function initBoard(opts) {
       var ph = game.phase, name = PLAYER_INFO[game.turn].name, me = game.turn === VIEWER;
       switch (ph.kind) {
         case 'setup': {
-          var round = ph.step < game.players.length ? 1 : 2;
-          return (me ? 'Tu turno' : name) + ' · ronda ' + round + ' de 2: ' + (ph.part === 'settlement' ? (me ? 'tocá un punto para colocar tu poblado' : 'coloca su poblado') : (me ? 'tocá un camino junto a tu poblado' : 'coloca su camino'));
+          var fase = ph.step < game.players.length ? 'fase 1, sentido horario' : 'fase 2, sentido antihorario';
+          return (me ? 'Tu turno' : name) + ' · ' + fase + ': ' + (ph.part === 'settlement' ? (me ? 'tocá un punto para colocar tu casa' : 'coloca su casa') : (me ? 'tocá un camino junto a tu casa' : 'coloca su camino'));
         }
         case 'roll': return me ? 'Tu turno: jugá los dados' : 'Turno de ' + name;
         case 'main':
-          if (buildMode) return me ? { road: 'Elegí dónde va el camino', settlement: 'Elegí dónde va el poblado', city: 'Elegí qué poblado mejorar' }[buildMode] : 'Turno de ' + name;
+          if (buildMode) return me ? { road: 'Elegí dónde va el camino', settlement: 'Elegí dónde va la casa', city: 'Elegí qué casa mejorar' }[buildMode] : 'Turno de ' + name;
           return me ? 'Tu turno' : 'Turno de ' + name;
         case 'discard': return me ? 'Salió un 7: descartá ' + ph.queue[0].count + ' cartas' : name + ' descarta ' + ph.queue[0].count + ' cartas';
         case 'moveRobber': return me ? 'Mové el ladrón' : name + ' mueve el ladrón';
@@ -1522,7 +1664,6 @@ export function initBoard(opts) {
       if (game.turn !== me) return 'Esperá tu turno';
       if (d.hand[k] - d.fresh[k] <= 0) return 'La compraste en este turno: se juega desde el próximo';
       if (d.played) return 'Ya jugaste una carta en este turno';
-      if (k !== 'knight' && ph !== 'main') return 'Se juega después de tirar los dados';
       if (ph !== 'main' && ph !== 'roll') return 'Ahora no se puede jugar';
       if (!can[DEV[k].play]) return k === 'roadBuilding' ? 'No tenés dónde poner caminos' : k === 'yearOfPlenty' ? 'El banco casi no tiene cartas' : 'Ahora no se puede jugar';
       return '';
@@ -1543,11 +1684,11 @@ export function initBoard(opts) {
           resChips(function () { return true; }, function (k) { return cardsUI.res === k; }, function () { return 0; }) +
           '<div class="sum">' + (cardsUI.res ? 'Todos te dan su ' + TERRAINS[cardsUI.res].res.toLowerCase() : 'Elegí un recurso') + '</div>' + yesno(!!cardsUI.res);
       } else if (cardsUI.mode === 'plenty') {
-        var avail = can.playYearOfPlenty ? can.playYearOfPlenty.resources : [], picks = cardsUI.picks;
-        html = '<h3>Buena cosecha</h3><p>Elegí 2 recursos del banco.</p>' +
-          resChips(function (k) { return avail.indexOf(k) >= 0 && picks.length < 2; }, function (k) { return picks.indexOf(k) >= 0; }, function (k) { return picks.filter(function (x) { return x === k; }).length; }) +
-          '<div class="sum">' + (picks.length ? picks.map(function (k) { return TERRAINS[k].res; }).join(' + ') : 'Elegí 2 recursos') + '</div>' +
-          (picks.length ? '<button type="button" class="clear" data-clear>Borrar elección</button>' : '') + yesno(picks.length === 2);
+        var avail = can.playYearOfPlenty ? can.playYearOfPlenty.resources : [], picks = cardsUI.picks, need = can.playYearOfPlenty ? can.playYearOfPlenty.count : 2;
+        html = '<h3>Buena cosecha</h3><p>' + (need === 1 ? 'El banco solo tiene 1 carta: elegí 1 recurso.' : 'Elegí 2 recursos del banco.') + '</p>' +
+          resChips(function (k) { return avail.indexOf(k) >= 0 && picks.length < need; }, function (k) { return picks.indexOf(k) >= 0; }, function (k) { return picks.filter(function (x) { return x === k; }).length; }) +
+          '<div class="sum">' + (picks.length ? picks.map(function (k) { return TERRAINS[k].res; }).join(' + ') : (need === 1 ? 'Elegí 1 recurso' : 'Elegí 2 recursos')) + '</div>' +
+          (picks.length ? '<button type="button" class="clear" data-clear>Borrar elección</button>' : '') + yesno(picks.length === need);
       } else {
         html = '<button type="button" class="x" data-close aria-label="Cerrar" title="Cerrar">✕</button><h3>Tus cartas</h3><p>Una por turno, y no la que compraste en este mismo turno.</p><div class="cardgrid">' +
           DEV_ORDER.filter(function (k) { return d.hand[k] > 0; }).map(function (k) {
@@ -1561,6 +1702,7 @@ export function initBoard(opts) {
       dialogEl.innerHTML = html;
       dialogEl.hidden = false;
     }
+    function plentyNeed() { var a = legal.filter(function (x) { return x.type === 'playYearOfPlenty'; })[0]; return a ? a.count : 2; } // cuántas cartas pide Buena cosecha (2, o 1 si el banco casi no tiene)
     function tradeOptions() {
       var a = legal.filter(function (x) { return x.type === 'bankTrade'; })[0];
       return a ? a.trades : [];
@@ -1604,7 +1746,7 @@ export function initBoard(opts) {
           else { cardsUI = null; dispatch({ type: DEV[dk].play, player: game.turn }); return; } // Gaucho y Vialidad siguen sobre el tablero
         } else if (b.hasAttribute('data-res')) {
           var rk = b.getAttribute('data-res');
-          if (cardsUI.mode === 'monopoly') cardsUI.res = rk; else if (cardsUI.picks.length < 2) cardsUI.picks.push(rk);
+          if (cardsUI.mode === 'monopoly') cardsUI.res = rk; else if (cardsUI.picks.length < plentyNeed()) cardsUI.picks.push(rk);
         } else if (b.hasAttribute('data-clear')) cardsUI.picks = [];
         else if (b.hasAttribute('data-ok')) {
           var ui = cardsUI; cardsUI = null;
@@ -1706,7 +1848,7 @@ export function initBoard(opts) {
           diceSum.textContent = s;
           rollCounts[s]++; updateStats();
           var dur = 0;
-          if (s === 7) robberPulse = 1;
+          if (s === 7) { robberPulse = 1; if (animate) audio.seven(); }
           else { tiles.forEach(function (t) { if (t.num === s) t.pulse = 1; }); dur = flyGains(rollJobs({ map: game.map, robber: shown.robber, vertexBuildings: shown.vertexBuildings }, s, dist ? dist.gains : []), animate); }
           diceTimer = setTimeout(function () { diceBox.hidden = true; }, 3200);
           setTimeout(cont, animate ? Math.max(dur, 900) : 0); // se sigue cuando terminan de llegar los recursos
@@ -1734,7 +1876,7 @@ export function initBoard(opts) {
               pause(cont, foreign(p) ? 550 : 0);
             });
           case 'RobberMoved':
-            return gap(p, function () { shown.robber = ev.tile; syncRobber(); pause(cont, foreign(p) ? 800 : 0); });
+            return gap(p, function () { shown.robber = ev.tile; syncRobber(); if (foreign(p) && animate) audio.robberMoved(); pause(cont, foreign(p) ? 800 : 0); });
           case 'BankTraded':
             return gap(p, function () {
               counts[p] += 1 - ev.giveCount; renderSeats();
@@ -1801,7 +1943,7 @@ export function initBoard(opts) {
             });
           case 'LongestRoadChanged': {
             var pts = game.config.awardPoints;
-            awardRoad = { holder: ev.player, length: ev.length };
+            awardRoad = { holder: ev.player, length: ev.length }; if (ev.player !== null) roadLens[ev.player] = ev.length;
             if (ev.from !== null) vps[ev.from] -= pts;
             if (ev.player !== null) vps[ev.player] += pts;
             renderSeats(); renderHand();
@@ -1820,6 +1962,7 @@ export function initBoard(opts) {
             return pause(cont, 1000);
           }
           case 'Stolen': return stolen(ev, cont);
+          case 'GameWon': if (animate && ev.player === VIEWER) audio.victory(); setOrbit(true); return cont(); // solo suena si ganaste; el tablero empieza a girar en todos los casos
           case 'TurnChanged':
             turn = ev.player; renderSeats();
             if (withOthers) showStatus(ev.player === VIEWER ? 'Tu turno' : 'Turno de ' + PLAYER_INFO[ev.player].name, false, false, ev.player);
@@ -1836,7 +1979,7 @@ export function initBoard(opts) {
             syncPieces();
             if (foreign(p)) audio.land(kind); // las propias ya sonaron al tocar
             var wait = foreign(p) ? 650 : 0;
-            // el 2.º poblado de la colocación inicial cobra recursos: se animan desde las casillas que toca
+            // la 2.ª casa de la colocación inicial cobra recursos: se animan desde las casillas que toca
             var got = kind === 'settlement' ? take('ResourcesDistributed') : null;
             if (got) {
               var jobs = [];
@@ -1850,6 +1993,7 @@ export function initBoard(opts) {
           }
       }
       function stolen(ev, cont) {
+        if (ev.victim === VIEWER && animate) audio.robbed(); // la melodía es solo para quien perdió la carta
         if (ev.resource) { // los dos implicados ven qué carta fue
           note = { text: (ev.thief === VIEWER ? 'Le robaste ' : PLAYER_INFO[ev.thief].name + ' le robó ') + TERRAINS[ev.resource].res.toLowerCase() + ' a ' + PLAYER_INFO[ev.victim].name, who: ev.thief };
           showStatus(note.text, false, true, note.who);
@@ -1944,7 +2088,7 @@ export function initBoard(opts) {
     document.getElementById('btnNew').addEventListener('click', newGame);
     document.getElementById('btnLeave').addEventListener('click', function () { window.location.assign('/'); });
     if (online) document.getElementById('btnNew').hidden = true; // en una sala no hay mapa nuevo: la partida es de todos
-    // Solo desarrollo: salta la colocación inicial. Mapa nuevo, poblados y caminos al azar (por el motor, con comandos legales) y listo para tirar.
+    // Solo desarrollo: salta la colocación inicial. Mapa nuevo, casas y caminos al azar (por el motor, con comandos legales) y listo para tirar.
     // Se ve con `npm run dev` o con ?debug en la URL; en producción no existe.
     var btnQuick = document.getElementById('btnQuick');
     if (!online && (process.env.NODE_ENV !== 'production' || /[?&]debug/.test(location.search))) btnQuick.hidden = false;
@@ -2054,6 +2198,8 @@ export function initBoard(opts) {
         pick: function (x, y) { var r = renderer.domElement.getBoundingClientRect(); pointer.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1); raycaster.setFromCamera(pointer, camera); var h = raycaster.intersectObjects(markersGroup.children, false)[0]; return { hit: h ? h.object.userData : null, ray: [raycaster.ray.origin.toArray(), raycaster.ray.direction.toArray()], pointer: pointer.toArray(), cam: camera.position.toArray(), marker19: markersGroup.children.filter(function (c) { return c.userData.id === 19; }).map(function (c) { return c.matrixWorld.elements.slice(12, 15); }) }; },
         game: function () { return session.debugState ? session.debugState() : game; },
         busy: function () { return busy; },
+        camera: camera, controls: controls, // para acercar la cámara a un adorno y revisarlo
+
         legal: function () { return legal; },
         tileVertices: function (t) { return topology().tiles[t].vertices; },
         mutate: function (fn) { if (!session.debugMutate) return; session.debugMutate(fn); pull(); syncPieces(); applyView(); },
@@ -2080,6 +2226,15 @@ export function initBoard(opts) {
         var k = 1 - Math.exp(-dt * 6);
         camera.position.lerp(HOME_POS, k); controls.target.lerp(HOME_TARGET, k);
         if (camera.position.distanceTo(HOME_POS) < 0.01) { camera.position.copy(HOME_POS); controls.target.copy(HOME_TARGET); homing = false; }
+      }
+      if (orbit.on && performance.now() >= orbit.resumeAt) {
+        orbit.t += dt;
+        orbitOff.copy(camera.position).sub(controls.target); orbitSph.setFromVector3(orbitOff);
+        var ease = 1 - Math.exp(-dt * 0.8);
+        orbitSph.theta += dt * 0.07;
+        orbitSph.phi += (0.85 + 0.4 * Math.sin(orbit.t * 0.11) - orbitSph.phi) * ease;
+        orbitSph.radius += (17 + 3 * Math.sin(orbit.t * 0.07 + 1) - orbitSph.radius) * ease;
+        orbitOff.setFromSpherical(orbitSph); camera.position.copy(controls.target).add(orbitOff);
       }
       controls.update();
       applyLight(1 - Math.exp(-dt * 3.5));

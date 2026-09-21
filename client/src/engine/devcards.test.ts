@@ -218,8 +218,19 @@ describe('Acopio (monopolio)', () => {
     expect(errorOf(applyCommand(s, { type: 'playMonopoly', player: 0, resource: 'oro' as never }))).toBe('invalid-target');
   });
 
-  it('solo se juega en la fase principal (no antes de tirar)', () => {
+  it('se puede jugar antes de tirar los dados (y se sigue con la tirada)', () => {
     const s = { ...game(), phase: { kind: 'roll' } } as GameState;
+    giveCard(s, 0, 'monopoly');
+    s.players[1].hand.forest = 3;
+    expect(legalActions(s, 0).some((a) => a.type === 'playMonopoly')).toBe(true);
+    const r = must(s, { type: 'playMonopoly', player: 0, resource: 'forest' });
+    expect(r.state.players[0].hand.forest).toBe(3);
+    expect(r.state.phase).toEqual({ kind: 'roll' });
+    expect(legalActions(r.state, 0).some((a) => a.type === 'rollDice')).toBe(true);
+  });
+
+  it('no se juega en otras fases (por ejemplo, con el ladrón por mover)', () => {
+    const s = { ...game(), phase: { kind: 'moveRobber', after: 'main' } } as GameState;
     giveCard(s, 0, 'monopoly');
     expect(errorOf(applyCommand(s, { type: 'playMonopoly', player: 0, resource: 'forest' }))).toBe('wrong-phase');
   });
@@ -251,16 +262,39 @@ describe('Buena cosecha (año de abundancia)', () => {
   });
 });
 
+describe('Buena cosecha con el banco casi vacío', () => {
+  const nearlyEmpty = (left: Partial<Record<(typeof RESOURCES)[number], number>>): GameState => {
+    const s = game();
+    giveCard(s, 0, 'yearOfPlenty');
+    for (const r of RESOURCES) s.bank[r] = left[r] ?? 0;
+    return s;
+  };
+
+  it('si queda 1 sola carta en el banco, se toma esa (hasta 2)', () => {
+    const s = nearlyEmpty({ hills: 1 });
+    const act = legalActions(s, 0).find((a) => a.type === 'playYearOfPlenty');
+    expect(act).toEqual({ type: 'playYearOfPlenty', resources: ['hills'], count: 1 });
+    expect(errorOf(applyCommand(s, { type: 'playYearOfPlenty', player: 0, resources: ['hills', 'hills'] }))).toBe('invalid-target');
+    expect(must(s, { type: 'playYearOfPlenty', player: 0, resources: ['hills'] }).state.players[0].hand.hills).toBe(1);
+  });
+
+  it('con el banco vacío no se ofrece; con 2 o más se piden 2', () => {
+    expect(legalActions(nearlyEmpty({}), 0).some((a) => a.type === 'playYearOfPlenty')).toBe(false);
+    const act = legalActions(nearlyEmpty({ hills: 1, forest: 1 }), 0).find((a) => a.type === 'playYearOfPlenty');
+    expect(act).toMatchObject({ count: 2 });
+  });
+});
+
 describe('Vialidad (caminos gratis)', () => {
   it('permite poner 2 caminos sin pagar y después vuelve a la fase principal', () => {
     let s = game();
     giveCard(s, 0, 'roadBuilding');
     s = must(s, { type: 'playRoadBuilding', player: 0 }).state;
-    expect(s.phase).toEqual({ kind: 'roadBuilding', left: 2 });
+    expect(s.phase).toEqual({ kind: 'roadBuilding', left: 2, after: 'main' });
     const first = (legalActions(s, 0)[0] as { type: 'buildRoad'; edges: number[] }).edges[0];
     const r1 = must(s, { type: 'buildRoad', player: 0, edge: first });
     expect(r1.events.map((e) => e.type)).toEqual(['RoadBuilt']); // sin ResourcesSpent
-    expect(r1.state.phase).toEqual({ kind: 'roadBuilding', left: 1 });
+    expect(r1.state.phase).toEqual({ kind: 'roadBuilding', left: 1, after: 'main' });
     const second = (legalActions(r1.state, 0)[0] as { type: 'buildRoad'; edges: number[] }).edges[0];
     const r2 = must(r1.state, { type: 'buildRoad', player: 0, edge: second });
     expect(r2.state.phase).toEqual({ kind: 'main' });
@@ -275,6 +309,44 @@ describe('Vialidad (caminos gratis)', () => {
     giveCard(full, 0, 'roadBuilding');
     full.edgeRoads = full.edgeRoads.map((p) => (p === null ? 1 : p)); // todo ocupado
     expect(legalActions(full, 0).some((a) => a.type === 'playRoadBuilding')).toBe(false);
+  });
+});
+
+describe('cartas de progreso antes de tirar los dados', () => {
+  const beforeRoll = (): GameState => ({ ...game(), phase: { kind: 'roll' } }) as GameState;
+
+  it('Buena cosecha antes de tirar: recibe los recursos y sigue pudiendo tirar', () => {
+    const s = beforeRoll();
+    giveCard(s, 0, 'yearOfPlenty');
+    const r = must(s, { type: 'playYearOfPlenty', player: 0, resources: ['fields', 'mountains'] });
+    expect(r.state.players[0].hand).toMatchObject({ fields: 1, mountains: 1 });
+    expect(r.state.phase).toEqual({ kind: 'roll' });
+    expectConserved(r.state);
+  });
+
+  it('Vialidad antes de tirar: pone los 2 caminos gratis y vuelve a la fase de tirar', () => {
+    let s = beforeRoll();
+    giveCard(s, 0, 'roadBuilding');
+    s = must(s, { type: 'playRoadBuilding', player: 0 }).state;
+    expect(s.phase).toEqual({ kind: 'roadBuilding', left: 2, after: 'roll' });
+    const first = (legalActions(s, 0)[0] as { type: 'buildRoad'; edges: number[] }).edges[0];
+    s = must(s, { type: 'buildRoad', player: 0, edge: first }).state;
+    const second = (legalActions(s, 0)[0] as { type: 'buildRoad'; edges: number[] }).edges[0];
+    s = must(s, { type: 'buildRoad', player: 0, edge: second }).state;
+    expect(s.phase).toEqual({ kind: 'roll' });
+    expect(legalActions(s, 0).some((a) => a.type === 'rollDice')).toBe(true);
+  });
+
+  it('sigue valiendo una sola carta por turno y no la comprada ese turno', () => {
+    const s = beforeRoll();
+    giveCard(s, 0, 'monopoly');
+    giveCard(s, 0, 'yearOfPlenty');
+    giveCard(s, 0, 'roadBuilding', true);
+    const r = must(s, { type: 'playMonopoly', player: 0, resource: 'forest' });
+    expect(errorOf(applyCommand(r.state, { type: 'playYearOfPlenty', player: 0, resources: ['forest', 'forest'] }))).toBe('already-played');
+    const fresh = beforeRoll();
+    giveCard(fresh, 0, 'roadBuilding', true);
+    expect(errorOf(applyCommand(fresh, { type: 'playRoadBuilding', player: 0 }))).toBe('no-card');
   });
 });
 
