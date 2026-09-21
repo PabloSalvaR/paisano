@@ -181,14 +181,15 @@ body{
 
 /* Puestos de los jugadores (a la izquierda, bajo el título): avatar, nombre y cantidad de cartas. El que tiene el turno resalta. */
 .seats{top:150px;left:14px;display:flex;flex-direction:column;gap:6px;padding:8px}
-.seat{position:relative;display:flex;align-items:center;gap:9px;padding:4px 12px 4px 5px;border-radius:999px;
+.seat{position:relative;display:grid;grid-template-columns:auto auto auto 1fr;grid-template-areas:"av nm vp cnt" "av aw aw aw";align-items:center;column-gap:9px;row-gap:3px;padding:5px 12px 5px 5px;border-radius:24px;
   background:var(--btn);border:2px solid transparent;transition:border-color .3s,box-shadow .3s,background-color .3s}
-.seat .av{width:38px;height:38px;flex:none;box-shadow:0 0 0 3px var(--pc)}
-.seat .nm{font-weight:700;font-size:.86rem;color:var(--text);min-width:42px}
+.seat .av{grid-area:av;width:38px;height:38px;flex:none;box-shadow:0 0 0 3px var(--pc)}
+.seat .nm{grid-area:nm;font-weight:700;font-size:.86rem;color:var(--text);min-width:42px}
 .vp{display:inline-flex;align-items:center;gap:2px;padding:1px 7px 1px 4px;border-radius:999px;background:rgba(43,34,22,.85);color:#ffe9a8;font-weight:800;font-size:.85rem;line-height:1.3}
 .vp svg{width:14px;height:14px}
 .vp b{color:#ffe9a8;font-size:.85rem}
-.seat .cnt{display:flex;align-items:center;gap:3px;margin-left:auto}
+.seat .vp{grid-area:vp}
+.seat .cnt{grid-area:cnt;display:flex;align-items:center;gap:3px;justify-self:end}
 .seat .cnt svg{width:13px;height:16px}
 .seat .cnt b{font-size:.95rem;color:var(--text)}
 .seat.on{border-color:var(--pc);background:var(--btn-hover);box-shadow:0 0 14px var(--pc)}
@@ -259,16 +260,16 @@ body{
   .who .nm{display:none}
   .who .av{width:32px;height:32px}
   /* los puestos van en una fila entre el logo (izquierda) y el botón de menú (derecha); todo compacto para que entren 4 */
-  .seats{top:10px;left:80px;right:60px;height:44px;transform:none;flex-direction:row;align-items:center;gap:2px;padding:0 4px}
+  .seats{top:10px;left:80px;right:60px;min-height:44px;transform:none;flex-direction:row;align-items:center;gap:2px;padding:0 4px}
   .seat .nm{display:none}
   /* avatar a la izquierda; puntos y cartas apilados a su derecha */
-  .seat{flex:1;min-width:0;display:grid;grid-template-columns:auto auto;align-items:center;justify-content:center;justify-items:start;
-    column-gap:2px;row-gap:0;padding:2px 3px 2px 2px;border-width:1px}
-  .seat .av{grid-row:1 / 3;width:22px;height:22px;box-shadow:0 0 0 2px var(--pc)}
+  .seat{flex:1;min-width:0;grid-template-columns:auto 1fr;grid-template-areas:"av vp" "av cnt" "aw aw";justify-content:stretch;justify-items:start;
+    column-gap:2px;row-gap:2px;padding:3px 3px 5px 2px;border-width:1px;border-radius:12px}
+  .seat .av{width:22px;height:22px;box-shadow:0 0 0 2px var(--pc)}
   .seat .vp{padding:0 3px 0 2px;font-size:.62rem;line-height:1.2;gap:1px}
   .seat .vp b{font-size:.62rem}
   .seat .vp svg{width:8px;height:8px}
-  .seat .cnt{margin-left:0;padding-left:2px;gap:2px}
+  .seat .cnt{justify-self:start;padding-left:2px;gap:2px}
   .seat .cnt svg{width:7px;height:9px}
   .seat .cnt b{font-size:.68rem;line-height:1.2}
   .res{flex:1;min-width:0;padding:4px 3px 3px}
@@ -392,31 +393,28 @@ body{
 .seat[hidden]{display:none}
 
 /* Cartas de desarrollo: contador en el puesto, reconocimientos (ruta más larga y montonera) y el panel «Mis cartas» */
-.seat .dv{display:inline-flex;align-items:center;gap:2px;margin-left:2px}
-.seat .dv svg{width:11px;height:14px}
-.seat .dv b{font-size:.85rem;color:var(--text)}
-.seat .aw{position:absolute;top:-9px;right:10px;display:flex;gap:3px;pointer-events:none}
-.seat .bdg{display:inline-flex;align-items:center;gap:2px;padding:1px 6px 1px 4px;border-radius:999px;background:var(--btn-on);color:var(--btn-on-text);border:1px solid var(--pc);
-  font-size:.72rem;font-weight:800;line-height:1.25;box-shadow:0 1px 4px rgba(0,0,0,.35)}
-.seat .bdg svg{width:12px;height:12px}
-.seat .bdg b{color:inherit;font-size:.72rem}
+/* Segunda fila del puesto: ruta más larga, gauchos jugados y cartas de desarrollo, siempre a la vista y sin salirse del puesto */
+.seat .aw{grid-area:aw;display:flex;align-items:center;gap:4px;min-width:0}
+.seat .bdg,.seat .dv{display:inline-flex;align-items:center;gap:3px;padding:1px 7px 1px 5px;border-radius:999px;background:var(--btn-on);color:var(--btn-on-text);border:1px solid var(--pc);
+  font-size:.72rem;font-weight:800;line-height:1.25;white-space:nowrap}
+.seat .bdg svg{width:15px;height:15px}
+.seat .dv svg{width:9px;height:12px}
+.seat .bdg b,.seat .dv b{color:inherit;font-size:.72rem}
 .seat .dv[hidden],.seat .bdg[hidden]{display:none}
-/* siempre a la vista: apagados si no tiene el reconocimiento, encendidos (con el color del jugador) si lo tiene */
-.seat .bdg:not(.held){opacity:.62;background:var(--btn);color:var(--text);box-shadow:none}
+/* apagados si no tiene el reconocimiento, encendidos (con el color del jugador) si lo tiene */
+.seat .bdg:not(.held),.seat .dv{opacity:.7;background:var(--btn);color:var(--text)}
 .seat .bdg.held{box-shadow:0 0 8px var(--pc),0 1px 4px rgba(0,0,0,.35)}
 .build .cost b{font-size:.68rem;line-height:8px;font-weight:800;color:var(--muted)}
 .dialog.cards .x{position:absolute;top:8px;right:8px;width:30px;height:30px;font-size:1rem;line-height:1}
 .dialog.cards .clear{display:block;margin:0 auto 6px;padding:3px 10px;font-size:.78rem}
 .dialog.cards h3{padding:0 30px}
 @media (max-width:640px){
-  /* en celular los puestos son muy angostos: las insignias van sobre el avatar (arriba) y el contador de cartas debajo, sin tapar puntos ni mano */
-  .seat .aw{top:-10px;left:1px;right:auto;gap:1px}
-  .seat .bdg{padding:0 3px 0 2px;font-size:.55rem;border-width:1px}
+  /* en celular los puestos son muy angostos: las insignias van en una tercera fila, chicas y centradas, dentro del puesto */
+  .seat .aw{justify-self:stretch;justify-content:center;flex-wrap:wrap;gap:1px 2px}
+  .seat .bdg,.seat .dv{gap:1px;padding:0 3px 0 2px;font-size:.55rem;border-width:1px}
   .seat .bdg svg{width:8px;height:8px}
-  .seat .bdg b{font-size:.55rem}
-  .seat .dv{position:absolute;left:1px;bottom:-9px;margin:0;gap:1px;padding:0 3px 0 2px;border-radius:999px;background:var(--btn-on);border:1px solid var(--pc)}
-  .seat .dv svg{width:5px;height:7px}
-  .seat .dv b{font-size:.55rem;line-height:1.2;color:var(--btn-on-text)}
+  .seat .dv svg{width:6px;height:8px}
+  .seat .bdg b,.seat .dv b{font-size:.55rem;line-height:1.2}
 }
 
 /* Panel «Mis cartas»: las cartas se ven como cartas (lámina propia de cardart.js), con su botón y el motivo si no se pueden jugar */
@@ -463,3 +461,7 @@ body{
 .opening .onote{margin:6px 0 0;min-height:1.3em;font-weight:600;color:var(--text)}
 @keyframes odie-in{from{transform:translateY(-10px) rotate(-40deg) scale(.6);opacity:0}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion:reduce){.opening .odie{animation:none}}
+.opening .orow.mine{border-color:var(--pc);background:var(--btn-hover)}
+.opening .oroll{margin-left:auto;padding:5px 12px;font-weight:800;font-size:.85rem;border-radius:999px;background:var(--accent);color:#2b1a05;border:2px solid rgba(0,0,0,.25);cursor:pointer;animation:oroll-pulse 1.2s ease-in-out infinite}
+@keyframes oroll-pulse{0%,100%{box-shadow:0 0 0 0 rgba(240,147,43,.6)}50%{box-shadow:0 0 0 7px rgba(240,147,43,0)}}
+@media (prefers-reduced-motion:reduce){.opening .oroll{animation:none}}

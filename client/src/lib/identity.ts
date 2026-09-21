@@ -30,6 +30,15 @@ export function saveIdentity(roomId: string, identity: Identity, storage: Pick<S
   }
 }
 
+/** Guarda solo el nombre (para la partida contra bots, que no tiene sala ni token). */
+export function saveName(name: string, storage: Pick<Storage, 'setItem'> | null = safeStorage()): void {
+  try {
+    storage?.setItem(NAME_KEY, name);
+  } catch {
+    /* sin almacenamiento: se sigue jugando */
+  }
+}
+
 export function forgetIdentity(roomId: string, storage: Pick<Storage, 'removeItem'> | null = safeStorage()): void {
   try {
     storage?.removeItem(roomKey(roomId));

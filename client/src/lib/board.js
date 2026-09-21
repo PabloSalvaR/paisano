@@ -1459,7 +1459,7 @@ export function initBoard(opts) {
       victoryPoint: { name: 'Punto de victoria', desc: 'Vale 1 punto. Queda oculta hasta que ganes.', play: null }
     };
     var BADGE_ROAD = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="8" width="16" height="4.5" rx="1.5" transform="rotate(-25 10 10)" fill="currentColor"/></svg>';
-    var BADGE_ARMY = '<svg viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="10" cy="13.5" rx="8.5" ry="2.4" fill="currentColor"/><path d="M5 13.5c0-5 2-7.5 5-7.5s5 2.5 5 7.5z" fill="currentColor"/></svg>';
+    var BADGE_ARMY = '<svg viewBox="0 0 20 20" aria-hidden="true"><g transform="rotate(-40 10 10)" fill="currentColor"><path d="M8 7.8H15.6Q18.6 8.4 19.6 10.4Q17.4 12.3 14.2 12.4H8Z"/><rect x="5.9" y="5.8" width="2.3" height="9" rx="1"/><rect x="0.8" y="8.6" width="5.4" height="3.6" rx="1.6"/></g></svg>'; // silueta de un facón: hoja con punta, guarda y mango
     var PLAYER_INFO = [
       { name: 'Tomás', css: '#d94141', text: '#ffffff', skin: '#f1c9a5', hair: '#5a3a22', hat: true },
       { name: 'Lucía', css: '#3b6fd6', text: '#ffffff', skin: '#c98f66', hair: '#2b2118', hat: false },
@@ -1467,6 +1467,10 @@ export function initBoard(opts) {
       { name: 'Sofía', css: '#f1eee6', text: '#2b2216', skin: '#f4d3b5', hair: '#a3402b', hat: false }
     ];
     if (online) opts.seats.forEach(function (st, i) { if (PLAYER_INFO[i]) PLAYER_INFO[i].name = st.name; }); // los nombres vienen de la sala
+    if (!online && opts.mode === 'bots' && opts.name) { // contra bots: el primer asiento es la persona, con el nombre que puso
+      PLAYER_INFO[0].name = opts.name;
+      PLAYER_INFO.forEach(function (pl, i) { if (i > 0 && pl.name.toLowerCase() === opts.name.toLowerCase()) pl.name += ' (bot)'; }); // si coincide con un bot, se distinguen
+    }
     function avatarSVG(p) {
       var i = PLAYER_INFO[p];
       return '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#e7dfcc"/>' +
@@ -1479,14 +1483,14 @@ export function initBoard(opts) {
     var handEl = stage.querySelector('.hand'), whoEl = document.getElementById('who'), seatsEl = document.getElementById('seats');
     var STAR = '<svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="10,1.5 12.6,7.2 18.8,7.8 14.1,12 15.5,18.2 10,15 4.5,18.2 5.9,12 1.2,7.8 7.4,7.2" fill="#f2c230" stroke="#7a5a10" stroke-width="1.4" stroke-linejoin="round"/></svg>';
     var vps = [0, 0, 0, 0]; // puntos de victoria que se ven: casas, estancias y reconocimientos (los Puntos de victoria ajenos no se ven)
-    var devCounts = [0, 0, 0, 0], knights = [0, 0, 0, 0], roadLens = [0, 0, 0, 0], awardRoad = { holder: null, length: 0 }, awardArmy = { holder: null, size: 0 }; // cartas de desarrollo por jugador (cuántas, no cuáles), caballeros jugados y quién tiene cada reconocimiento
+    var openingOn = false, devCounts = [0, 0, 0, 0], knights = [0, 0, 0, 0], roadLens = [0, 0, 0, 0], awardRoad = { holder: null, length: 0 }, awardArmy = { holder: null, size: 0 }; // cartas de desarrollo por jugador (cuántas, no cuáles), caballeros jugados y quién tiene cada reconocimiento
     var myHand = {}, counts = [], turn = 0, VIEWER = 0; // myHand: la mano de quien mira; counts: cartas de cada jugador (de los demás solo se sabe cuántas); VIEWER: el jugador cuya mano muestra el banner (en la partida local, el de turno)
     seatsEl.innerHTML = PLAYER_INFO.map(function (pl, p) {
       return '<div class="seat" data-p="' + p + '" style="--pc:' + pl.css + '"><div class="av">' + avatarSVG(p) + '</div><span class="nm">' + pl.name + '</span>' +
         '<span class="vp" title="Puntos de victoria">' + STAR + '<b>0</b></span>' +
         '<span class="cnt"><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#f6ecd4" stroke="#5b4630" stroke-width="1.6"/></svg><b>0</b></span>' +
-        '<span class="dv" title="Cartas de desarrollo" hidden><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#8f2a2a" stroke="#e8d6a0" stroke-width="1.6"/></svg><b>0</b></span>' +
-        '<span class="aw"><span class="bdg road" title="Ruta más larga">' + BADGE_ROAD + '<b></b></span><span class="bdg army" title="Gauchos jugados">' + BADGE_ARMY + '<b></b></span></span></div>';
+        '<span class="aw"><span class="bdg road" title="Ruta más larga">' + BADGE_ROAD + '<b></b></span><span class="bdg army" title="Gauchos jugados">' + BADGE_ARMY + '<b></b></span>' +
+        '<span class="dv" title="Cartas de desarrollo" hidden><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#8f2a2a" stroke="#e8d6a0" stroke-width="1.6"/></svg><b>0</b></span></span></div>';
     }).join('');
     if (online) for (var si = opts.seats.length; si < seatsEl.children.length; si++) seatsEl.children[si].hidden = true; // partidas de 3: sin el 4.º puesto
     function handTotal(p) { return counts[p]; }
@@ -1498,7 +1502,7 @@ export function initBoard(opts) {
     }
     function renderSeats() {
       Array.prototype.forEach.call(seatsEl.children, function (s, p) {
-        s.classList.toggle('on', p === turn); s.querySelector('.cnt b').textContent = handTotal(p); s.querySelector('.vp b').textContent = vps[p];
+        s.classList.toggle('on', p === turn && !openingOn); s.querySelector('.cnt b').textContent = handTotal(p); s.querySelector('.vp b').textContent = vps[p];
         var dv = s.querySelector('.dv'), rd = s.querySelector('.bdg.road'), ar = s.querySelector('.bdg.army');
         dv.hidden = !devCounts[p]; dv.querySelector('b').textContent = devCounts[p];
         rd.classList.toggle('held', awardRoad.holder === p); rd.querySelector('b').textContent = roadLens[p]; rd.title = awardRoad.holder === p ? 'Tiene la Ruta más larga (' + roadLens[p] + ')' : 'Ruta más larga propia: ' + roadLens[p] + ' (hacen falta ' + game.config.longestRoadMin + ' y superar al resto)';
@@ -1588,6 +1592,7 @@ export function initBoard(opts) {
       var ph = game.phase, name = PLAYER_INFO[game.turn].name, me = game.turn === VIEWER;
       switch (ph.kind) {
         case 'setup': {
+          if (openingOn) return 'Sorteando quién empieza…';
           var fase = ph.step < game.players.length ? 'fase 1, sentido horario' : 'fase 2, sentido antihorario';
           return (me ? 'Tu turno' : name) + ' · ' + fase + ': ' + (ph.part === 'settlement' ? (me ? 'tocá un punto para colocar tu casa' : 'coloca su casa') : (me ? 'tocá un camino junto a tu casa' : 'coloca su camino'));
         }
@@ -1606,7 +1611,7 @@ export function initBoard(opts) {
     // Muestra un mensaje. Los errores y avisos "temporales" vuelven solos al texto de siempre.
     function showStatus(text, isError, temporary, who) {
       clearTimeout(statusTimer);
-      statusEl.innerHTML = '<i style="background:' + PLAYER_INFO[who !== undefined ? who : game.turn].css + '"></i><span></span>';
+      statusEl.innerHTML = '<i style="background:' + PLAYER_INFO[who !== undefined ? who : openingOn ? VIEWER : game.turn].css + '"></i><span></span>';
       statusEl.lastChild.textContent = text;
       statusEl.classList.toggle('error', !!isError);
       if (isError || temporary) statusTimer = setTimeout(function () { showStatus(statusText(), false); }, isError ? 2500 : 4000);
@@ -2221,47 +2226,66 @@ export function initBoard(opts) {
     // El motor ya sorteó (`game.opening`: rondas de 2 dados por jugador; si hay empate arriba, otra ronda solo con los empatados).
     // Acá solo se muestra, una tirada por vez, y al terminar arranca la colocación (y, si abre un bot, empieza a jugar). Tocar lo salta.
     var openingEl = document.getElementById('opening'), openingTimers = [];
+    openingOn = false; // mientras dura el sorteo no se marca de quién es el turno (sería adelantar el resultado)
     function miniDie(v) {
       return '<svg class="odie" viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="6" fill="#d94141" stroke="#7a1f1f" stroke-width="2"/>' +
         DIE_PIPS[v].map(function (i) { return '<circle cx="' + (6.5 + (i % 3) * 6.5) + '" cy="' + (6.5 + Math.floor(i / 3) * 6.5) + '" r="2.2" fill="#fff"/>'; }).join('') + '</svg>';
     }
-    function openingRows(round, shownN, winners) {
+    function openingRows(round, shownN, winners, rollIdx) {
       return round.map(function (r, i) {
         var pl = PLAYER_INFO[r.player], out = i < shownN;
+        if (i === rollIdx) return '<div class="orow mine" style="--pc:' + pl.css + '"><i></i><span class="nm"></span><button type="button" class="oroll">Tirar mis dados</button></div>'; // tu tirada: la hacés vos
         return '<div class="orow' + (winners && winners.indexOf(r.player) >= 0 ? ' win' : '') + '" style="--pc:' + pl.css + '"><i></i><span class="nm"></span>' +
           (out ? miniDie(r.roll[0]) + miniDie(r.roll[1]) + '<b>' + (r.roll[0] + r.roll[1]) + '</b>' : '<span class="odie ph"></span><span class="odie ph"></span><b>?</b>') + '</div>';
       }).join('');
     }
-    function closeOpening() { openingTimers.forEach(clearTimeout); openingTimers = []; openingEl.hidden = true; openingEl.onclick = null; }
+    function closeOpening() { openingTimers.forEach(clearTimeout); openingTimers = []; openingEl.hidden = true; openingEl.onclick = null; openingOn = false; }
     function showOpening(rounds, first, done) {
       var animate = !reduced();
-      busy = true; refreshUi();
+      openingOn = true; busy = true; refreshUi(); renderSeats();
       openingEl.hidden = false;
       function later(ms, fn) { openingTimers.push(setTimeout(fn, ms)); }
       function finish() {
         openingTimers.forEach(clearTimeout); openingTimers = [];
-        openingEl.hidden = true; openingEl.onclick = null;
-        busy = false; refreshUi();
+        openingEl.hidden = true; openingEl.onclick = null; openingOn = false;
+        busy = false; refreshUi(); renderSeats();
         showStatus(first === VIEWER && withOthers ? 'Empezás vos' : 'Empieza ' + PLAYER_INFO[first].name, false, true, first);
         done();
       }
       openingEl.onclick = finish; // tocar salta el sorteo
       function playRound(ri) {
-        var round = rounds[ri], last = ri === rounds.length - 1, t = 0, max = Math.max.apply(null, round.map(function (r) { return r.roll[0] + r.roll[1]; }));
+        var round = rounds[ri], last = ri === rounds.length - 1, max = Math.max.apply(null, round.map(function (r) { return r.roll[0] + r.roll[1]; }));
         var winners = round.filter(function (r) { return r.roll[0] + r.roll[1] === max; }).map(function (r) { return r.player; });
-        function draw(n, note, win) {
-          openingEl.innerHTML = '<h3>' + (ri === 0 ? '¿Quién empieza?' : 'Desempate') + '</h3><div class="orows">' + openingRows(round, n, win ? winners : null) + '</div><p class="onote">' + (note || '&nbsp;') + '</p>';
+        function draw(n, note, win, rollIdx) {
+          openingEl.innerHTML = '<h3>' + (ri === 0 ? '¿Quién empieza?' : 'Desempate') + '</h3><div class="orows">' + openingRows(round, n, win ? winners : null, rollIdx) + '</div><p class="onote">' + (note || '&nbsp;') + '</p>';
           Array.prototype.forEach.call(openingEl.querySelectorAll('.orow .nm'), function (el, i) { el.textContent = PLAYER_INFO[round[i].player].name; });
         }
-        draw(0, ri === 0 ? 'Tira cada uno dos dados; abre el mayor' : 'Tiran de nuevo solo los empatados');
-        if (animate) audio.rollDice();
-        round.forEach(function (r, i) { t = 900 + i * 650; later(t, function () { draw(i + 1); }); });
-        t += 550;
-        later(t, function () {
-          var names = winners.map(function (p) { return PLAYER_INFO[p].name; });
-          draw(round.length, last ? 'Empieza ' + names[0] : 'Empate entre ' + names.join(' y ') + ': tiran de nuevo', true);
-          later(last ? 1900 : 1700, function () { if (last) finish(); else playRound(ri + 1); });
-        });
+        var intro = ri === 0 ? 'Tira cada uno dos dados; abre el mayor' : 'Tiran de nuevo solo los empatados';
+        function conclude() {
+          later(550, function () {
+            var names = winners.map(function (p) { return PLAYER_INFO[p].name; });
+            draw(round.length, last ? 'Empieza ' + names[0] : 'Empate entre ' + names.join(' y ') + ': tiran de nuevo', true);
+            later(last ? 1900 : 1700, function () { if (last) finish(); else playRound(ri + 1); });
+          });
+        }
+        // Los otros tiran solos, uno cada 0,65 s. Cuando le toca a quien mira, se frena hasta que toque «Tirar mis dados».
+        function step(i) {
+          if (i >= round.length) return conclude();
+          if (withOthers && round[i].player === VIEWER) {
+            draw(i, 'Te toca: tirá tus dados', false, i);
+            openingEl.querySelector('.oroll').onclick = function (e) {
+              e.stopPropagation();
+              if (animate) audio.rollDice();
+              draw(i + 1, intro);
+              later(animate ? 800 : 0, function () { step(i + 1); });
+            };
+            return;
+          }
+          later(i === 0 ? 900 : 650, function () { draw(i + 1, intro); step(i + 1); });
+        }
+        draw(0, intro);
+        if (animate && !(withOthers && round[0].player === VIEWER)) audio.rollDice(); // suenan los dados de los que tiran solos
+        step(0);
       }
       playRound(0);
     }
