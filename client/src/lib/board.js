@@ -4,8 +4,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createAudio } from './audio.js';
-// Motor de reglas (TypeScript puro): decide todo. Este archivo solo dibuja el estado y envía comandos.
-import { createGame, applyCommand, legalActions, topology, victoryPoints } from '../engine';
+// Motor de reglas (TypeScript puro): decide todo. Este archivo solo dibuja lo que la sesión le da (la vista del jugador)
+// y le envía comandos; no aplica reglas ni conoce el estado completo. `topology` es geometría fija del tablero.
+import { topology } from '../engine';
+import { LocalSession } from './session';
 
 export const MARKUP = `
 <div id="stage">
@@ -932,7 +934,10 @@ export function initBoard() {
 
     // ------------------------------------------------------------------ tablero
     var board = null, tiles = [], tileMeshes = [], ships = [], robber = null, robberBase = 0, robberPulse = 0, piecesGroup = null, markersGroup = null, ghostGroup = null;
-    var game = null; // estado de la partida (lo maneja el motor); el tablero 3D es solo su reflejo
+    var session = null; // GameSession: dueña de la partida (hoy local, después remota)
+    var game = null, legal = [], me = 0; // última vista de la sesión: partida visible, acciones legales y jugador que mira
+    var sending = false; // true mientras espera la respuesta de la sesión a un comando
+    function pull() { var v = session.view(); game = v.game; legal = v.legal; me = v.me; }
     var buildMode = null; // 'road' | 'settlement' | 'city' | null: qué se está por construir (en el turno normal)
     var robberTile = -1, discardSel = {}, dialogKey = ''; // casilla donde está dibujado el ladrón; selección del descarte
     var busy = false; // true mientras corre una animación (dados, recursos volando): no se aceptan jugadas ni botones
@@ -942,10 +947,10 @@ export function initBoard() {
     function buildBoard(seed) {
       if (board) scene.remove(board);
       var rnd = mulberry32(seed);
-      game = createGame(PLAYER_INFO.map(function (p) { return p.name; }), seed);
+      session = new LocalSession(PLAYER_INFO.map(function (p) { return p.name; }), seed); pull();
       var topo = topology();
       board = new THREE.Group(); scene.add(board);
-      tiles = []; tileMeshes = []; ships = []; robber = null; hoverTile = null; busy = false; pieceSeen = {};
+      tiles = []; tileMeshes = []; ships = []; robber = null; hoverTile = null; busy = false; sending = false; pieceSeen = {};
 
       // casillas (mismo orden e ids que las del motor)
       topo.tiles.forEach(function (et) {
@@ -1112,7 +1117,7 @@ export function initBoard() {
       }
       if (markerMat) { markerMat.dispose(); markerMat = null; }
       if (busy || !game) return;
-      var acts = legalActions(game, game.turn), topo = topology(), y = TILE_TOP + 0.05;
+      var acts = legal, topo = topology(), y = TILE_TOP + 0.05;
       markerMat = new THREE.MeshBasicMaterial({ color: col(PLAYER_INFO[game.turn].css), transparent: true, opacity: 0.6, depthWrite: false, fog: false });
       var ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false, fog: false });
       function vertexMarker(vid) {
@@ -1245,9 +1250,11 @@ export function initBoard() {
     // cuando los dados terminan de caer, y mientras tanto los botones y marcadores quedan bloqueados (busy).
     function rollDice() {
       if (busy || !game || game.phase.kind !== 'roll') return;
-      var before = game, r = applyCommand(game, { type: 'rollDice', player: game.turn });
-      if (!r.ok) { showStatus(r.error.message, true); return; }
-      game = r.state;
+      var before = game;
+      busy = true; // también cubre la espera de la respuesta de la sesión
+      session.send({ type: 'rollDice', player: game.turn }).then(function (r) {
+      if (!r.ok) { busy = false; showStatus(r.error.message, true); return; }
+      pull();
       var rolled = r.events.filter(function (e) { return e.type === 'DiceRolled'; })[0], dist = r.events.filter(function (e) { return e.type === 'ResourcesDistributed'; })[0];
       var a = rolled.dice[0], b = rolled.dice[1], s = rolled.total;
       var animate = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -1268,6 +1275,7 @@ export function initBoard() {
         setTimeout(function () { busy = false; applyView(); }, animate ? Math.max(dur, 900) : 0);
         diceTimer = setTimeout(function () { diceBox.hidden = true; }, 3200);
       }, animate ? 1250 : 0);
+      });
     }
 
     // Qué casilla le dio qué a quién en una tirada (para animar los iconos). El motor solo informa el total por jugador y
@@ -1292,7 +1300,7 @@ export function initBoard() {
     // ------------------------------------------------------------------ jugadores y partida local
     // Partida local de 4 jugadores en el mismo navegador ("hot-seat"): el banner de recursos muestra la mano del jugador de turno
     // (VIEWER) con su color, y su puesto se resalta. Las manos y los puntos que se ven son un reflejo del estado del motor
-    // (game); los iconos que vuelan hacia el banner actualizan `hands` a medida que llegan. Con multijugador, VIEWER será
+    // (game); los iconos que vuelan hacia el banner actualizan `myHand` y `counts` a medida que llegan. Con multijugador, VIEWER será
     // siempre el jugador de este navegador y los nombres vendrán de la sala.
     var HAND_KINDS = ['forest', 'hills', 'pasture', 'fields', 'mountains'];
     var PLAYER_INFO = [
@@ -1313,30 +1321,31 @@ export function initBoard() {
     var handEl = stage.querySelector('.hand'), whoEl = document.getElementById('who'), seatsEl = document.getElementById('seats');
     var STAR = '<svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="10,1.5 12.6,7.2 18.8,7.8 14.1,12 15.5,18.2 10,15 4.5,18.2 5.9,12 1.2,7.8 7.4,7.2" fill="#f2c230" stroke="#7a5a10" stroke-width="1.4" stroke-linejoin="round"/></svg>';
     var vps = [0, 0, 0, 0]; // puntos de victoria: 1 por poblado y 2 por ciudad (todavía sin cartas ni reconocimientos especiales)
-    var hands = [], turn = 0, VIEWER = 0; // VIEWER: el jugador cuya mano muestra el banner (en la partida local, el de turno)
+    var myHand = {}, counts = [], turn = 0, VIEWER = 0; // myHand: la mano de quien mira; counts: cartas de cada jugador (de los demás solo se sabe cuántas); VIEWER: el jugador cuya mano muestra el banner (en la partida local, el de turno)
     seatsEl.innerHTML = PLAYER_INFO.map(function (pl, p) {
       return '<div class="seat" data-p="' + p + '" style="--pc:' + pl.css + '"><div class="av">' + avatarSVG(p) + '</div><span class="nm">' + pl.name + '</span>' +
         '<span class="vp" title="Puntos de victoria">' + STAR + '<b>0</b></span>' +
         '<span class="cnt"><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#f6ecd4" stroke="#5b4630" stroke-width="1.6"/></svg><b>0</b></span></div>';
     }).join('');
-    function handTotal(p) { return HAND_KINDS.reduce(function (a, k) { return a + hands[p][k]; }, 0); }
+    function handTotal(p) { return counts[p]; }
     function renderHand() {
       var pl = PLAYER_INFO[VIEWER];
       handEl.style.setProperty('--pc', pl.css); handEl.style.setProperty('--pt', pl.text);
       whoEl.innerHTML = '<div class="av">' + avatarSVG(VIEWER) + '</div><span class="nm">' + pl.name + '</span><span class="vp" title="Puntos de victoria">' + STAR + '<b>' + vps[VIEWER] + '</b></span>';
-      HAND_KINDS.forEach(function (k) { handEl.querySelector('[data-res="' + k + '"] b').textContent = hands[VIEWER][k]; });
+      HAND_KINDS.forEach(function (k) { handEl.querySelector('[data-res="' + k + '"] b').textContent = myHand[k]; });
     }
     function renderSeats() {
       Array.prototype.forEach.call(seatsEl.children, function (s, p) { s.classList.toggle('on', p === turn); s.querySelector('.cnt b').textContent = handTotal(p); s.querySelector('.vp b').textContent = vps[p]; });
     }
     // Copia las manos y los puntos del estado del motor a lo que se ve en pantalla.
     function syncHands() {
-      hands = game.players.map(function (pl) { var h = {}; HAND_KINDS.forEach(function (k) { h[k] = pl.hand[k]; }); return h; });
-      vps = game.players.map(function (pl, p) { return victoryPoints(game, p); });
+      myHand = {}; HAND_KINDS.forEach(function (k) { myHand[k] = game.hand[k]; });
+      counts = game.players.map(function (pl) { return pl.handCount; });
+      vps = game.players.map(function (pl) { return pl.points; });
     }
-    function resetPlayers() { VIEWER = turn = game.turn; syncHands(); renderHand(); renderSeats(); }
+    function resetPlayers() { VIEWER = me; turn = game.turn; syncHands(); renderHand(); renderSeats(); }
     // Pone la pantalla al día con el estado (banner del jugador de turno, puestos, ladrón, marcadores, botones y diálogos).
-    function applyView() { VIEWER = turn = game.turn; syncHands(); renderHand(); renderSeats(); syncRobber(); refreshUi(); }
+    function applyView() { VIEWER = me; turn = game.turn; syncHands(); renderHand(); renderSeats(); syncRobber(); refreshUi(); }
     function refreshUi() { refreshMarkers(); updateControls(); renderDialog(); showStatus(statusText(), false); }
 
     // El ladrón se dibuja sobre la casilla del estado (con un saltito al llegar). Fuera del desierto va corrido hacia adelante
@@ -1379,13 +1388,13 @@ export function initBoard() {
     }
     // Carta de desarrollo: un botón más de la bandeja; se habilita en fase main si la mano alcanza para pagarla.
     function updateDevButton() {
-      var cost = game.config.costs.developmentCard, hand = game.players[game.turn].hand;
+      var cost = game.config.costs.developmentCard, hand = game.hand;
       var can = !busy && game.phase.kind === 'main' && Object.keys(cost).every(function (k) { return hand[k] >= cost[k]; });
       btnDev.disabled = !can;
       if (!can && pendingCmd && pendingCmd.type === 'buyDevCard') { pendingCmd = null; renderDialog(); }
     }
     function updateControls() {
-      var ph = game.phase.kind, acts = legalActions(game, game.turn), can = {};
+      var ph = game.phase.kind, acts = legal, can = {};
       acts.forEach(function (a) { can[a.type] = true; });
       updateTurnButton(); updateDevButton();
       if (tradeUI && (busy || !can.bankTrade)) tradeUI = null; // ya no se puede comerciar (otra fase, o la mano no alcanza)
@@ -1450,15 +1459,15 @@ export function initBoard() {
       var html = '';
       if (ph.kind === 'discard') {
         var need = ph.queue[0].count, got = HAND_KINDS.reduce(function (a, k) { return a + (discardSel[k] || 0); }, 0);
-        html = '<h3></h3><p>Elegidas ' + got + ' de ' + need + '</p><div class="rows">' + HAND_KINDS.filter(function (k) { return hands[game.turn][k] > 0; }).map(function (k) {
+        html = '<h3></h3><p>Elegidas ' + got + ' de ' + need + '</p><div class="rows">' + HAND_KINDS.filter(function (k) { return myHand[k] > 0; }).map(function (k) {
           return '<div class="row"><span class="ico">' + resIcon(k) + '</span><span class="nm">' + TERRAINS[k].res + '</span>' +
             '<button type="button" data-dec="' + k + '" aria-label="Menos ' + TERRAINS[k].res + '"' + ((discardSel[k] || 0) ? '' : ' disabled') + '>−</button>' +
-            '<b>' + (discardSel[k] || 0) + ' / ' + hands[game.turn][k] + '</b>' +
-            '<button type="button" data-inc="' + k + '" aria-label="Más ' + TERRAINS[k].res + '"' + ((discardSel[k] || 0) < hands[game.turn][k] && got < need ? '' : ' disabled') + '>+</button></div>';
+            '<b>' + (discardSel[k] || 0) + ' / ' + myHand[k] + '</b>' +
+            '<button type="button" data-inc="' + k + '" aria-label="Más ' + TERRAINS[k].res + '"' + ((discardSel[k] || 0) < myHand[k] && got < need ? '' : ' disabled') + '>+</button></div>';
         }).join('') + '</div><button type="button" class="primary" data-confirm' + (got === need ? '' : ' disabled') + '>Descartar</button>';
       } else {
         html = '<h3></h3><div class="victims">' + ph.victims.map(function (v) {
-          var total = HAND_KINDS.reduce(function (a, k) { return a + hands[v][k]; }, 0);
+          var total = counts[v];
           return '<button type="button" class="victim" data-victim="' + v + '" style="--pc:' + PLAYER_INFO[v].css + '"><span class="av">' + avatarSVG(v) + '</span><span>' + PLAYER_INFO[v].name + '</span><small>' + total + ' cartas</small></button>';
         }).join('') + '</div>';
       }
@@ -1470,7 +1479,7 @@ export function initBoard() {
     // la acción bankTrade de legalActions; acá no se calcula ninguna regla.
     var tradeUI = null; // { give, get } elegidos (null = panel cerrado)
     function tradeOptions() {
-      var a = legalActions(game, game.turn).filter(function (x) { return x.type === 'bankTrade'; })[0];
+      var a = legal.filter(function (x) { return x.type === 'bankTrade'; })[0];
       return a ? a.trades : [];
     }
     function renderTrade() {
@@ -1529,14 +1538,19 @@ export function initBoard() {
       else if (tradeUI) { tradeUI = null; refreshUi(); }
     });
     function dispatch(cmd) {
+      if (sending) return;
       pendingCmd = null;
-      var r = applyCommand(game, cmd);
+      sending = true;
+      session.send(cmd).then(function (r) { sending = false; settle(cmd, r); });
+    }
+    // Respuesta de la sesión a un comando: la pantalla se pone al día (con animaciones) recién acá, no antes.
+    function settle(cmd, r) {
       if (!r.ok) { showStatus(r.error.message, true); renderDialog(); return; }
       tradeUI = null;
       var thief = game.turn;
       var landed = { placeRoad: 'road', buildRoad: 'road', placeSettlement: 'settlement', buildSettlement: 'settlement', buildCity: 'city' }[cmd.type];
       if (landed) audio.land(landed); // la pieza toca el tablero
-      game = r.state;
+      pull();
       buildMode = null;
       syncPieces();
       // el 2.º poblado de la colocación inicial cobra recursos: se animan desde las casillas que toca
@@ -1592,8 +1606,9 @@ export function initBoard() {
         var card = handEl.querySelector('[data-res="' + k + '"]'), seat = seatsEl.children[p];
         var target = mine ? card : seat, glow = mine ? card.style.getPropertyValue('--c') : pl.css;
         var gain = function () {
-          hands[p][k] += amount;
-          if (mine) card.querySelector('b').textContent = hands[p][k]; else seat.querySelector('.cnt b').textContent = handTotal(p);
+          if (mine) myHand[k] += amount;
+          counts[p] += amount;
+          if (mine) card.querySelector('b').textContent = myHand[k]; else seat.querySelector('.cnt b').textContent = handTotal(p);
           if (!animate) return;
           pop(target, glow); floatText(target, '+' + amount, mine ? card.style.getPropertyValue('--c') : pl.css);
         };
@@ -1602,7 +1617,7 @@ export function initBoard() {
         if (stolen) { // robo: sale del avatar de la víctima, que pierde la carta en el momento de partir
           var fs = seatsEl.children[j.from], fr = fs.querySelector('.av').getBoundingClientRect();
           sx = fr.left - sr.left + fr.width / 2; sy = fr.top - sr.top + fr.height / 2;
-          setTimeout(function () { hands[j.from][k] -= 1; fs.querySelector('.cnt b').textContent = handTotal(j.from); pop(fs, PLAYER_INFO[j.from].css); }, delay);
+          setTimeout(function () { counts[j.from] -= 1; if (j.from === VIEWER) { myHand[k] -= 1; handEl.querySelector('[data-res="' + k + '"] b').textContent = myHand[k]; } fs.querySelector('.cnt b').textContent = handTotal(j.from); pop(fs, PLAYER_INFO[j.from].css); }, delay);
         } else {
           var v = new THREE.Vector3(j.t.x, TILE_TOP + 0.35, j.t.z).project(camera); sx = (v.x * 0.5 + 0.5) * w; sy = (0.5 - v.y * 0.5) * h;
         }
@@ -1645,14 +1660,8 @@ export function initBoard() {
       buildBoard((Math.random() * 1e9) | 0);
       for (var n = 2; n <= 12; n++) rollCounts[n] = 0;
       updateStats();
-      var st = game, guard = 0;
-      while (st.phase.kind === 'setup' && guard++ < 200) {
-        var p = st.turn, a = legalActions(st, p)[0], list = a.vertices || a.edges, at = pickCentral(list, !!a.vertices);
-        var r = applyCommand(st, a.type === 'placeSettlement' ? { type: 'placeSettlement', player: p, vertex: at } : { type: 'placeRoad', player: p, edge: at });
-        if (!r.ok) break;
-        st = r.state;
-      }
-      game = st; syncPieces(); applyView();
+      session.autoSetup(pickCentral); // la sesión juega la colocación con comandos legales; acá solo se elige dónde
+      pull(); syncPieces(); applyView();
     });
     var btnStats = document.getElementById('btnStats');
     btnStats.addEventListener('click', function () { statsEl.hidden = !statsEl.hidden; pressed(btnStats, !statsEl.hidden); });
@@ -1732,11 +1741,11 @@ export function initBoard() {
     if (/[?&]debug/.test(location.search)) {
       window.__paisano = {
         pick: function (x, y) { var r = renderer.domElement.getBoundingClientRect(); pointer.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1); raycaster.setFromCamera(pointer, camera); var h = raycaster.intersectObjects(markersGroup.children, false)[0]; return { hit: h ? h.object.userData : null, ray: [raycaster.ray.origin.toArray(), raycaster.ray.direction.toArray()], pointer: pointer.toArray(), cam: camera.position.toArray(), marker19: markersGroup.children.filter(function (c) { return c.userData.id === 19; }).map(function (c) { return c.matrixWorld.elements.slice(12, 15); }) }; },
-        game: function () { return game; },
+        game: function () { return session.debugState(); },
         busy: function () { return busy; },
-        legal: function () { return legalActions(game, game.turn); },
+        legal: function () { return legal; },
         tileVertices: function (t) { return topology().tiles[t].vertices; },
-        mutate: function (fn) { game = JSON.parse(JSON.stringify(game)); fn(game); syncPieces(); applyView(); },
+        mutate: function (fn) { session.debugMutate(fn); pull(); syncPieces(); applyView(); },
         screen: function (type, id) {
           var topo = topology(), p = new THREE.Vector3();
           if (type === 'vertex') p.set(vertices[id].x, TILE_TOP + 0.05, vertices[id].z);
