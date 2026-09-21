@@ -21,6 +21,7 @@ export type RoomErrorCode =
   | 'not-started'
   | 'not-enough-players'
   | 'invalid-name'
+  | 'invalid-command'
   | 'name-taken'
   | 'conflict';
 
