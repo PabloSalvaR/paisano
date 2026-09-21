@@ -92,6 +92,7 @@ export const MARKUP = `
   <nav class="panel bar" id="bar" aria-label="Controles del tablero">
     <div class="group">
       <button type="button" id="btnNew" class="primary">Nuevo mapa</button>
+      <button type="button" id="btnBots" class="primary" title="Jugás vos contra tres bots que juegan solos">Partida contra bots</button>
       <button type="button" id="btnQuick" class="primary" hidden title="Solo desarrollo: mapa nuevo con la colocación inicial hecha al azar, listo para tirar los dados">Partida rápida · dev</button>
     </div>
     <div class="group" role="group" aria-label="Sonido">
@@ -937,7 +938,12 @@ export function initBoard() {
     var session = null; // GameSession: dueña de la partida (hoy local, después remota)
     var game = null, legal = [], me = 0; // última vista de la sesión: partida visible, acciones legales y jugador que mira
     var sending = false; // true mientras espera la respuesta de la sesión a un comando
-    function pull() { var v = session.view(); game = v.game; legal = v.legal; me = v.me; }
+    var botMode = false; // true en la partida contra bots (vos sos siempre el primer jugador); false: los 4 en la misma pantalla
+    var shown = null; // lo que ya se dibujó del estado (piezas y ladrón); durante una reproducción de eventos va por detrás de `game`
+    function pull() {
+      var v = session.view(); game = v.game; legal = v.legal; me = v.me;
+      shown = { vertexBuildings: game.vertexBuildings.slice(), edgeRoads: game.edgeRoads.slice(), robber: game.robber };
+    }
     var buildMode = null; // 'road' | 'settlement' | 'city' | null: qué se está por construir (en el turno normal)
     var robberTile = -1, discardSel = {}, dialogKey = ''; // casilla donde está dibujado el ladrón; selección del descarte
     var busy = false; // true mientras corre una animación (dados, recursos volando): no se aceptan jugadas ni botones
@@ -947,7 +953,7 @@ export function initBoard() {
     function buildBoard(seed) {
       if (board) scene.remove(board);
       var rnd = mulberry32(seed);
-      session = new LocalSession(PLAYER_INFO.map(function (p) { return p.name; }), seed); pull();
+      session = new LocalSession(PLAYER_INFO.map(function (p) { return p.name; }), seed, undefined, botMode ? { bots: [false, true, true, true] } : {}); pull();
       var topo = topology();
       board = new THREE.Group(); scene.add(board);
       tiles = []; tileMeshes = []; ships = []; robber = null; hoverTile = null; busy = false; sending = false; pieceSeen = {};
@@ -1012,7 +1018,7 @@ export function initBoard() {
       }
       var topo = topology(), now = performance.now() / 1000;
       function born(o, key) { if (!pieceSeen[key]) { pieceSeen[key] = true; o.userData.born = now; o.scale.setScalar(0.001); } }
-      game.edgeRoads.forEach(function (p, eid) {
+      shown.edgeRoads.forEach(function (p, eid) {
         if (p === null) return;
         var e = topo.edges[eid], A = vertices[e.a], B = vertices[e.b], dx = B.x - A.x, dz = B.z - A.z, L = Math.hypot(dx, dz);
         var ux = dx / L, uz = dz / L, a = { x: A.x + ux * 0.2, z: A.z + uz * 0.2 }, b = { x: B.x - ux * 0.2, z: B.z - uz * 0.2 };
@@ -1022,7 +1028,7 @@ export function initBoard() {
         born(road, 'e' + eid); born(edgeLine, 'e' + eid);
         piecesGroup.add(road); piecesGroup.add(edgeLine);
       });
-      game.vertexBuildings.forEach(function (bd, vid) {
+      shown.vertexBuildings.forEach(function (bd, vid) {
         if (!bd) return;
         var v = vertices[vid], m = bd.city ? makeCity(PLAYERS[bd.player]) : makeSettlement(PLAYERS[bd.player]);
         m.position.set(v.x, TILE_TOP, v.z); m.rotation.y = ((vid * 5) % 6) * Math.PI / 3 + Math.PI / 6;
@@ -1246,35 +1252,14 @@ export function initBoard() {
       statsN.textContent = total ? '· ' + total + (total === 1 ? ' tirada' : ' tiradas') : '';
     }
     updateStats();
-    // La tirada la decide el motor (servidor autoritativo); acá solo se anima. El estado ya cambió: la pantalla lo revela
+    // La tirada la decide el motor (servidor autoritativo); acá solo se anima (ver playEvents): la pantalla revela el resultado
     // cuando los dados terminan de caer, y mientras tanto los botones y marcadores quedan bloqueados (busy).
     function rollDice() {
       if (busy || !game || game.phase.kind !== 'roll') return;
-      var before = game;
       busy = true; // también cubre la espera de la respuesta de la sesión
       session.send({ type: 'rollDice', player: game.turn }).then(function (r) {
-      if (!r.ok) { busy = false; showStatus(r.error.message, true); return; }
-      pull();
-      var rolled = r.events.filter(function (e) { return e.type === 'DiceRolled'; })[0], dist = r.events.filter(function (e) { return e.type === 'ResourcesDistributed'; })[0];
-      var a = rolled.dice[0], b = rolled.dice[1], s = rolled.total;
-      var animate = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-      busy = true; refreshUi();
-      clearTimeout(diceTimer);
-      diceSum.textContent = '';
-      diceBox.hidden = false;
-      spinDie(dieA, a, animate); spinDie(dieB, b, animate);
-      if (animate) audio.rollDice();
-      // el resultado (solo el total) y el efecto sobre el tablero aparecen cuando los dados terminan de caer
-      diceTimer = setTimeout(function () {
-        diceSum.textContent = s;
-        rollCounts[s]++; updateStats();
-        var dur = 0;
-        if (s === 7) robberPulse = 1;
-        else { tiles.forEach(function (t) { if (t.num === s) t.pulse = 1; }); dur = flyGains(rollJobs(before, s, dist ? dist.gains : []), animate); }
-        // los botones se liberan cuando terminan de llegar los recursos
-        setTimeout(function () { busy = false; applyView(); }, animate ? Math.max(dur, 900) : 0);
-        diceTimer = setTimeout(function () { diceBox.hidden = true; }, 3200);
-      }, animate ? 1250 : 0);
+        if (!r.ok) { busy = false; showStatus(r.error.message, true); return; }
+        playEvents(r.events);
       });
     }
 
@@ -1351,9 +1336,9 @@ export function initBoard() {
     // El ladrón se dibuja sobre la casilla del estado (con un saltito al llegar). Fuera del desierto va corrido hacia adelante
     // para no tapar la ficha del número.
     function syncRobber() {
-      if (!robber || robberTile === game.robber) return;
-      var t = tiles[game.robber];
-      robberTile = game.robber;
+      if (!robber || robberTile === shown.robber) return;
+      var t = tiles[shown.robber];
+      robberTile = shown.robber;
       t.group.add(robber);
       robber.position.x = t.kind === 'desert' ? 0.05 : 0; robber.position.z = t.kind === 'desert' ? 0.03 : 0.5;
       robberPulse = 1;
@@ -1428,9 +1413,9 @@ export function initBoard() {
     }
     var statusEl = document.getElementById('status'), statusTimer = null;
     // Muestra un mensaje. Los errores y avisos "temporales" vuelven solos al texto de siempre.
-    function showStatus(text, isError, temporary) {
+    function showStatus(text, isError, temporary, who) {
       clearTimeout(statusTimer);
-      statusEl.innerHTML = '<i style="background:' + PLAYER_INFO[game.turn].css + '"></i><span></span>';
+      statusEl.innerHTML = '<i style="background:' + PLAYER_INFO[who !== undefined ? who : game.turn].css + '"></i><span></span>';
       statusEl.lastChild.textContent = text;
       statusEl.classList.toggle('error', !!isError);
       if (isError || temporary) statusTimer = setTimeout(function () { showStatus(statusText(), false); }, isError ? 2500 : 4000);
@@ -1546,32 +1531,113 @@ export function initBoard() {
     // Respuesta de la sesión a un comando: la pantalla se pone al día (con animaciones) recién acá, no antes.
     function settle(cmd, r) {
       if (!r.ok) { showStatus(r.error.message, true); renderDialog(); return; }
-      tradeUI = null;
-      var thief = game.turn;
+      tradeUI = null; buildMode = null;
       var landed = { placeRoad: 'road', buildRoad: 'road', placeSettlement: 'settlement', buildSettlement: 'settlement', buildCity: 'city' }[cmd.type];
       if (landed) audio.land(landed); // la pieza toca el tablero
-      pull();
-      buildMode = null;
-      syncPieces();
-      // el 2.º poblado de la colocación inicial cobra recursos: se animan desde las casillas que toca
-      var built = r.events.filter(function (e) { return e.type === 'SettlementBuilt'; })[0];
-      var got = r.events.filter(function (e) { return e.type === 'ResourcesDistributed'; })[0];
-      var stolen = r.events.filter(function (e) { return e.type === 'Stolen'; })[0];
-      var dur = 0;
-      if (got && built) {
-        var jobs = [];
-        topology().vertices[built.vertex].tiles.forEach(function (tid) {
-          var terr = game.map.terrains[tid];
-          if (terr !== 'desert') jobs.push({ t: tiles[tid], p: built.player, k: terr, n: 1 });
-        });
-        dur = flyGains(jobs, !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches));
+      playEvents(r.events);
+    }
+
+    // ------------------------------------------------------------------ reproducción de eventos
+    // Lo que pasó después de un comando (lo propio y, contra bots, lo de los demás) llega como una lista de eventos. Se
+    // reproducen en orden, con pausas cortas cuando actúa otro jugador, para que se vea qué hizo cada uno. `game` (la vista)
+    // recién se actualiza al final; mientras tanto `shown` es lo ya dibujado y `counts`, `myHand` y `vps` avanzan al ritmo
+    // de la animación (al terminar se corrigen con el estado real: si algo quedó corrido, se arregla solo).
+    function foreign(p) { return botMode && p !== VIEWER; } // jugadas de otro: llevan pausa y sonido
+    function reduced() { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+    function sumOf(o) { var n = 0; for (var k in o) n += o[k]; return n; }
+    function playEvents(events) {
+      var animate = !reduced(), i = 0, note = null;
+      busy = true; refreshUi();
+      function pause(cont, ms) { if (animate && ms > 0) setTimeout(cont, ms); else cont(); }
+      function take(type) { var e = events[i]; if (e && e.type === type) { i++; return e; } return null; }
+      function next() {
+        if (i >= events.length) {
+          busy = false; pull(); syncPieces(); applyView();
+          if (note) showStatus(note.text, false, true, note.who); // el aviso del robo sobrevive al refresco
+          return;
+        }
+        handle(events[i++], next);
       }
-      if (stolen) dur = Math.max(dur, flyGains([{ from: stolen.victim, p: stolen.thief, k: stolen.resource, n: 1 }], !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)));
-      if (dur > 0) { busy = true; refreshUi(); setTimeout(function () { busy = false; applyView(); }, dur); }
-      else applyView();
-      var traded = r.events.filter(function (e) { return e.type === 'BankTraded'; })[0];
-      if (traded) { audio.trade(); tradeFx(traded); }
-      if (stolen) showStatus((stolen.thief === VIEWER ? 'Le robaste ' : PLAYER_INFO[stolen.thief].name + ' le robó ') + TERRAINS[stolen.resource].res.toLowerCase() + ' a ' + PLAYER_INFO[stolen.victim].name, false, true);
+      // la tirada: dados rodando; el resultado y la producción aparecen cuando terminan de caer
+      function rollAnim(ev, dist, cont) {
+        var a = ev.dice[0], b = ev.dice[1], s = ev.total;
+        clearTimeout(diceTimer);
+        diceSum.textContent = '';
+        diceBox.hidden = false;
+        spinDie(dieA, a, animate); spinDie(dieB, b, animate);
+        if (animate) audio.rollDice();
+        diceTimer = setTimeout(function () {
+          diceSum.textContent = s;
+          rollCounts[s]++; updateStats();
+          var dur = 0;
+          if (s === 7) robberPulse = 1;
+          else { tiles.forEach(function (t) { if (t.num === s) t.pulse = 1; }); dur = flyGains(rollJobs({ map: game.map, robber: shown.robber, vertexBuildings: shown.vertexBuildings }, s, dist ? dist.gains : []), animate); }
+          diceTimer = setTimeout(function () { diceBox.hidden = true; }, 3200);
+          setTimeout(cont, animate ? Math.max(dur, 900) : 0); // se sigue cuando terminan de llegar los recursos
+        }, animate ? 1250 : 0);
+      }
+      function handle(ev, cont) {
+        var p = ev.player;
+        switch (ev.type) {
+          case 'DiceRolled': return rollAnim(ev, take('ResourcesDistributed'), cont);
+          case 'SettlementBuilt': case 'CityBuilt': case 'RoadBuilt': {
+            var kind = ev.type === 'RoadBuilt' ? 'road' : ev.type === 'CityBuilt' ? 'city' : 'settlement';
+            if (kind === 'road') shown.edgeRoads[ev.edge] = p; else shown.vertexBuildings[ev.vertex] = { player: p, city: kind === 'city' };
+            if (kind !== 'road') { vps[p] += 1; renderSeats(); if (p === VIEWER) renderHand(); }
+            syncPieces();
+            if (foreign(p)) audio.land(kind); // las propias ya sonaron al tocar
+            var wait = foreign(p) ? 650 : 0;
+            // el 2.º poblado de la colocación inicial cobra recursos: se animan desde las casillas que toca
+            var got = kind === 'settlement' ? take('ResourcesDistributed') : null;
+            if (got) {
+              var jobs = [];
+              topology().vertices[ev.vertex].tiles.forEach(function (tid) {
+                var terr = game.map.terrains[tid];
+                if (terr !== 'desert') jobs.push({ t: tiles[tid], p: p, k: terr, n: 1 });
+              });
+              wait = Math.max(wait, flyGains(jobs, animate));
+            }
+            return pause(cont, wait);
+          }
+          case 'ResourcesSpent':
+            counts[p] -= sumOf(ev.cost);
+            if (p === VIEWER) { for (var kc in ev.cost) myHand[kc] -= ev.cost[kc]; renderHand(); }
+            renderSeats();
+            return cont();
+          case 'Discarded':
+            counts[p] -= sumOf(ev.cards);
+            if (p === VIEWER) { for (var kd in ev.cards) myHand[kd] -= ev.cards[kd]; renderHand(); }
+            renderSeats();
+            if (foreign(p) && animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
+            return pause(cont, foreign(p) ? 550 : 0);
+          case 'RobberMoved':
+            shown.robber = ev.tile; syncRobber();
+            return pause(cont, foreign(p) ? 800 : 0);
+          case 'Stolen': {
+            if (ev.resource) { // los dos implicados ven qué carta fue
+              note = { text: (ev.thief === VIEWER ? 'Le robaste ' : PLAYER_INFO[ev.thief].name + ' le robó ') + TERRAINS[ev.resource].res.toLowerCase() + ' a ' + PLAYER_INFO[ev.victim].name, who: ev.thief };
+              showStatus(note.text, false, true, note.who);
+              return pause(cont, flyGains([{ from: ev.victim, p: ev.thief, k: ev.resource, n: 1 }], animate));
+            }
+            note = { text: PLAYER_INFO[ev.thief].name + ' le robó una carta a ' + PLAYER_INFO[ev.victim].name, who: ev.thief }; // un tercero no ve cuál
+            showStatus(note.text, false, true, note.who);
+            counts[ev.victim] -= 1; counts[ev.thief] += 1; renderSeats();
+            if (animate) { pop(seatsEl.children[ev.victim], PLAYER_INFO[ev.victim].css); pop(seatsEl.children[ev.thief], PLAYER_INFO[ev.thief].css); }
+            return pause(cont, 700);
+          }
+          case 'BankTraded':
+            counts[p] += 1 - ev.giveCount; renderSeats();
+            audio.trade();
+            if (p === VIEWER) tradeFx(ev); else if (animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
+            return pause(cont, foreign(p) ? 600 : 0);
+          case 'TurnChanged':
+            turn = ev.player; renderSeats();
+            if (botMode) showStatus(ev.player === VIEWER ? 'Tu turno' : 'Turno de ' + PLAYER_INFO[ev.player].name, false, false, ev.player);
+            return pause(cont, foreign(ev.player) ? 450 : 0);
+          default: return cont(); // DiscardRequired, ResourcesDistributed suelto, GameWon: lo muestra el estado final
+        }
+      }
+      next();
     }
     function commandFromMarker(m) {
       var p = game.turn, setup = game.phase.kind === 'setup';
@@ -1635,11 +1701,14 @@ export function initBoard() {
     }
 
     function pressed(btn, on) { btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
-    document.getElementById('btnNew').addEventListener('click', function () {
+    function newGame(bots) {
+      botMode = bots;
       buildBoard((Math.random() * 1e9) | 0);
       for (var n = 2; n <= 12; n++) rollCounts[n] = 0;
       updateStats();
-    });
+    }
+    document.getElementById('btnNew').addEventListener('click', function () { newGame(false); });
+    document.getElementById('btnBots').addEventListener('click', function () { newGame(true); });
     // Solo desarrollo: salta la colocación inicial. Mapa nuevo, poblados y caminos al azar (por el motor, con comandos legales) y listo para tirar.
     // Se ve con `npm run dev` o con ?debug en la URL; en producción no existe.
     var btnQuick = document.getElementById('btnQuick');

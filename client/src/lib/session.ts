@@ -2,8 +2,10 @@
 // de los cambios. Hay dos implementaciones: `LocalSession` (motor en el navegador, los 3-4 jugadores en la misma pantalla)
 // y, más adelante, una remota que habla con la API de salas. La vista es la misma en ambas (`RoomView`).
 
+import { playBots } from '../bots/play';
+import type { Bot } from '../bots/random';
 import { applyCommand, createGame, legalActions } from '../engine';
-import type { Command, GameConfig, GameState } from '../engine';
+import type { Command, GameConfig, GameEvent, GameState, Rng } from '../engine';
 import { gameView, viewEvent, type RoomView, type ViewEvent } from '../server/view';
 
 export type SendResult = { ok: true; events: ViewEvent[] } | { ok: false; error: { code: string; message: string } };
@@ -17,6 +19,13 @@ export interface GameSession {
   subscribe(fn: (view: RoomView, events: ViewEvent[]) => void): () => void;
 }
 
+export interface LocalOptions {
+  /** Qué asientos juegan solos. El primero tiene que ser humano. Sin esto, todos los asientos son de la misma pantalla. */
+  bots?: boolean[];
+  rng?: Rng;
+  bot?: Bot;
+}
+
 export class LocalSession implements GameSession {
   private state: GameState;
   private version = 1;
@@ -26,18 +35,24 @@ export class LocalSession implements GameSession {
     private names: string[],
     seed: number,
     config?: Partial<GameConfig>,
+    private opts: LocalOptions = {},
   ) {
+    if (opts.bots?.[0]) throw new Error('LocalSession: el primer asiento tiene que ser humano');
     this.state = createGame(names, seed, config);
   }
 
-  /** En la partida local mira quien tiene el turno: es lo mismo que pasaba cuando el tablero leía el estado completo. */
+  /** Quién mira: en la partida contra bots, el humano (asiento 0); en la de varios en la misma pantalla, quien tiene el turno. */
+  private viewer(): number {
+    return this.opts.bots ? 0 : this.state.turn;
+  }
+
   view(): RoomView {
-    const me = this.state.turn;
+    const me = this.viewer();
     return {
       roomId: 'local',
       version: this.version,
       status: 'playing',
-      seats: this.names.map((name) => ({ name, bot: false })),
+      seats: this.names.map((name, i) => ({ name, bot: !!this.opts.bots?.[i] })),
       me,
       game: gameView(this.state, me),
       legal: legalActions(this.state, me),
@@ -49,8 +64,17 @@ export class LocalSession implements GameSession {
     const r = applyCommand(this.state, cmd);
     if (!r.ok) return { ok: false, error: r.error };
     this.state = r.state;
+    const all: GameEvent[] = [...r.events];
+    const bots = this.opts.bots;
+    if (bots) {
+      // los bots juegan enseguida, hasta que vuelve a tocarle al humano: sus eventos siguen a los del comando
+      const played = playBots(this.state, (p) => bots[p], this.opts.rng ?? Math.random, this.opts.bot);
+      this.state = played.state;
+      all.push(...played.events);
+    }
     this.version++;
-    const events = r.events.map((e) => viewEvent(e, cmd.player));
+    const who = this.opts.bots ? 0 : cmd.player; // en la misma pantalla mira quien jugó; contra bots, el humano
+    const events = all.map((e) => viewEvent(e, who));
     this.listeners.forEach((fn) => fn(this.view(), events));
     return { ok: true, events };
   }

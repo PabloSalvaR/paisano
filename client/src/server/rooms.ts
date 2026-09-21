@@ -5,8 +5,9 @@
 // sale del asiento del token, nunca de lo que diga el cliente.
 
 import { createHash, randomInt, randomUUID } from 'node:crypto';
-import { randomBot, type Bot } from '../bots/random';
-import { applyCommand, createGame, legalActions } from '../engine';
+import { playBots } from '../bots/play';
+import type { Bot } from '../bots/random';
+import { applyCommand, createGame } from '../engine';
 import type { Command, ErrorCode, GameConfig, GameEvent, Rng } from '../engine';
 import { LOG_LIMIT, MAX_SEATS, MIN_SEATS, type Room } from './room';
 import type { RoomStore } from './store';
@@ -38,7 +39,6 @@ const ok = <T>(value: T): Res<T> => ({ ok: true, value });
 const ROOM_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // sin letras ni números que se confunden (0/O, 1/I/L)
 const MAX_TRIES = 4;
 const MAX_NAME = 20;
-const MAX_BOT_STEPS = 2000; // tope de jugadas seguidas de bots en una petición (una partida entera cabe de sobra)
 
 /** Opciones que se inyectan en los tests: semilla y reglas de la partida, azar y elección de los bots. */
 export interface PlayOptions {
@@ -74,18 +74,11 @@ function record(room: Room, events: GameEvent[]): void {
  * Mientras le toque a un bot, juega por él con las mismas acciones legales que tendría un jugador.
  * Corre dentro de la misma petición que dejó el turno en manos del bot (en Vercel no hay proceso en segundo plano).
  */
-function playBots(room: Room, opts: PlayOptions): void {
-  const bot = opts.bot ?? randomBot;
-  const rng = opts.rng ?? Math.random;
-  for (let i = 0; i < MAX_BOT_STEPS && room.state && room.state.phase.kind !== 'finished' && room.seats[room.state.turn].bot; i++) {
-    const me = room.state.turn;
-    const legal = legalActions(room.state, me);
-    if (!legal.length) return;
-    const result = applyCommand(room.state, bot({ me, legal, hand: room.state.players[me].hand }, rng));
-    if (!result.ok) return; // un bot que se equivoca no debe trabar la sala: se corta acá
-    room.state = result.state;
-    record(room, result.events);
-  }
+function runBots(room: Room, opts: PlayOptions): void {
+  if (!room.state) return;
+  const played = playBots(room.state, (p) => room.seats[p].bot, opts.rng ?? Math.random, opts.bot);
+  room.state = played.state;
+  record(room, played.events);
 }
 
 /**
@@ -161,7 +154,7 @@ export async function startGame(store: RoomStore, roomId: string, token: string,
     if (room.seats.length < MIN_SEATS) return { code: 'not-enough-players', message: `Hacen falta al menos ${MIN_SEATS} jugadores.` };
     room.state = createGame(room.seats.map((s) => s.name), opts.seed ?? newSeed(), opts.config);
     room.status = 'playing';
-    playBots(room, opts);
+    runBots(room, opts);
     return null;
   });
   return r.ok ? ok(roomView(r.value.room, me, r.value.before)) : r;
@@ -180,7 +173,7 @@ export async function submitCommand(store: RoomStore, roomId: string, token: str
     if (!result.ok) return result.error;
     room.state = result.state;
     record(room, result.events);
-    playBots(room, opts);
+    runBots(room, opts);
     return null;
   });
   return r.ok ? ok(roomView(r.value.room, me, r.value.before)) : r;
