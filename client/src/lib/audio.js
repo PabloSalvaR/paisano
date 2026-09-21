@@ -165,7 +165,9 @@ export function createAudio() {
   function seven() {
     if (!ctx) return;
     var t = ctx.currentTime + 0.005;
-    thump(t, 95, 0.3, 0.22); thump(t + 0.2, 72, 0.26, 0.3);
+    // más fuerte y con un poco de agudo (click): los parlantes de celular casi no reproducen por debajo de ~120 Hz
+    thump(t, 130, 0.6, 0.24); click(t, 0.3, 320);
+    thump(t + 0.2, 100, 0.55, 0.32); click(t + 0.2, 0.3, 260);
   }
   // Otro jugador mueve el ladrón: un golpecito seco y bajo.
   function robberMoved() {
