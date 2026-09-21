@@ -466,6 +466,26 @@ export function initBoard(opts) {
         x.beginPath(); x.moveTo(0, -70); x.lineTo(11, -46); x.lineTo(9, 30); x.lineTo(-9, 30); x.lineTo(-11, -46); x.closePath(); x.fill(); x.stroke();
         x.fillStyle = '#c9a23a'; x.fillRect(-30, 30, 60, 10); x.strokeRect(-30, 30, 60, 10);
         x.fillStyle = '#5a3a1e'; x.fillRect(-6, 40, 12, 28); x.strokeRect(-6, 40, 12, 28);
+      } else if (suit === 'bastos' && num === 11) { // el caballero: jinete a caballo con un basto en la mano
+        x.scale(0.92, 0.92); x.lineJoin = 'round'; x.lineCap = 'round';
+        var line = '#3a220b', horse = '#8a5a2b', coat = '#c23b3b';
+        x.strokeStyle = line; x.lineWidth = 3;
+        x.fillStyle = horse;
+        x.beginPath(); x.moveTo(-28, 16); x.quadraticCurveTo(-46, 22, -44, 46); x.quadraticCurveTo(-36, 32, -26, 28); x.closePath(); x.fill(); x.stroke();
+        [-24, -12, 10, 22].forEach(function (lx) { x.fillRect(lx, 30, 7, 28); x.strokeRect(lx, 30, 7, 28); });
+        x.beginPath(); x.ellipse(-2, 22, 32, 15, 0, 0, 6.2832); x.fill(); x.stroke();
+        x.beginPath(); x.moveTo(18, 14); x.lineTo(26, -6); x.lineTo(40, -16); x.lineTo(54, -6); x.lineTo(50, 6); x.lineTo(38, 5); x.lineTo(32, 22); x.closePath(); x.fill(); x.stroke();
+        x.fillStyle = line; x.beginPath(); x.arc(44, -7, 2, 0, 6.2832); x.fill(); // ojo
+        x.fillStyle = '#4a3a6a'; x.fillRect(-8, 12, 9, 20); x.strokeRect(-8, 12, 9, 20);
+        x.fillStyle = coat; x.beginPath(); x.moveTo(-14, -24); x.lineTo(6, -24); x.lineTo(8, 14); x.lineTo(-14, 14); x.closePath(); x.fill(); x.stroke();
+        x.fillStyle = '#e8c39a'; x.beginPath(); x.arc(-4, -34, 8, 0, 6.2832); x.fill(); x.stroke();
+        x.fillStyle = '#3a2a16'; x.beginPath(); x.moveTo(-16, -37); x.lineTo(8, -37); x.lineTo(2, -50); x.lineTo(-10, -50); x.closePath(); x.fill(); x.stroke();
+        x.strokeStyle = line; x.lineWidth = 9; x.beginPath(); x.moveTo(4, -14); x.lineTo(20, -2); x.stroke();
+        x.strokeStyle = coat; x.lineWidth = 5; x.beginPath(); x.moveTo(4, -14); x.lineTo(20, -2); x.stroke();
+        x.strokeStyle = line; x.lineWidth = 9; x.beginPath(); x.moveTo(16, 6); x.lineTo(34, -62); x.stroke();
+        x.strokeStyle = '#7a4a1e'; x.lineWidth = 5; x.beginPath(); x.moveTo(16, 6); x.lineTo(34, -62); x.stroke();
+        x.fillStyle = '#3f8f45'; x.strokeStyle = line; x.lineWidth = 2;
+        [[26, -30], [31, -50]].forEach(function (p) { x.beginPath(); x.arc(p[0] + 6, p[1], 5, 0, 6.2832); x.fill(); x.stroke(); });
       } else {
         x.rotate(-0.5); x.fillStyle = '#7a4a1e'; x.strokeStyle = '#3a220b';
         x.beginPath(); x.moveTo(-14, -66); x.lineTo(14, -66); x.lineTo(20, 40); x.quadraticCurveTo(0, 70, -20, 40); x.closePath(); x.fill(); x.stroke();
@@ -486,7 +506,7 @@ export function initBoard(opts) {
       var g = new THREE.Group(), CW = 0.9, CL = 1.4, cream = M(0xf4ead2, 0.7, 0, { env: 0.2 });
       var deck = mesh(new THREE.BoxGeometry(CW, 0.3, CL), [cream, cream, M(0xffffff, 0.7, 0, { env: 0.2, map: tex(cardBackCanvas()) }), cream, cream, cream]);
       deck.position.set(0.55, 0.15, 0.3); deck.rotation.y = 0.2; g.add(deck);
-      var hand = [['espadas', 1], ['oros', 7], ['copas', 12], ['bastos', 3]];
+      var hand = [['espadas', 1], ['oros', 7], ['copas', 12], ['bastos', 11]];
       hand.forEach(function (h, i) {
         var f = new THREE.Group();
         var card = mesh(new THREE.BoxGeometry(CW, 0.02, CL), [cream, cream, M(0xffffff, 0.7, 0, { env: 0.2, map: tex(cardFaceCanvas(h[0], h[1])) }), cream, cream, cream]);
@@ -1557,6 +1577,7 @@ export function initBoard(opts) {
     // recién se actualiza al final; mientras tanto `shown` es lo ya dibujado y `counts`, `myHand` y `vps` avanzan al ritmo
     // de la animación (al terminar se corrigen con el estado real: si algo quedó corrido, se arregla solo).
     function foreign(p) { return withOthers && p !== VIEWER; } // jugadas de otro: llevan pausa y sonido
+    var BOT_GAP_MS = 2000; // «piensa» este rato antes de cada acción de otro, para que se pueda seguir lo que hace
     function reduced() { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
     function sumOf(o) { var n = 0; for (var k in o) n += o[k]; return n; }
     var playing = false, queue = []; // queue: tandas de eventos de otros que llegaron mientras se reproducía otra
@@ -1565,6 +1586,10 @@ export function initBoard(opts) {
       playing = true;
       busy = true; refreshUi();
       function pause(cont, ms) { if (animate && ms > 0) setTimeout(cont, ms); else cont(); }
+      // Antes de una acción de otro jugador: espera BOT_GAP_MS. `spent`: la acción abre con ResourcesSpent (construir); su pieza
+      // llega justo después y no vuelve a esperar.
+      function gap(p, cont, again) { if (!again && foreign(p)) return pause(cont, BOT_GAP_MS); return cont(); }
+      function afterSpent(ev) { var prev = events[i - 2]; return !!prev && prev.type === 'ResourcesSpent' && prev.player === ev.player; }
       function take(type) { var e = events[i]; if (e && e.type === type) { i++; return e; } return null; }
       function next() {
         if (i >= events.length) {
@@ -1596,8 +1621,44 @@ export function initBoard(opts) {
       function handle(ev, cont) {
         var p = ev.player;
         switch (ev.type) {
-          case 'DiceRolled': return rollAnim(ev, take('ResourcesDistributed'), cont);
-          case 'SettlementBuilt': case 'CityBuilt': case 'RoadBuilt': {
+          case 'DiceRolled': return gap(p, function () { rollAnim(ev, take('ResourcesDistributed'), cont); });
+          case 'SettlementBuilt': case 'CityBuilt': case 'RoadBuilt':
+            return gap(p, function () { built(ev, cont); }, afterSpent(ev));
+          case 'ResourcesSpent':
+            return gap(p, function () {
+              counts[p] -= sumOf(ev.cost);
+              if (p === VIEWER) { for (var kc in ev.cost) myHand[kc] -= ev.cost[kc]; renderHand(); }
+              renderSeats();
+              cont();
+            });
+          case 'Discarded':
+            return gap(p, function () {
+              counts[p] -= sumOf(ev.cards);
+              if (p === VIEWER) { for (var kd in ev.cards) myHand[kd] -= ev.cards[kd]; renderHand(); }
+              renderSeats();
+              if (foreign(p) && animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
+              pause(cont, foreign(p) ? 550 : 0);
+            });
+          case 'RobberMoved':
+            return gap(p, function () { shown.robber = ev.tile; syncRobber(); pause(cont, foreign(p) ? 800 : 0); });
+          case 'BankTraded':
+            return gap(p, function () {
+              counts[p] += 1 - ev.giveCount; renderSeats();
+              audio.trade();
+              if (p === VIEWER) tradeFx(ev); else if (animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
+              pause(cont, foreign(p) ? 600 : 0);
+            });
+          case 'Stolen': return stolen(ev, cont);
+          case 'TurnChanged':
+            turn = ev.player; renderSeats();
+            if (withOthers) showStatus(ev.player === VIEWER ? 'Tu turno' : 'Turno de ' + PLAYER_INFO[ev.player].name, false, false, ev.player);
+            return pause(cont, foreign(ev.player) ? 450 : 0);
+          default: return cont(); // DiscardRequired, ResourcesDistributed suelto, GameWon: lo muestra el estado final
+        }
+      }
+      function built(ev, cont) {
+        var p = ev.player;
+        {
             var kind = ev.type === 'RoadBuilt' ? 'road' : ev.type === 'CityBuilt' ? 'city' : 'settlement';
             if (kind === 'road') shown.edgeRoads[ev.edge] = p; else shown.vertexBuildings[ev.vertex] = { player: p, city: kind === 'city' };
             if (kind !== 'road') { vps[p] += 1; renderSeats(); if (p === VIEWER) renderHand(); }
@@ -1616,43 +1677,18 @@ export function initBoard(opts) {
             }
             return pause(cont, wait);
           }
-          case 'ResourcesSpent':
-            counts[p] -= sumOf(ev.cost);
-            if (p === VIEWER) { for (var kc in ev.cost) myHand[kc] -= ev.cost[kc]; renderHand(); }
-            renderSeats();
-            return cont();
-          case 'Discarded':
-            counts[p] -= sumOf(ev.cards);
-            if (p === VIEWER) { for (var kd in ev.cards) myHand[kd] -= ev.cards[kd]; renderHand(); }
-            renderSeats();
-            if (foreign(p) && animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
-            return pause(cont, foreign(p) ? 550 : 0);
-          case 'RobberMoved':
-            shown.robber = ev.tile; syncRobber();
-            return pause(cont, foreign(p) ? 800 : 0);
-          case 'Stolen': {
-            if (ev.resource) { // los dos implicados ven qué carta fue
-              note = { text: (ev.thief === VIEWER ? 'Le robaste ' : PLAYER_INFO[ev.thief].name + ' le robó ') + TERRAINS[ev.resource].res.toLowerCase() + ' a ' + PLAYER_INFO[ev.victim].name, who: ev.thief };
-              showStatus(note.text, false, true, note.who);
-              return pause(cont, flyGains([{ from: ev.victim, p: ev.thief, k: ev.resource, n: 1 }], animate));
-            }
-            note = { text: PLAYER_INFO[ev.thief].name + ' le robó una carta a ' + PLAYER_INFO[ev.victim].name, who: ev.thief }; // un tercero no ve cuál
-            showStatus(note.text, false, true, note.who);
-            counts[ev.victim] -= 1; counts[ev.thief] += 1; renderSeats();
-            if (animate) { pop(seatsEl.children[ev.victim], PLAYER_INFO[ev.victim].css); pop(seatsEl.children[ev.thief], PLAYER_INFO[ev.thief].css); }
-            return pause(cont, 700);
-          }
-          case 'BankTraded':
-            counts[p] += 1 - ev.giveCount; renderSeats();
-            audio.trade();
-            if (p === VIEWER) tradeFx(ev); else if (animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
-            return pause(cont, foreign(p) ? 600 : 0);
-          case 'TurnChanged':
-            turn = ev.player; renderSeats();
-            if (withOthers) showStatus(ev.player === VIEWER ? 'Tu turno' : 'Turno de ' + PLAYER_INFO[ev.player].name, false, false, ev.player);
-            return pause(cont, foreign(ev.player) ? 450 : 0);
-          default: return cont(); // DiscardRequired, ResourcesDistributed suelto, GameWon: lo muestra el estado final
+      }
+      function stolen(ev, cont) {
+        if (ev.resource) { // los dos implicados ven qué carta fue
+          note = { text: (ev.thief === VIEWER ? 'Le robaste ' : PLAYER_INFO[ev.thief].name + ' le robó ') + TERRAINS[ev.resource].res.toLowerCase() + ' a ' + PLAYER_INFO[ev.victim].name, who: ev.thief };
+          showStatus(note.text, false, true, note.who);
+          return pause(cont, flyGains([{ from: ev.victim, p: ev.thief, k: ev.resource, n: 1 }], animate));
         }
+        note = { text: PLAYER_INFO[ev.thief].name + ' le robó una carta a ' + PLAYER_INFO[ev.victim].name, who: ev.thief }; // un tercero no ve cuál
+        showStatus(note.text, false, true, note.who);
+        counts[ev.victim] -= 1; counts[ev.thief] += 1; renderSeats();
+        if (animate) { pop(seatsEl.children[ev.victim], PLAYER_INFO[ev.victim].css); pop(seatsEl.children[ev.thief], PLAYER_INFO[ev.thief].css); }
+        return pause(cont, 700);
       }
       next();
     }

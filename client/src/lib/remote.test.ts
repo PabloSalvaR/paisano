@@ -181,6 +181,50 @@ describe('ahorro de consultas (cada una gasta un comando de la base)', () => {
     beto!.stop();
   });
 
+  it('en tu turno consulta despacio (nada cambia hasta que actúes) y al pasar el turno vuelve a consultar seguido', async () => {
+    const { fetchFn, ana } = await setup(2, 1);
+    const views = () => fetchFn.calls.filter((c) => c.startsWith('GET')).length;
+    ana.start(10, 500, { myTurnMs: 500 });
+    const from = views();
+    await sleep(100);
+    expect(views() - from).toBeLessThanOrEqual(1); // le toca a Ana: casi no consulta
+    await ana.send(firstSetupCmd(ana.view().legal)); // poblado
+    await ana.send(firstSetupCmd(ana.view().legal)); // camino: el turno pasa a Beto
+    expect(ana.view().legal).toEqual([]);
+    const passed = views();
+    await sleep(80);
+    expect(views() - passed).toBeGreaterThan(3); // no le toca: consulta seguido, sin esperar el intervalo largo
+    ana.stop();
+  });
+
+  it('sin actividad del jugador se pausa, y al volver a tocar la pantalla retoma enseguida', async () => {
+    const { fetchFn, beto } = await setup(2, 1);
+    const views = () => fetchFn.calls.filter((c) => c.startsWith('GET')).length;
+    beto!.start(10, 500, { idleMs: 60 });
+    await sleep(200);
+    const paused = views();
+    await sleep(100);
+    expect(views()).toBe(paused); // pausado: no consulta
+    beto!.touch();
+    await sleep(40);
+    expect(views()).toBeGreaterThan(paused); // retoma ya
+    beto!.stop();
+  });
+
+  it('con actividad sostenida no se pausa', async () => {
+    const { fetchFn, beto } = await setup(2, 1);
+    const views = () => fetchFn.calls.filter((c) => c.startsWith('GET')).length;
+    beto!.start(10, 500, { idleMs: 60 });
+    for (let i = 0; i < 10; i++) {
+      beto!.touch();
+      await sleep(20);
+    }
+    const before = views();
+    await sleep(30);
+    expect(views()).toBeGreaterThan(before);
+    beto!.stop();
+  });
+
   it('deja de consultar cuando la partida terminó (y avisa una sola vez)', async () => {
     const { store, roomId, fetchFn, beto } = await setup(2, 1);
     const seen: string[] = [];

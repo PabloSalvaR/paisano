@@ -86,12 +86,19 @@ export default function RoomPage() {
   }, [roomId, connect]);
 
   // Con la pestaña oculta se consulta muy despacio (cada consulta gasta un comando de la base); al volver, enseguida.
+  // Y sin tocar la pantalla unos minutos el polling se pausa: mouse, toque o teclado lo retoman.
   useEffect(() => {
     if (!session) return;
     const sync = () => session.setHidden(document.hidden);
+    const activity = () => session.touch();
+    const events = ["pointerdown", "pointermove", "keydown", "wheel"] as const;
     sync();
     document.addEventListener("visibilitychange", sync);
-    return () => document.removeEventListener("visibilitychange", sync);
+    events.forEach((e) => window.addEventListener(e, activity, { passive: true }));
+    return () => {
+      document.removeEventListener("visibilitychange", sync);
+      events.forEach((e) => window.removeEventListener(e, activity));
+    };
   }, [session]);
 
   async function enter() {

@@ -67,7 +67,7 @@ describe('UpstashStore', () => {
     expect(await store.save(room('ZZZZZZ', 2), 1)).toBe(false); // no existe
   });
 
-  it('manda el token, comandos en JSON, las dos claves y el vencimiento de 7 días', async () => {
+  it('manda el token, comandos en JSON, las dos claves y el vencimiento de 6 horas', async () => {
     const { fake, store } = newStore();
     await store.create(room('ABC123'));
     await store.save(room('ABC123', 2), 1);
@@ -75,7 +75,7 @@ describe('UpstashStore', () => {
     const create = fake.seen[0].command;
     expect(create.slice(0, 3)).toEqual(['EVAL', CREATE_SCRIPT, 2]);
     expect(create.slice(3, 5)).toEqual(['paisano:sala:ABC123', 'paisano:sala:ABC123:v']);
-    expect(create[7]).toBe(7 * 24 * 60 * 60);
+    expect(create[7]).toBe(6 * 60 * 60);
     expect(fake.data.get('paisano:sala:ABC123:v')!.value).toBe('2');
   });
 
