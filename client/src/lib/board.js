@@ -1553,7 +1553,7 @@ export function initBoard(opts) {
     function avatarSVG(p) { return characterSVG(PLAYER_INFO[p]); }
     var handEl = stage.querySelector('.hand'), whoEl = document.getElementById('who'), seatsEl = document.getElementById('seats');
     var STAR = '<svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="10,1.5 12.6,7.2 18.8,7.8 14.1,12 15.5,18.2 10,15 4.5,18.2 5.9,12 1.2,7.8 7.4,7.2" fill="#f2c230" stroke="#7a5a10" stroke-width="1.4" stroke-linejoin="round"/></svg>';
-    var vps = [0, 0, 0, 0]; // puntos de victoria que se ven: casas, estancias y reconocimientos (los Puntos de victoria ajenos no se ven)
+    var vps = [0, 0, 0, 0], vpCards = [0, 0, 0, 0]; // puntos de victoria que se ven: casas, estancias y reconocimientos (los Puntos de victoria ajenos no se ven hasta el final); vpCards: esas cartas, las que se conocen
     var openingOn = false, devCounts = [0, 0, 0, 0], knights = [0, 0, 0, 0], roadLens = [0, 0, 0, 0], awardRoad = { holder: null, length: 0 }, awardArmy = { holder: null, size: 0 }; // cartas de desarrollo por jugador (cuántas, no cuáles), caballeros jugados y quién tiene cada reconocimiento
     var myHand = {}, counts = [], turn = 0, VIEWER = 0; // myHand: la mano de quien mira; counts: cartas de cada jugador (de los demás solo se sabe cuántas); VIEWER: el jugador cuya mano muestra el banner (en la partida local, el de turno)
     seatsEl.innerHTML = PLAYER_INFO.map(function (pl, p) {
@@ -1586,6 +1586,7 @@ export function initBoard(opts) {
       myHand = {}; HAND_KINDS.forEach(function (k) { myHand[k] = game.hand[k]; });
       counts = game.players.map(function (pl) { return pl.handCount; });
       vps = game.players.map(function (pl) { return pl.points; });
+      vpCards = game.players.map(function (pl) { return pl.vpCards || 0; });
       devCounts = game.players.map(function (pl) { return pl.devCount; });
       knights = game.players.map(function (pl) { return pl.knights; });
       roadLens = game.players.map(function (pl) { return pl.roadLength; });
@@ -1797,7 +1798,10 @@ export function initBoard(opts) {
     }
     // Resumen de fin de partida: una fila bien corta por jugador (para entrar en el ancho de un celular), con lo que ya es
     // público durante la partida (nada de manos ni cartas de desarrollo ajenas). Se arma con lo mismo que ya pinta cada
-    // puesto (`vps`, `awardRoad`/`awardArmy`) más las casas/estancias contadas de `shown.vertexBuildings`.
+    // puesto (`vps`, `awardRoad`/`awardArmy`) más las casas/estancias contadas de `shown.vertexBuildings`. Los Puntos de victoria
+    // ocultos se revelan al terminar (la vista los manda en `vpCards`): una cartita al lado del puntaje, para que la cuenta cierre.
+    var ICON_HOUSE = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 28V15L16 5l10 10v13z" fill="currentColor"/></svg>';
+    var ICON_CITY = '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 28V17l7-6 7 6v11zM17 28V12l6-8 6 8v16z" fill="currentColor"/></svg>';
     function renderSummary() {
       var ph = game.phase, seats = SEATS;
       var rows = PLAYER_INFO.slice(0, seats).map(function (pl, p) {
@@ -1806,7 +1810,8 @@ export function initBoard(opts) {
         var badges = (awardRoad.holder === p ? BADGE_ROAD : '') + (awardArmy.holder === p ? BADGE_ARMY : '');
         return '<div class="row' + (p === ph.winner ? ' winner' : '') + '" style="--pc:' + pl.css + '"><span class="av">' + avatarSVG(p) + '</span>' +
           '<span class="nm">' + pl.name + '</span>' + (badges ? '<span class="bdg">' + badges + '</span>' : '') +
-          '<small>' + settlements + ' casa' + (settlements === 1 ? '' : 's') + ' · ' + cities + ' estancia' + (cities === 1 ? '' : 's') + '</small>' +
+          '<small title="' + settlements + ' casa' + (settlements === 1 ? '' : 's') + ' y ' + cities + ' estancia' + (cities === 1 ? '' : 's') + '">' + ICON_HOUSE + settlements + ICON_CITY + cities + '</small>' + // íconos de los botones de construir: con el texto no entraban la insignia y los Puntos de victoria
+          (vpCards[p] ? '<span class="vpc" title="' + vpCards[p] + (vpCards[p] === 1 ? ' Punto de victoria' : ' Puntos de victoria') + '"><img src="' + devCardURL('victoryPoint') + '" alt="Punto de victoria" draggable="false">' + (vpCards[p] > 1 ? '<b>×' + vpCards[p] + '</b>' : '') + '</span>' : '') +
           '<span class="vp">' + STAR + vps[p] + '</span></div>';
       }).join('');
       dialogEl.className = 'panel dialog summary';
@@ -2211,6 +2216,7 @@ export function initBoard(opts) {
           }
           case 'Stolen': return stolen(ev, cont);
           case 'GameWon': // solo suena si ganaste, la copa, el resumen y el giro de cámara son para toda la mesa
+            vps[ev.player] = ev.points; renderSeats(); renderHand(); // el evento trae el total con los Puntos de victoria ocultos
             if (animate) { if (ev.player === VIEWER) audio.victory(); showTrophy(); summaryUI = summaryShown = true; }
             setOrbit(true);
             return cont();

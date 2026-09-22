@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Command } from '../engine';
 import { MemoryStore } from './store';
 import { createRoom, getView, hashToken, joinRoom, startGame, submitCommand, type Res } from './rooms';
-import { createGame } from '../engine';
+import { createGame, victoryPoints } from '../engine';
 import { gameView, viewEvent } from './view';
 
 const newStore = () => new MemoryStore(new Map());
@@ -170,6 +170,20 @@ describe('vista filtrada', () => {
     expect(ana.game!.dev.hand).toMatchObject({ knight: 0, victoryPoint: 0 });
     expect(beto.game!.dev.hand).toMatchObject({ knight: 1, victoryPoint: 2 });
     expect(beto.game!.players[1].points).toBe(ana.game!.players[1].points + 2); // él sí cuenta sus Estancias
+    expect(ana.game!.players[1].vpCards).toBe(0);
+    expect(beto.game!.players[1].vpCards).toBe(2);
+  });
+
+  it('al terminar la partida los Puntos de victoria de todos se revelan', async () => {
+    const { store, roomId, tokens } = await started();
+    const room = (await store.get(roomId))!;
+    room.state!.players[1].dev.victoryPoint = 2;
+    room.state!.phase = { kind: 'finished', winner: 1 };
+    expect(await store.save(room, room.version)).toBe(true);
+    const ana = val(await getView(store, roomId, tokens[0]));
+    expect(ana.game!.players[1].vpCards).toBe(2);
+    expect(ana.game!.players[1].points).toBe(victoryPoints(room.state!, 1));
+    expect(ana.game!.dev.hand.victoryPoint).toBe(0); // la mano ajena sigue sin salir: solo el conteo de puntos
   });
 
   it('qué carta compró un jugador solo lo ve él', () => {

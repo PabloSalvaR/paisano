@@ -1,7 +1,8 @@
 // Vista filtrada: lo que un jugador puede ver de la sala. Es lo único que sale del servidor.
 // Se oculta: las manos rivales (solo la cantidad), las semillas de dados y robos (permitirían predecir el azar),
 // el recurso robado cuando el jugador no es ni el ladrón ni la víctima, y de las cartas de desarrollo el mazo (solo se
-// cuenta cuántas quedan), las cartas ajenas (solo cuántas), qué carta compró otro y los puntos de victoria ocultos ajenos.
+// cuenta cuántas quedan), las cartas ajenas (solo cuántas), qué carta compró otro y los puntos de victoria ocultos ajenos
+// (estos se revelan al terminar la partida, para que el puntaje final cierre).
 
 import { legalActions, longestRoad as roadLengthOf, publicVictoryPoints, victoryPoints } from '../engine';
 import type { DevCardKind, DevHand, GameEvent, GameState, Hand, LegalAction, PlayerId, Resource } from '../engine';
@@ -13,7 +14,8 @@ export interface PlayerView {
   devCount: number; // cartas de desarrollo en la mano (cuántas, no cuáles)
   knights: number; // caballeros ya jugados (público)
   roadLength: number; // su ruta más larga hoy (público: los caminos están a la vista)
-  points: number; // los que ve todo el mundo; el de quien mira incluye sus Puntos de victoria
+  points: number; // los que ve todo el mundo; el de quien mira incluye sus Puntos de victoria, y al terminar la partida los de todos
+  vpCards: number; // cartas de Punto de victoria: las propias siempre; las ajenas, solo al terminar la partida (antes, 0)
 }
 
 export type GameView = Pick<GameState, 'config' | 'map' | 'bank' | 'vertexBuildings' | 'edgeRoads' | 'robber' | 'phase' | 'turn' | 'longestRoad' | 'largestArmy' | 'opening' | 'trade' | 'tradeOffers'> & {
@@ -62,14 +64,18 @@ export function gameView(state: GameState, me: PlayerId): GameView {
     opening, // el sorteo de quién abre es público
     trade: trade ?? null, // la oferta de comercio abierta es pública (qué se ofrece y quién ya respondió)
     tradeOffers: tradeOffers ?? 0, // cuántas ofertas se abrieron en este turno (público): la interfaz grisa «Ofrecer» al llegar al tope
-    players: players.map((p, id) => ({
-      name: p.name,
-      handCount: Object.values(p.hand).reduce((n, c) => n + c, 0),
-      devCount: Object.values(p.dev).reduce((n, c) => n + c, 0),
-      knights: p.knightsPlayed,
-      roadLength: roadLengthOf(state, id),
-      points: id === me ? victoryPoints(state, id) : publicVictoryPoints(state, id),
-    })),
+    players: players.map((p, id) => {
+      const revealed = id === me || phase.kind === 'finished';
+      return {
+        name: p.name,
+        handCount: Object.values(p.hand).reduce((n, c) => n + c, 0),
+        devCount: Object.values(p.dev).reduce((n, c) => n + c, 0),
+        knights: p.knightsPlayed,
+        roadLength: roadLengthOf(state, id),
+        points: revealed ? victoryPoints(state, id) : publicVictoryPoints(state, id),
+        vpCards: revealed ? p.dev.victoryPoint : 0,
+      };
+    }),
     hand: { ...players[me].hand },
     dev: { hand: { ...players[me].dev }, fresh: { ...players[me].devNew }, played: state.devPlayed },
     deckCount: state.devDeck.length,
