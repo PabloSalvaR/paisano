@@ -16,7 +16,7 @@ export interface PlayerView {
   points: number; // los que ve todo el mundo; el de quien mira incluye sus Puntos de victoria
 }
 
-export type GameView = Pick<GameState, 'config' | 'map' | 'bank' | 'vertexBuildings' | 'edgeRoads' | 'robber' | 'phase' | 'turn' | 'longestRoad' | 'largestArmy' | 'opening' | 'trade'> & {
+export type GameView = Pick<GameState, 'config' | 'map' | 'bank' | 'vertexBuildings' | 'edgeRoads' | 'robber' | 'phase' | 'turn' | 'longestRoad' | 'largestArmy' | 'opening' | 'trade' | 'tradeOffers'> & {
   players: PlayerView[];
   hand: Hand; // la mano de quien mira
   dev: { hand: DevHand; fresh: DevHand; played: boolean }; // sus cartas de desarrollo; `fresh`: las compradas este turno (no jugables)
@@ -47,7 +47,7 @@ export function viewEvent(event: GameEvent, me: PlayerId): ViewEvent {
 }
 
 export function gameView(state: GameState, me: PlayerId): GameView {
-  const { players, config, map, bank, vertexBuildings, edgeRoads, robber, phase, turn, longestRoad, largestArmy, opening, trade } = state; // lista explícita: un campo nuevo del estado no sale por defecto
+  const { players, config, map, bank, vertexBuildings, edgeRoads, robber, phase, turn, longestRoad, largestArmy, opening, trade, tradeOffers } = state; // lista explícita: un campo nuevo del estado no sale por defecto
   return {
     config,
     map,
@@ -61,6 +61,7 @@ export function gameView(state: GameState, me: PlayerId): GameView {
     largestArmy,
     opening, // el sorteo de quién abre es público
     trade: trade ?? null, // la oferta de comercio abierta es pública (qué se ofrece y quién ya respondió)
+    tradeOffers: tradeOffers ?? 0, // cuántas ofertas se abrieron en este turno (público): la interfaz grisa «Ofrecer» al llegar al tope
     players: players.map((p, id) => ({
       name: p.name,
       handCount: Object.values(p.hand).reduce((n, c) => n + c, 0),

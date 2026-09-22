@@ -285,7 +285,7 @@ describe('Buena cosecha con el banco casi vacío', () => {
   });
 });
 
-describe('Vialidad (caminos gratis)', () => {
+describe('Empedrado (caminos gratis)', () => {
   it('permite poner 2 caminos sin pagar y después vuelve a la fase principal', () => {
     let s = game();
     giveCard(s, 0, 'roadBuilding');
@@ -324,7 +324,7 @@ describe('cartas de progreso antes de tirar los dados', () => {
     expectConserved(r.state);
   });
 
-  it('Vialidad antes de tirar: pone los 2 caminos gratis y vuelve a la fase de tirar', () => {
+  it('Empedrado antes de tirar: pone los 2 caminos gratis y vuelve a la fase de tirar', () => {
     let s = beforeRoll();
     giveCard(s, 0, 'roadBuilding');
     s = must(s, { type: 'playRoadBuilding', player: 0 }).state;

@@ -8,7 +8,7 @@ import { createAudio } from './audio.js';
 // y le envía comandos; no aplica reglas ni conoce el estado completo. `topology` es geometría fija del tablero.
 import { topology } from '../engine';
 import { LocalSession } from './session';
-import { drawBastos11, devCardURL } from './cardart';
+import { drawBastos11, devCardURL, awardURL } from './cardart';
 import { CHARACTERS, characterById } from './characters';
 
 export const MARKUP = `
@@ -1440,6 +1440,23 @@ export function initBoard(opts) {
     diceBox.innerHTML = '<div class="dice-row"></div><b></b>';
     var diceRow = diceBox.firstChild, diceSum = diceRow.nextSibling;
     var dieA = buildDie(), dieB = buildDie(); diceRow.appendChild(dieA.el); diceRow.appendChild(dieB.el);
+    // Después de mostrarse grandes, los dados se achican a un chip en la esquina (dos caras chicas y el total) que queda a la
+    // vista todo el turno, como los dados que quedan sobre la mesa; se va cuando pasa el turno o se vuelve a tirar.
+    var diceChip = document.createElement('div'); diceChip.className = 'dice-chip'; diceChip.hidden = true; diceChip.setAttribute('aria-hidden', 'true');
+    diceBox.parentNode.appendChild(diceChip);
+    function clearDice() { clearTimeout(diceTimer); diceBox.getAnimations().forEach(function (a) { a.cancel(); }); diceBox.hidden = true; diceChip.hidden = true; }
+    function dockDice(a, b, s, animate) {
+      diceChip.innerHTML = miniDie(a) + miniDie(b) + '<b>' + s + '</b>'; // mismas caras chicas que el sorteo de quién abre
+      diceChip.hidden = false;
+      if (!animate) { diceBox.hidden = true; return; }
+      // el recuadro grande viaja hasta donde está el chip y se achica; recién al llegar aparece el chip
+      var br = diceBox.getBoundingClientRect(), cr = diceChip.getBoundingClientRect(), base = getComputedStyle(diceBox).transform;
+      base = base === 'none' ? '' : ' ' + base;
+      var dx = cr.left + cr.width / 2 - (br.left + br.width / 2), dy = cr.top + cr.height / 2 - (br.top + br.height / 2);
+      diceChip.style.visibility = 'hidden';
+      diceBox.animate([{ transform: base || 'none', opacity: 1 }, { transform: 'translate(' + dx + 'px,' + dy + 'px)' + base + ' scale(' + (cr.width / br.width) + ')', opacity: 0.3 }],
+        { duration: 450, easing: 'ease-in' }).onfinish = function () { diceBox.hidden = true; diceChip.style.visibility = ''; };
+    }
     // Estadística: cuántas veces salió cada total (2 a 12). Se reinicia con "Nuevo mapa" (partida nueva).
     var rollCounts = {}, statsEl = document.getElementById('stats'), chartEl = document.getElementById('chart'), statsN = document.getElementById('statsN');
     var statBars = {}, PLOT_H = 130, BAR_STEP = 20;
@@ -1503,7 +1520,7 @@ export function initBoard(opts) {
       knight: { name: 'Gaucho', desc: 'Mové el ladrón y robá una carta.', play: 'playKnight' },
       monopoly: { name: 'Acopio', desc: 'Elegí un recurso: todos te entregan el que tengan.', play: 'playMonopoly' },
       yearOfPlenty: { name: 'Buena cosecha', desc: 'Tomá 2 recursos del banco (o 1 si queda una sola carta).', play: 'playYearOfPlenty' },
-      roadBuilding: { name: 'Vialidad', desc: 'Poné 2 caminos gratis.', play: 'playRoadBuilding' },
+      roadBuilding: { name: 'Empedrado', desc: 'Poné 2 caminos gratis.', play: 'playRoadBuilding' },
       victoryPoint: { name: 'Punto de victoria', desc: 'Vale 1 punto. Queda oculta hasta que ganes.', play: null }
     };
     var BADGE_ROAD = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="8" width="16" height="4.5" rx="1.5" transform="rotate(-25 10 10)" fill="currentColor"/></svg>';
@@ -1632,7 +1649,7 @@ export function initBoard(opts) {
       var ph = game.phase.kind, acts = legal, can = {};
       acts.forEach(function (a) { can[a.type] = true; });
       updateTurnButton(); updateDevButton();
-      var canTrade = !!(can.bankTrade || can.proposeTrade); // con el banco o con jugadores
+      var canTrade = !!(can.bankTrade || can.proposeTrade || offerLimit()); // con el banco o con jugadores (con el tope de ofertas, igual se abre: «Ofrecer» queda gris)
       if (tradeUI && (busy || !canTrade)) tradeUI = null; // ya no se puede comerciar (otra fase, o la mano no alcanza)
       btnTrade.disabled = busy || !canTrade; pressed(btnTrade, !!tradeUI);
       var nDev = devTotal();
@@ -1643,7 +1660,7 @@ export function initBoard(opts) {
       if (!can[{ road: 'buildRoad', settlement: 'buildSettlement', city: 'buildCity' }[buildMode]]) buildMode = null; // ya no alcanza o no hay dónde
       Array.prototype.forEach.call(buildEl.querySelectorAll('[data-build]'), function (b) {
         var kind = b.getAttribute('data-build');
-        b.disabled = busy || ph === 'roadBuilding' || !can[{ road: 'buildRoad', settlement: 'buildSettlement', city: 'buildCity' }[kind]]; // con Vialidad los caminos se ponen gratis, sin este botón
+        b.disabled = busy || ph === 'roadBuilding' || !can[{ road: 'buildRoad', settlement: 'buildSettlement', city: 'buildCity' }[kind]]; // con Empedrado los caminos se ponen gratis, sin este botón
         pressed(b, buildMode === kind);
       });
     }
@@ -1667,7 +1684,7 @@ export function initBoard(opts) {
           return me ? 'Tu turno' : 'Turno de ' + name;
         case 'discard': return me ? 'Salió un 7: descartá ' + ph.queue[0].count + ' cartas' : name + ' descarta ' + ph.queue[0].count + ' cartas';
         case 'moveRobber': return me ? 'Mové el ladrón' : name + ' mueve el ladrón';
-        case 'roadBuilding': return me ? 'Vialidad: elegí dónde va el camino gratis (' + (ph.left === 2 ? 'faltan 2' : 'falta 1') + ')' : name + ' pone caminos gratis';
+        case 'roadBuilding': return me ? 'Empedrado: elegí dónde va el camino gratis (' + (ph.left === 2 ? 'faltan 2' : 'falta 1') + ')' : name + ' pone caminos gratis';
         case 'steal': return me ? 'Elegí a quién robarle una carta' : name + ' elige a quién robarle';
         default: return ph.winner === VIEWER ? '¡Ganaste la partida con ' + vps[ph.winner] + ' puntos!' : '¡' + PLAYER_INFO[ph.winner].name + ' ganó la partida con ' + vps[ph.winner] + ' puntos!';
       }
@@ -1816,14 +1833,17 @@ export function initBoard(opts) {
       HAND_KINDS.forEach(function (k) { if (o.give[k] > myHand[k]) o.give[k] = myHand[k]; if (!o.give[k]) delete o.give[k]; });
       return o;
     }
+    // Tope de ofertas por turno alcanzado: el motor ya no ofrece `proposeTrade`, pero la pestaña «Jugadores» sigue a la vista
+    // con «Ofrecer» gris (sin decirle al jugador cuántas le quedan).
+    function offerLimit() { return !!game && game.turn === me && game.phase.kind === 'main' && !game.trade && (game.tradeOffers || 0) >= game.config.trade.maxOffersPerTurn; }
     function renderPlayersTab() {
       var o = offerState(), pl = legal.filter(function (a) { return a.type === 'proposeTrade'; })[0];
       var sg = sumOf(o.give), st = sumOf(o.get), ok = sg > 0 && st > 0 && o.to.length > 0;
-      // Dos franjas horizontales, una columna por recurso con + arriba y − abajo de la cantidad. Las flechas son las mismas de la
+      // «Ofrezco» y «Quiero»: dos franjas horizontales, una columna por recurso con + arriba y − abajo de la cantidad. Las flechas son las mismas de la
       // oferta recibida: roja ↑ lo que se te va, verde ↓ lo que te entra.
       function strip(side) {
-        var giving = side === 'give', mine = giving ? o.give : o.get, other = giving ? o.get : o.give, pre = giving ? 'data-og-' : 'data-ot-', verb = giving ? ' que doy' : ' que pido';
-        return '<div class="side ' + side + '"><p>' + dirIco(!giving, giving ? 'Esto se te va' : 'Esto te entra') + (giving ? 'Doy' : 'Pido') + '</p><div class="steps">' + HAND_KINDS.map(function (k) {
+        var giving = side === 'give', mine = giving ? o.give : o.get, other = giving ? o.get : o.give, pre = giving ? 'data-og-' : 'data-ot-', verb = giving ? ' que ofrezco' : ' que quiero';
+        return '<div class="side ' + side + '"><p>' + dirIco(!giving, giving ? 'Esto se te va' : 'Esto te entra') + (giving ? 'Ofrezco' : 'Quiero') + '</p><div class="steps">' + HAND_KINDS.map(function (k) {
           var n = mine[k] || 0, max = giving ? myHand[k] : OFFER_MAX;
           return '<div class="step' + (n ? ' on' : '') + '" style="--c:' + handEl.querySelector('[data-res="' + k + '"]').style.getPropertyValue('--c') + '">' +
             '<button type="button" ' + pre + 'inc="' + k + '" aria-label="Más ' + TERRAINS[k].res + verb + '"' + (n < max && !other[k] ? '' : ' disabled') + '>+</button>' +
@@ -1834,21 +1854,23 @@ export function initBoard(opts) {
       var tos = others().map(function (p) {
         return '<button type="button" class="to" data-to="' + p + '" aria-pressed="' + (o.to.indexOf(p) >= 0 ? 'true' : 'false') + '" style="--pc:' + PLAYER_INFO[p].css + '"><span class="av">' + avatarSVG(p) + '</span><small></small></button>';
       }).join('');
+      // «Se lo ofrezco a» y los avatares en una sola fila (en el celular, sin los nombres: quedan en el title)
       return strip('give') + strip('get') +
-        '<p>Se lo ofrezco a</p><div class="tos">' + tos + '</div>' +
+        '<div class="to-row"><p>Se lo ofrezco a</p><div class="tos">' + tos + '</div></div>' +
         '<div class="sum">' + (sg && st ? '' : 'Elegí qué das y qué pedís') + '</div>' +
-        '<button type="button" class="primary" data-offer' + (ok ? '' : ' disabled') + '>Ofrecer' + (pl ? ' <small>(te quedan ' + pl.left + ')</small>' : '') + '</button>';
+        '<div class="yesno"><button type="button" class="yes" data-offer aria-label="Ofrecer" title="Ofrecer"' + (ok && pl ? '' : ' disabled') + '>✓</button></div>'; // la tilde verde de siempre
     }
     function renderTrade() {
       var can = {}; legal.forEach(function (a) { can[a.type] = a; });
-      if (!tradeUI.tab || (tradeUI.tab === 'bank' && !can.bankTrade) || (tradeUI.tab === 'players' && !can.proposeTrade)) tradeUI.tab = can.bankTrade ? 'bank' : 'players';
-      var tabs = can.bankTrade && can.proposeTrade
+      var players = can.proposeTrade || offerLimit(); // la pestaña sigue aunque se haya llegado al tope de ofertas
+      if (!tradeUI.tab || (tradeUI.tab === 'bank' && !can.bankTrade) || (tradeUI.tab === 'players' && !players)) tradeUI.tab = can.bankTrade ? 'bank' : 'players';
+      var tabs = can.bankTrade && players
         ? '<div class="tabs"><button type="button" data-tab="bank" aria-pressed="' + (tradeUI.tab === 'bank') + '">Banco</button><button type="button" data-tab="players" aria-pressed="' + (tradeUI.tab === 'players') + '">Jugadores</button></div>'
         : '';
       dialogEl.className = 'panel dialog trade';
       if (tradeUI.tab === 'players') {
         dialogEl.innerHTML = '<h3>Comerciar con jugadores</h3>' + tabs + renderPlayersTab();
-        Array.prototype.forEach.call(dialogEl.querySelectorAll('.to small'), function (el) { el.textContent = PLAYER_INFO[+el.parentNode.getAttribute('data-to')].name; });
+        Array.prototype.forEach.call(dialogEl.querySelectorAll('.to'), function (el) { var nm = PLAYER_INFO[+el.getAttribute('data-to')].name; el.querySelector('small').textContent = nm; el.title = nm; el.setAttribute('aria-label', nm); });
         dialogEl.hidden = false;
         return;
       }
@@ -1920,7 +1942,7 @@ export function initBoard(opts) {
           var dk = b.getAttribute('data-play');
           if (dk === 'monopoly') cardsUI = { mode: 'monopoly', res: null, picks: [] };
           else if (dk === 'yearOfPlenty') cardsUI = { mode: 'plenty', res: null, picks: [] };
-          else { cardsUI = null; dispatch({ type: DEV[dk].play, player: game.turn }); return; } // Gaucho y Vialidad siguen sobre el tablero
+          else { cardsUI = null; dispatch({ type: DEV[dk].play, player: game.turn }); return; } // Gaucho y Empedrado siguen sobre el tablero
         } else if (b.hasAttribute('data-res')) {
           var rk = b.getAttribute('data-res');
           if (cardsUI.mode === 'monopoly') cardsUI.res = rk; else if (cardsUI.picks.length < plentyNeed()) cardsUI.picks.push(rk);
@@ -2036,7 +2058,7 @@ export function initBoard(opts) {
       // la tirada: dados rodando; el resultado y la producción aparecen cuando terminan de caer
       function rollAnim(ev, dist, cont) {
         var a = ev.dice[0], b = ev.dice[1], s = ev.total;
-        clearTimeout(diceTimer);
+        clearDice();
         diceSum.textContent = '';
         diceBox.hidden = false;
         spinDie(dieA, a, animate); spinDie(dieB, b, animate);
@@ -2047,7 +2069,7 @@ export function initBoard(opts) {
           var dur = 0;
           if (s === 7) { robberPulse = 1; if (animate) audio.seven(); }
           else { tiles.forEach(function (t) { if (t.num === s) t.pulse = 1; }); dur = flyGains(rollJobs({ map: game.map, robber: shown.robber, vertexBuildings: shown.vertexBuildings }, s, dist ? dist.gains : []), animate); }
-          diceTimer = setTimeout(function () { diceBox.hidden = true; }, 3200);
+          diceTimer = setTimeout(function () { dockDice(a, b, s, animate); }, animate ? 1600 : 0);
           setTimeout(cont, animate ? Math.max(dur, 900) : 0); // se sigue cuando terminan de llegar los recursos
         }, animate ? 1250 : 0);
       }
@@ -2120,9 +2142,9 @@ export function initBoard(opts) {
             return gap(p, function () {
               devCounts[p] = Math.max(0, devCounts[p] - 1); knights[p]++; renderSeats();
               if (foreign(p)) audio.card();
-              if (animate) { pop(seatsEl.children[p], PLAYER_INFO[p].css); cardLeaves(p, 'knight'); }
+              if (animate) { pop(seatsEl.children[p], PLAYER_INFO[p].css); cardPlayed(p, 'knight'); }
               showStatus((p === VIEWER ? 'Jugaste un Gaucho' : PLAYER_INFO[p].name + ' jugó un Gaucho'), false, true, p);
-              pause(cont, foreign(p) ? 900 : 0);
+              pause(cont, foreign(p) ? PLAYED_MS : 0);
             });
           case 'MonopolyPlayed':
             return gap(p, function () {
@@ -2136,9 +2158,9 @@ export function initBoard(opts) {
               counts[p] += total; if (p === VIEWER) myHand[ev.resource] += total;
               renderSeats(); renderHand();
               if (foreign(p)) audio.card();
-              if (animate) { pop(seatsEl.children[p], css); cardLeaves(p, 'monopoly'); if (total) floatText(seatsEl.children[p], '+' + total, css); }
+              if (animate) { pop(seatsEl.children[p], css); cardPlayed(p, 'monopoly'); if (total) floatText(seatsEl.children[p], '+' + total, css); }
               showStatus((p === VIEWER ? 'Jugaste Acopio' : PLAYER_INFO[p].name + ' jugó Acopio') + ': ' + TERRAINS[ev.resource].res.toLowerCase() + (total ? ' (+' + total + ')' : ' (nadie tenía)'), false, true, p);
-              pause(cont, 1100);
+              pause(cont, foreign(p) ? PLAYED_MS : 1100);
             });
           case 'YearOfPlentyPlayed':
             return gap(p, function () {
@@ -2150,22 +2172,22 @@ export function initBoard(opts) {
               renderSeats(); renderHand();
               if (foreign(p)) audio.card();
               if (animate) {
-                cardLeaves(p, 'yearOfPlenty');
+                cardPlayed(p, 'yearOfPlenty');
                 ev.gains.forEach(function (g) {
                   var card = g.player === VIEWER ? handEl.querySelector('[data-res="' + g.resource + '"]') : seatsEl.children[g.player], col = g.player === VIEWER ? card.style.getPropertyValue('--c') : PLAYER_INFO[g.player].css;
                   pop(card, col); floatText(card, '+' + g.amount, col);
                 });
               }
               showStatus((p === VIEWER ? 'Jugaste Buena cosecha' : PLAYER_INFO[p].name + ' jugó Buena cosecha'), false, true, p);
-              pause(cont, 900);
+              pause(cont, foreign(p) ? PLAYED_MS : 900);
             });
           case 'RoadBuildingPlayed':
             return gap(p, function () {
               devCounts[p] = Math.max(0, devCounts[p] - 1); renderSeats();
               if (foreign(p)) audio.card();
-              if (animate) { pop(seatsEl.children[p], PLAYER_INFO[p].css); cardLeaves(p, 'roadBuilding'); }
-              showStatus((p === VIEWER ? 'Jugaste Vialidad' : PLAYER_INFO[p].name + ' jugó Vialidad') + ': 2 caminos gratis', false, true, p);
-              pause(cont, foreign(p) ? 700 : 0);
+              if (animate) { pop(seatsEl.children[p], PLAYER_INFO[p].css); cardPlayed(p, 'roadBuilding'); }
+              showStatus((p === VIEWER ? 'Jugaste Empedrado' : PLAYER_INFO[p].name + ' jugó Empedrado') + ': 2 caminos gratis', false, true, p);
+              pause(cont, foreign(p) ? PLAYED_MS : 0);
             });
           case 'LongestRoadChanged': {
             var pts = game.config.awardPoints;
@@ -2173,9 +2195,9 @@ export function initBoard(opts) {
             if (ev.from !== null) vps[ev.from] -= pts;
             if (ev.player !== null) vps[ev.player] += pts;
             renderSeats(); renderHand();
-            if (animate && ev.player !== null) pop(seatsEl.children[ev.player], PLAYER_INFO[ev.player].css);
+            if (animate && ev.player !== null) awardWon(ev.player, 'longestRoad', ev.from);
             showStatus(ev.player === null ? PLAYER_INFO[ev.from].name + ' perdió la Ruta más larga' : (ev.player === VIEWER ? 'Tenés' : PLAYER_INFO[ev.player].name + ' tiene') + ' la Ruta más larga (' + ev.length + ' caminos)', false, true, ev.player === null ? ev.from : ev.player);
-            return pause(cont, 1000);
+            return pause(cont, ev.player === null ? 1000 : AWARD_MS); // si nadie se queda con la ruta, va solo el aviso
           }
           case 'LargestArmyChanged': {
             var apts = game.config.awardPoints;
@@ -2183,9 +2205,9 @@ export function initBoard(opts) {
             if (ev.from !== null) vps[ev.from] -= apts;
             vps[ev.player] += apts;
             renderSeats(); renderHand();
-            if (animate) pop(seatsEl.children[ev.player], PLAYER_INFO[ev.player].css);
+            if (animate) awardWon(ev.player, 'largestArmy', ev.from);
             showStatus((ev.player === VIEWER ? 'Tenés' : PLAYER_INFO[ev.player].name + ' tiene') + ' la Milicia más grande (' + ev.size + ' gauchos)', false, true, ev.player);
-            return pause(cont, 1000);
+            return pause(cont, AWARD_MS);
           }
           case 'Stolen': return stolen(ev, cont);
           case 'GameWon': // solo suena si ganaste, la copa, el resumen y el giro de cámara son para toda la mesa
@@ -2193,7 +2215,7 @@ export function initBoard(opts) {
             setOrbit(true);
             return cont();
           case 'TurnChanged':
-            turn = ev.player; renderSeats();
+            turn = ev.player; renderSeats(); clearDice();
             if (withOthers) showStatus(ev.player === VIEWER ? 'Tu turno' : 'Turno de ' + PLAYER_INFO[ev.player].name, false, false, ev.player);
             return pause(cont, foreign(ev.player) ? 450 : 0);
           default: return cont(); // DiscardRequired, ResourcesDistributed suelto, GameWon: lo muestra el estado final
@@ -2269,6 +2291,29 @@ export function initBoard(opts) {
         { transform: 'translate(-50%,-65%) scale(.9) rotate(-4deg)', opacity: 0 }
       ], { duration: 2200, easing: 'ease-out' }).onfinish = function () { el.remove(); };
     }
+    // Ruta más larga y Milicia más grande: la placa (cuadrada, para no confundirla con una carta) aparece en el centro para toda la mesa, con
+    // una cinta que dice quién la tiene ahora, y vuela a su puesto (donde queda la insignia); el puesto que la perdió titila.
+    var AWARD_MS = 3800; // ~2,5 s quieta en el centro antes de volar al puesto
+    function awardWon(p, kind, from) {
+      var w = stage.clientWidth, h = stage.clientHeight, sr = stage.getBoundingClientRect();
+      var el = document.createElement('div'); el.className = 'played award';
+      el.innerHTML = '<img alt="" draggable="false"><span></span>';
+      el.firstChild.src = awardURL(kind); el.firstChild.alt = kind === 'longestRoad' ? 'Ruta más larga' : 'Milicia más grande';
+      var tag = el.lastChild; tag.style.background = PLAYER_INFO[p].css; tag.style.color = PLAYER_INFO[p].text;
+      tag.textContent = PLAYER_INFO[p].name + ' tiene la ' + (kind === 'longestRoad' ? 'Ruta más larga' : 'Milicia más grande'); // simple, gane o pase de mano
+      stage.appendChild(el);
+      var ar = seatsEl.children[p].querySelector('.av').getBoundingClientRect(), tx = ar.left - sr.left + ar.width / 2, ty = ar.top - sr.top + ar.height / 2;
+      var cx = w / 2, cy = h * 0.42;
+      var at = function (x, y, sc, rot) { return 'translate(' + x + 'px,' + y + 'px) translate(-50%,-50%) scale(' + sc + ') rotate(' + rot + 'deg)'; };
+      el.animate([
+        { transform: at(cx, cy + 40, 0.4, -10), opacity: 0 },
+        { transform: at(cx, cy, 1.08, 3), opacity: 1, offset: 0.08 },
+        { transform: at(cx, cy, 1, 0), opacity: 1, offset: 0.76 },
+        { transform: at(tx, ty, 0.12, 0), opacity: 0.8, offset: 0.96 },
+        { transform: at(tx, ty, 0.1, 0), opacity: 0 }
+      ], { duration: AWARD_MS, easing: 'ease-in-out', fill: 'both' }).onfinish = function () { el.remove(); pop(seatsEl.children[p], PLAYER_INFO[p].css); };
+      if (from !== null && from !== undefined) pop(seatsEl.children[from], PLAYER_INFO[from].css);
+    }
     function pop(el, color) {
       el.animate([{ transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }, { transform: 'scale(1.2)', boxShadow: '0 0 18px 5px ' + color, offset: 0.35 }, { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }], { duration: 520, easing: 'ease-out' });
     }
@@ -2324,21 +2369,32 @@ export function initBoard(opts) {
       return animate && jobs.length ? 450 + (jobs.length - 1) * 260 + 1000 + 600 : 0;
     }
 
-    // Al jugar una carta de desarrollo (Gaucho, Acopio, Buena cosecha, Vialidad) se pierde de la mano en el acto: en vez de
-    // desaparecer sin más, sale volando del puesto y se desvanece, mismo lenguaje visual que el ícono que "se va" cuando
-    // te roban un recurso — pero sin nadie del otro lado, porque la carta se descarta.
-    function cardLeaves(p, kind) {
-      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      var sr = stage.getBoundingClientRect(), ar = seatsEl.children[p].querySelector('.av').getBoundingClientRect();
-      var sx = ar.left - sr.left + ar.width / 2, sy = ar.top - sr.top + ar.height / 2;
-      var fly = document.createElement('div'); fly.className = 'fly leaves';
-      var img = document.createElement('img'); img.src = devCardURL(kind); fly.appendChild(img); stage.appendChild(fly);
-      var at = function (x, y, sc) { return 'translate(' + (x - 13) + 'px,' + (y - 20) + 'px) scale(' + sc + ')'; };
-      fly.animate([{ transform: at(sx, sy, 1), opacity: 1 }, { transform: at(sx, sy - 55, 0.5), opacity: 0 }], { duration: 650, easing: 'ease-in', fill: 'both' }).onfinish = function () { fly.remove(); };
+    // Al jugar una carta de desarrollo (Gaucho, Acopio, Buena cosecha, Empedrado) la ve toda la mesa: aparece grande en el
+    // centro, con una cinta del color de quien la jugó (si no fuiste vos), y después "baja" al tablero (se achica e inclina hacia el centro de
+    // la mesa) y se desvanece, porque se descarta. Dura PLAYED_MS; las pausas de los demás la esperan.
+    var PLAYED_MS = 3000; // ~2 s quieta en el centro: tiene que alcanzar para leerla
+    function cardPlayed(p, kind) {
+      var w = stage.clientWidth, h = stage.clientHeight;
+      var el = document.createElement('div'); el.className = 'played';
+      el.innerHTML = '<img alt="" draggable="false"><span></span>';
+      el.firstChild.src = devCardURL(kind); el.firstChild.alt = DEV[kind].name;
+      var tag = el.lastChild; // la cinta con el nombre es solo para la carta de otro: la propia ya sabés quién la jugó
+      if (p === VIEWER) tag.remove(); else { tag.textContent = PLAYER_INFO[p].name; tag.style.background = PLAYER_INFO[p].css; tag.style.color = PLAYER_INFO[p].text; }
+      stage.appendChild(el);
+      var cx = w / 2, cy = h * 0.42, v = new THREE.Vector3(0, TILE_TOP, 0).project(camera), tx = (v.x * 0.5 + 0.5) * w, ty = (0.5 - v.y * 0.5) * h;
+      var at = function (x, y, sc, rot) { return 'translate(' + x + 'px,' + y + 'px) translate(-50%,-50%) scale(' + sc + ') rotate(' + rot + 'deg)'; };
+      el.animate([
+        { transform: at(cx, cy + 40, 0.5, -8), opacity: 0 },
+        { transform: at(cx, cy, 1.05, 2), opacity: 1, offset: 0.09 },
+        { transform: at(cx, cy, 1, 0), opacity: 1, offset: 0.74 },
+        { transform: at(tx, ty, 0.35, 14), opacity: 0.9, offset: 0.93 },
+        { transform: at(tx, ty, 0.3, 16), opacity: 0 }
+      ], { duration: PLAYED_MS, easing: 'ease-in-out', fill: 'both' }).onfinish = function () { el.remove(); };
     }
 
     function pressed(btn, on) { btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
     function newGame() {
+      clearDice();
       buildBoard((Math.random() * 1e9) | 0);
       for (var n = 2; n <= 12; n++) rollCounts[n] = 0;
       updateStats();
@@ -2364,6 +2420,7 @@ export function initBoard(opts) {
       return list[list.length - 1];
     }
     btnQuick.addEventListener('click', function () {
+      clearDice();
       buildBoard((Math.random() * 1e9) | 0);
       for (var n = 2; n <= 12; n++) rollCounts[n] = 0;
       updateStats();
@@ -2460,6 +2517,7 @@ export function initBoard(opts) {
         camera: camera, controls: controls, // para acercar la cámara a un adorno y revisarlo
 
         legal: function () { return legal; },
+        play: function (events) { playEvents(events); }, // reproduce eventos sueltos (solo lo visual; al final se vuelve al estado real)
         tileVertices: function (t) { return topology().tiles[t].vertices; },
         mutate: function (fn) { if (!session.debugMutate) return; session.debugMutate(fn); pull(); syncPieces(); applyView(); },
         screen: function (type, id) {

@@ -91,6 +91,11 @@ body{
 .dice b{display:block;height:2.8rem;font-family:'Nunito Sans','Segoe UI',system-ui,sans-serif;font-size:2.6rem;line-height:2.8rem;font-weight:700;font-variant-numeric:lining-nums}
 .dice-row{display:flex;gap:22px;justify-content:center;margin:4px 0 12px;padding:6px 0}
 /* la perspectiva va en cada dado (padre directo del cubo); en el contenedor no llegaba al cubo por ser nieto */
+/* Chip de la última tirada (ver dockDice): dos caras chicas y el total, alineado al borde derecho del modal de dados. */
+.dice-chip{position:absolute;z-index:3;top:14px;right:210px;display:flex;align-items:center;gap:6px;padding:6px 10px 6px 8px;border-radius:12px;
+  background:var(--panel);border:1px solid var(--border);box-shadow:var(--shadow);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);pointer-events:none}
+.dice-chip .odie{display:block;width:26px;height:26px;flex:none}
+.dice-chip b{min-width:1.3em;text-align:center;font-family:'Nunito Sans','Segoe UI',system-ui,sans-serif;font-size:1.3rem;line-height:1;font-weight:700;font-variant-numeric:lining-nums}
 .die{--s:56px;width:var(--s);height:var(--s);perspective:520px}
 .die.hop{animation:dice-hop 1.15s cubic-bezier(.3,.6,.4,1)}
 @keyframes dice-hop{0%{transform:translateY(0)}18%{transform:translateY(-20px)}42%{transform:translateY(0)}56%{transform:translateY(-7px)}72%,100%{transform:translateY(0)}}
@@ -180,10 +185,16 @@ body{
 .fly{position:absolute;z-index:4;left:0;top:0;width:40px;height:40px;border-radius:50%;border:2px solid #fff;
   display:flex;align-items:center;justify-content:center;pointer-events:none;box-shadow:0 3px 8px rgba(0,0,0,.45)}
 .fly svg{width:28px;height:28px;stroke:#3b2a18;stroke-width:2.2;stroke-linejoin:round;background:rgba(255,255,255,.85);border-radius:50%;padding:2px}
-/* Variante para una carta de desarrollo jugada: recorte de la carta (en vez del círculo de recurso) que sale volando del
-   puesto y se pierde de vista; mismo elemento `.fly`, sin destino porque la carta se descarta. */
-.fly.leaves{width:26px;height:40px;border-radius:5px}
-.fly.leaves img{width:100%;height:100%;object-fit:cover;border-radius:3px}
+/* Carta de desarrollo jugada: grande en el centro, con una cinta del color de quien la jugó, y después baja al tablero
+   (posición con transform desde board.js, ver cardPlayed). La ve toda la mesa. */
+.played{position:absolute;z-index:7;left:0;top:0;width:160px;pointer-events:none;display:flex;flex-direction:column;align-items:center}
+.played img{display:block;width:100%;filter:drop-shadow(0 10px 16px rgba(0,0,0,.5))}
+/* la cinta va por delante: el filter de la imagen la ponía en su propia capa, encima de la cinta */
+.played span{position:relative;z-index:1;margin-top:-10px;padding:3px 14px;border-radius:999px;font-weight:800;font-size:.95rem;border:2px solid #fff;
+  box-shadow:0 3px 8px rgba(0,0,0,.4);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Placa de un reconocimiento: cuadrada (no es una carta del mazo), y la cinta puede ocupar dos líneas («Lucía tiene la Milicia más grande»). */
+.played.award{width:260px}
+.played.award span{margin-top:-8px;padding:5px 16px;font-size:1.05rem;white-space:normal;text-align:center;line-height:1.2;box-shadow:0 4px 12px rgba(0,0,0,.55)}
 
 /* Puestos de los jugadores (a la izquierda, bajo el título): avatar, nombre y cantidad de cartas. El que tiene el turno resalta. */
 .seats{top:150px;left:14px;display:flex;flex-direction:column;gap:6px;padding:8px}
@@ -254,13 +265,20 @@ body{
   /* El logo ocupaba un rincón entero que los puestos necesitan más: se saca de la vista y se muestra arriba del todo
      del menú desplegable (.bar-logo), para no perderlo del todo. */
   .title{display:none}
-  .bar-logo{display:block;padding-bottom:12px;margin-bottom:6px;border-bottom:1px solid var(--border)}
-  .bar-logo .logo{width:140px}
+  .bar-logo{display:block;padding-bottom:8px;margin-bottom:0;border-bottom:1px solid var(--border)}
+  .bar-logo .logo{width:120px}
+  .bar-logo .tagline{margin-top:4px}
   /* el menú queda oculto tras un botón hamburguesa; al abrirlo es una lista que cae desde arriba a la derecha */
   .menu-btn{top:10px;right:10px}
   .bar{right:10px;left:auto;top:62px;bottom:auto;transform:none;
     max-height:calc(100% - 140px);z-index:4}
-  .bar button{padding:8px 12px;font-size:.85rem}
+  /* todo más compacto para que el menú entre sin barra de desplazamiento en un celular de 667 px de alto */
+  .bar{gap:8px;padding:10px}
+  .bar .group{gap:4px}
+  .bar .group + .group{padding-top:8px}
+  .bar button{padding:4px 12px;font-size:.8rem;min-height:30px}
+  .bar .vol .mute{width:32px}
+  .bar input[type=range]{min-height:20px;margin:0}
   .vol{width:170px}
   .hand{left:10px;right:76px;bottom:12px;transform:none;max-width:none;gap:6px;padding:8px 10px}
   .who{min-width:0}
@@ -291,14 +309,18 @@ body{
   .status{bottom:172px;font-size:.85rem;padding:7px 12px}
   .hover{top:auto;bottom:215px;right:10px;left:10px;max-width:none}
   /* el modal de dados va centrado, debajo de la fila de puestos; achicado para tapar lo menos posible del tablero */
-  .dice{top:64px;right:auto;left:50%;transform:translateX(-50%);padding:8px 10px 7px;width:160px}
+  .dice{top:74px;right:auto;left:50%;transform:translateX(-50%);padding:8px 10px 7px;width:160px}
+  /* el chip, debajo del botón de menú */
+  .dice-chip{top:66px;right:10px;gap:4px;padding:4px 7px 4px 5px;border-radius:10px}
+  .dice-chip .odie{width:22px;height:22px}
+  .dice-chip b{font-size:1.1rem}
   .dice-row{gap:10px;margin:2px 0 6px}
   .die{--s:34px}
   .dice b{height:1.7rem;font-size:1.5rem;line-height:1.7rem}
 }
 /* entre 641 y 900 px de ancho no hay lugar para el modal junto al menú: vuelve al borde derecho */
 @media (min-width:641px) and (max-width:900px){
-  .dice{right:68px}
+  .dice,.dice-chip{right:68px}
 }
 /* en ese rango angosto, si además la pantalla es baja, el menú baja al rincón inferior derecho para no chocar con el modal */
 @media (min-width:641px) and (max-width:900px) and (max-height:760px){
@@ -507,6 +529,8 @@ body{
   .dialog.cards .cardgrid{gap:10px 6px}
   .dialog.cards .dcard{width:88px}
   .reveal{width:120px}
+  .played{width:128px}
+  .played.award{width:200px}
   .trophy{width:82px}
 }
 
@@ -568,6 +592,32 @@ body{
 .dialog .tos .to .av svg{display:block;width:100%;height:100%}
 .dialog .tos .to small{font-size:.7rem;font-weight:700}
 .dialog .tos .to[aria-pressed="false"]{opacity:.45}
+.dialog .to-row{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px}
+.dialog.trade .to-row p{margin:0}
+.dialog .to-row .tos{margin:0}
+/* En el celular el comercio con jugadores tenía que entrar sin tapar los puestos ni la barra: «Doy»/«Pido» pasan a una
+   columna a la izquierda de su franja, todo un poco más chico, la fila de destinatarios sin nombres y sin título ni ayuda
+   (las pestañas ya dicen «Jugadores» y el botón «Ofrecer» se habilita solo cuando la oferta está completa). */
+@media (max-width:640px){
+  .dialog.trade:has(.to-row){padding:10px 10px 12px}
+  .dialog.trade:has(.to-row):has(.tabs) h3{display:none}
+  .dialog.trade:has(.to-row) .tabs{margin:0 0 8px}
+  .dialog.trade:has(.to-row) .sum{display:none}
+  .dialog.trade .side{display:grid;grid-template-columns:44px 1fr;align-items:center;gap:4px;padding:5px 5px 5px 2px;margin-bottom:6px}
+  .dialog.trade .side p{flex-direction:column;gap:0;margin:0;font-size:.72rem}
+  .dialog.trade .steps{gap:4px}
+  .dialog.trade .step{gap:2px}
+  .dialog.trade .step button{height:24px;font-size:1rem}
+  .dialog.trade .step .ico svg{width:22px;height:22px}
+  .dialog.trade .step b{font-size:.85rem}
+  .dialog .to-row{gap:8px;margin:2px 0 8px}
+  .dialog .to-row p{font-size:.8rem}
+  .dialog .tos{gap:6px}
+  .dialog .tos .to{padding:4px 6px}
+  .dialog .tos .to small{display:none}
+  .dialog.trade:has(.to-row) .yesno{margin-top:2px}
+  .dialog.trade:has(.to-row) .yesno button{height:46px}
+}
 .dialog .primary small{font-weight:600;opacity:.75}
 .dialog.offer .swap{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .dialog.offer .chips{display:inline-flex;gap:6px;flex-wrap:wrap;justify-content:center}

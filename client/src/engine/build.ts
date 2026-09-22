@@ -64,7 +64,7 @@ export function afterFreeRoad(s: GameState, player: PlayerId, events: GameEvent[
 }
 
 export function buildRoad(s: GameState, player: PlayerId, edge: number, events: GameEvent[]): Err {
-  const free = s.phase.kind === 'roadBuilding'; // carta Vialidad: el camino no se paga
+  const free = s.phase.kind === 'roadBuilding'; // carta Empedrado: el camino no se paga
   if (s.phase.kind !== 'main' && !free) return bad('wrong-phase', 'Solo se puede construir después de tirar los dados.');
   const topo = topology();
   if (!Number.isInteger(edge) || edge < 0 || edge >= topo.edges.length) return bad('invalid-edge', 'Esa arista no existe.');

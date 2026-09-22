@@ -194,4 +194,11 @@ describe('vista: contadores públicos de cada jugador', () => {
     expect(v.players.map((p) => p.knights)).toEqual([0, 2, 0]);
     expect(v.players.map((p) => p.roadLength)).toEqual([0, 0, 0]);
   });
+
+  it('trae cuántas ofertas de comercio se abrieron en el turno (pública), para grisar «Ofrecer» al llegar al tope', () => {
+    const s = createGame(['A', 'B', 'C'], 5);
+    expect(gameView(s, 1).tradeOffers).toBe(0);
+    s.tradeOffers = 5;
+    expect(gameView(s, 1).tradeOffers).toBe(5);
+  });
 });

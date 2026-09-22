@@ -1,7 +1,7 @@
 // Cartas de desarrollo: el mazo, comprarlas y jugarlas.
 //   Gaucho (knight): mueve al ladrón y roba, sin descarte. Se puede jugar antes de tirar los dados.
 //   Acopio (monopoly): todos los rivales entregan el recurso elegido. Buena cosecha (yearOfPlenty): 2 recursos del banco.
-//   Vialidad (roadBuilding): 2 caminos gratis. Punto de victoria (victoryPoint): 1 punto oculto, no se «juega».
+//   Empedrado (roadBuilding): 2 caminos gratis. Punto de victoria (victoryPoint): 1 punto oculto, no se «juega».
 // Una carta por turno, y no la que se compró ese mismo turno. Todas se pueden jugar antes o después de tirar los dados.
 
 import { roadPlaces } from './build';

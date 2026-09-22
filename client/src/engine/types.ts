@@ -6,7 +6,7 @@ export type PlayerId = number; // índice del jugador en el orden de mesa (0 = p
 export type Hand = Record<Resource, number>;
 export type Cost = Partial<Record<Resource, number>>;
 
-/** Cartas de desarrollo. En pantalla: Gaucho (knight), Acopio (monopoly), Buena cosecha (yearOfPlenty), Vialidad (roadBuilding), Punto de victoria (victoryPoint). */
+/** Cartas de desarrollo. En pantalla: Gaucho (knight), Acopio (monopoly), Buena cosecha (yearOfPlenty), Empedrado (roadBuilding), Punto de victoria (victoryPoint). */
 export type DevCardKind = 'knight' | 'monopoly' | 'yearOfPlenty' | 'roadBuilding' | 'victoryPoint';
 export type DevHand = Record<DevCardKind, number>;
 
@@ -63,7 +63,7 @@ export type Phase =
   | { kind: 'discard'; roller: PlayerId; queue: { player: PlayerId; count: number }[] }
   | { kind: 'moveRobber'; after: 'roll' | 'main' } // `after`: fase a la que se vuelve (con un caballero antes de tirar, `roll`)
   | { kind: 'steal'; victims: PlayerId[]; after: 'roll' | 'main' } // hay que elegir a quién robarle (más de un candidato)
-  | { kind: 'roadBuilding'; left: number; after: 'roll' | 'main' } // carta Vialidad: caminos gratis que faltan poner; `after`: fase a la que se vuelve (antes de tirar, `roll`)
+  | { kind: 'roadBuilding'; left: number; after: 'roll' | 'main' } // carta Empedrado: caminos gratis que faltan poner; `after`: fase a la que se vuelve (antes de tirar, `roll`)
 
   | { kind: 'finished'; winner: PlayerId };
 
