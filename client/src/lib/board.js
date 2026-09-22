@@ -2503,7 +2503,6 @@ export function initBoard(opts) {
           openingEl.innerHTML = '<h3>' + (ri === 0 ? '¿Quién empieza?' : 'Desempate') + '</h3><div class="orows">' + openingRows(round, n, win ? winners : null, rollIdx, spinIdx, fresh) + '</div><p class="onote">' + (note || '&nbsp;') + '</p>';
           Array.prototype.forEach.call(openingEl.querySelectorAll('.orow .nm'), function (el, i) { el.textContent = PLAYER_INFO[round[i].player].name; });
         }
-        var intro = ri === 0 ? 'Tira cada uno dos dados; abre el mayor' : 'Tiran de nuevo solo los empatados';
         function conclude() {
           later(550, function () {
             var names = winners.map(function (p) { return PLAYER_INFO[p].name; });
@@ -2528,16 +2527,16 @@ export function initBoard(opts) {
             openingEl.querySelector('.oroll').onclick = function (e) {
               e.stopPropagation();
               if (animate) audio.rollDice();
-              spin(i, 8, function () { draw(i + 1, intro, false, null, null, i); later(900, function () { step(i + 1); }); }); // tus dados también ruedan antes de mostrar el resultado
+              spin(i, 8, function () { draw(i + 1, null, false, null, null, i); later(900, function () { step(i + 1); }); }); // tus dados también ruedan antes de mostrar el resultado
             };
             return;
           }
           later(i === 0 ? 1100 : 350, function () {
             if (animate) audio.rollDice(); // suenan los dados de cada uno que tira solo
-            spin(i, 8, function () { draw(i + 1, intro, false, null, null, i); later(900, function () { step(i + 1); }); });
+            spin(i, 8, function () { draw(i + 1, null, false, null, null, i); later(900, function () { step(i + 1); }); });
           });
         }
-        draw(0, intro);
+        draw(0);
         step(0);
       }
       playRound(0);

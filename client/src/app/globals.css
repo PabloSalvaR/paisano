@@ -513,12 +513,14 @@ body{
 .opening .orow i{width:12px;height:12px;border-radius:50%;background:var(--pc);flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.7)}
 .opening .orow .nm{font-weight:700;font-size:.9rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .opening .odie{width:28px;height:28px;flex:none}
-.opening .odie.fresh{animation:odie-in .35s ease-out} /* solo el dado recién revelado: los redibujos no repiten la entrada */
+.opening .odie.fresh{animation:odie-land .38s cubic-bezier(.2,.8,.3,1.15)} /* el dado recién revelado se asienta tras rodar (sigue visible, frena el giro); los redibujos no lo repiten */
+.opening .odie.fresh+.odie.fresh{animation-name:odie-land-rev} /* el segundo rodaba al revés */
 .opening .odie.ph{border-radius:7px;border:2px dashed var(--border);animation:none;opacity:.6}
 .opening .orow b{width:1.7em;text-align:right;font-size:1.05rem}
 .opening .orow.win{border-color:var(--pc);background:var(--btn-hover);box-shadow:0 0 14px var(--pc)}
 .opening .onote{margin:6px 0 0;min-height:1.3em;font-weight:600;color:var(--text)}
-@keyframes odie-in{from{transform:translateY(-10px) rotate(-40deg) scale(.6);opacity:0}to{transform:none;opacity:1}}
+@keyframes odie-land{from{transform:translateY(-5px) rotate(-110deg) scale(.92)}to{transform:none}}
+@keyframes odie-land-rev{from{transform:translateY(-5px) rotate(110deg) scale(.92)}to{transform:none}}
 @media (prefers-reduced-motion:reduce){.opening .odie{animation:none}}
 .opening .orow.mine{border-color:var(--pc);background:var(--btn-hover)}
 .opening .orow.spin{border-color:var(--pc);background:var(--btn-hover)}
