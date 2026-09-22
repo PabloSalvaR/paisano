@@ -66,11 +66,13 @@ body{
 /* Logo: /public/logo-paisano.png es solo tinta (fondo transparente). Se usa como máscara y se pinta con el color
    del tema, así de día es tinta oscura y de noche se vuelve crema en lugar de desaparecer sobre el panel oscuro.
    Relación de aspecto = 900 / 297 (tamaño del PNG). */
-.title .logo{width:200px;aspect-ratio:900/297;margin:0 auto;background:var(--text);
+.title .logo,.bar-logo .logo{width:200px;aspect-ratio:900/297;margin:0 auto;background:var(--text);
   -webkit-mask:url(/logo-paisano.png) center/contain no-repeat;mask:url(/logo-paisano.png) center/contain no-repeat}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.title .tagline{margin-top:7px;font-family:'Fraunces',Georgia,'Times New Roman',serif;font-style:italic;font-weight:500;
-  font-size:1rem;line-height:1.2;color:var(--text)}
+.title .tagline,.bar-logo .tagline{margin-top:7px;font-family:'Fraunces',Georgia,'Times New Roman',serif;font-style:italic;font-weight:500;
+  font-size:1rem;line-height:1.2;color:var(--text);text-align:center}
+/* El logo del menú desplegable solo existe para el celular (ver @media abajo): en pantallas anchas el de .title ya se ve fijo. */
+.bar-logo{display:none}
 
 .hover{bottom:16px;left:14px;padding:10px 14px;font-size:.86rem;line-height:1.35;max-width:220px}
 .hover strong{font-family:'Fraunces',Georgia,serif;font-size:1rem;display:block}
@@ -245,10 +247,11 @@ body{
 @media (max-width:640px){
   .build{left:50%;right:auto;transform:translateX(-50%);bottom:108px;padding:6px}
   .build button{min-width:64px;padding:5px 6px 6px}
-  /* logo chico y sin lema, alineado en altura con el botón de menú */
-  .title{top:10px;left:10px;height:44px;display:flex;align-items:center;padding:0 6px;border-width:1px;box-shadow:var(--shadow)}
-  .title .logo{width:52px}
-  .title .tagline{display:none}
+  /* El logo ocupaba un rincón entero que los puestos necesitan más: se saca de la vista y se muestra arriba del todo
+     del menú desplegable (.bar-logo), para no perderlo del todo. */
+  .title{display:none}
+  .bar-logo{display:block;padding-bottom:12px;margin-bottom:6px;border-bottom:1px solid var(--border)}
+  .bar-logo .logo{width:140px}
   /* el menú queda oculto tras un botón hamburguesa; al abrirlo es una lista que cae desde arriba a la derecha */
   .menu-btn{top:10px;right:10px}
   .bar{right:10px;left:auto;top:62px;bottom:auto;transform:none;
@@ -259,8 +262,8 @@ body{
   .who{min-width:0}
   .who .nm{display:none}
   .who .av{width:32px;height:32px}
-  /* los puestos van en una fila entre el logo (izquierda) y el botón de menú (derecha); todo compacto para que entren 4 */
-  .seats{top:10px;left:80px;right:60px;min-height:44px;transform:none;flex-direction:row;align-items:center;gap:2px;padding:0 4px}
+  /* los puestos van en una fila entre el borde (ya no hay logo fijo) y el botón de menú; todo compacto para que entren 4 */
+  .seats{top:10px;left:10px;right:60px;min-height:44px;transform:none;flex-direction:row;align-items:center;gap:2px;padding:0 4px}
   .seat .nm{display:none}
   /* avatar a la izquierda; puntos y cartas apilados a su derecha */
   .seat{flex:1;min-width:0;grid-template-columns:auto 1fr;grid-template-areas:"av vp" "av cnt" "aw aw";justify-content:stretch;justify-items:start;

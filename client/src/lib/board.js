@@ -97,6 +97,11 @@ export const MARKUP = `
     <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
   </button>
   <nav class="panel bar" id="bar" aria-label="Controles del tablero">
+    <!-- Solo se ve en celular (ver .bar-logo): en pantallas anchas el logo ya está fijo en .title. -->
+    <div class="bar-logo">
+      <h2 class="logo"><span class="sr-only">Paisano</span></h2>
+      <p class="tagline">Piedra y camino</p>
+    </div>
     <div class="group">
       <button type="button" id="btnNew" class="primary">Nuevo mapa</button>
       <button type="button" id="btnLeave" class="primary" title="Volver al menú (en una sala, la partida sigue: podés volver con el mismo link)">Salir al menú</button>
@@ -1070,7 +1075,10 @@ export function initBoard(opts) {
     var sailShape = new THREE.Shape(); sailShape.moveTo(0, 0); sailShape.lineTo(0.3, 0); sailShape.lineTo(0, 0.44); sailShape.closePath();
     var SAIL = new THREE.ExtrudeGeometry(sailShape, { depth: 0.012, bevelEnabled: false });
     var MAST = new THREE.CylinderGeometry(0.014, 0.014, 0.55, 6);
-    var POST = new THREE.CylinderGeometry(0.025, 0.03, 0.6, 6);
+    // Plataforma chata del cartel de puerto (no un poste vertical): un disco bajo, como las fichas de número de las
+    // casillas, para que se vea pegado al muelle visto desde arriba en vez de "flotando" como una bandera.
+    var PORT_BASE = new THREE.CylinderGeometry(0.3, 0.32, 0.045, 24);
+    var PORT_FACE = new THREE.CircleGeometry(0.27, 24);
 
     // Dibujos de los recursos para los carteles de puerto (legibles de lejos, sin texto).
     var PORT_ICONS = {
@@ -1120,8 +1128,8 @@ export function initBoard(opts) {
         ctx.fillText('3:1', 128 - (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2,128 + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
       }
       else {
-        ctx.font = 'bold 96px Georgia, "Times New Roman", serif'; ctx.fillText('2:1', 128, 68);
-        ctx.strokeStyle = '#3b2a18'; ctx.lineWidth = 5; ctx.save(); ctx.translate(128, 154); ctx.scale(0.85, 0.85); PORT_ICONS[kind](ctx, 0, 0); ctx.restore();
+        // Sin el "2:1": el recurso solo ya lo dice (y el reglamento explica la tasa), y así el dibujo ocupa mejor el círculo.
+        ctx.strokeStyle = '#3b2a18'; ctx.lineWidth = 5; ctx.save(); ctx.translate(128, 128); ctx.scale(1.55, 1.55); PORT_ICONS[kind](ctx, 0, 0); ctx.restore();
       }
       var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
       return t;
@@ -1175,16 +1183,22 @@ export function initBoard(opts) {
         var e = topo.edges[port.edge], t = tiles[port.tile];
         var A = vertices[e.a], B = vertices[e.b], mx = (A.x + B.x) / 2, mz = (A.z + B.z) / 2;
         var nx = mx - t.x, nz = mz - t.z, nl = Math.hypot(nx, nz); nx /= nl; nz /= nl;
-        var P = { x: mx + nx * 1.1, z: mz + nz * 1.1 }, D = { x: mx + nx * 0.55, z: mz + nz * 0.55 };
-        board.add(segment(A, D, WATER_Y + 0.03, 0.05, 0.035, MAT.dock)); board.add(segment(B, D, WATER_Y + 0.03, 0.05, 0.035, MAT.dock));
+        var P = { x: mx + nx * 1.1, z: mz + nz * 1.1 }, D = { x: mx + nx * 0.32, z: mz + nz * 0.32 }; // D bien pegado a la costa: la plataforma casi toca el borde
+        // Los dos muelles no convergen en D (quedaban pegados entre sí de tan cerca): cada uno llega a un punto propio,
+        // separado a los lados de D, así el cartel queda EN MEDIO de los dos (como en el juego de referencia).
+        var tx = -nz, tz = nx, spread = 0.2;
+        var Da = { x: D.x + tx * spread, z: D.z + tz * spread }, Db = { x: D.x - tx * spread, z: D.z - tz * spread };
+        board.add(segment(A, Da, WATER_Y + 0.03, 0.05, 0.035, MAT.dock)); board.add(segment(B, Db, WATER_Y + 0.03, 0.05, 0.035, MAT.dock));
         var ship = new THREE.Group(); ship.add(mesh(HULL, MAT.hull));
         var mast = mesh(MAST, MAT.dock); mast.position.set(0.02, 0.43, 0); ship.add(mast);
         var sail = mesh(SAIL, MAT.sail); sail.position.set(0.035, 0.2, -0.006); ship.add(sail);
         ship.scale.setScalar(0.7);
-        // El cartel va fijo en un poste del muelle (no en el barco), para que no se mueva con las olas.
-        var post = mesh(POST, MAT.dock); post.position.set(D.x, WATER_Y + 0.3, D.z); board.add(post);
-        var lab = new THREE.Sprite(new THREE.SpriteMaterial({ map: portLabel(port.resource), transparent: true }));
-        lab.scale.set(0.62, 0.62, 1); lab.position.set(D.x, WATER_Y + 0.68, D.z); board.add(lab);
+        // El cartel va fijo entre los muelles, chato sobre el agua (no en el barco, para que no se mueva con las olas;
+        // ni parado como una bandera, para que se vea pegado al muelle visto desde arriba, en celular).
+        var plateBase = mesh(PORT_BASE, MAT.dock); plateBase.position.set(D.x, WATER_Y + 0.045, D.z); board.add(plateBase);
+        var portTex = portLabel(port.resource);
+        var lab = new THREE.Mesh(PORT_FACE, new THREE.MeshStandardMaterial({ map: portTex, emissive: 0xffffff, emissiveMap: portTex, emissiveIntensity: 0.4, roughness: 0.55, metalness: 0, envMapIntensity: 0.2 }));
+        lab.rotation.x = -Math.PI / 2; lab.position.set(D.x, WATER_Y + 0.069, D.z); lab.receiveShadow = true; board.add(lab);
         ship.position.set(P.x, WATER_Y, P.z); ship.rotation.y = -Math.atan2(B.z - A.z, B.x - A.x);
         ship.userData.phase = i * 1.3; ship.userData.baseY = WATER_Y - 0.02;
         board.add(ship); ships.push(ship);
