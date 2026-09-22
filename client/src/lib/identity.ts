@@ -13,7 +13,6 @@ const roomKey = (roomId: string): string => `paisano:sala:${roomId.toUpperCase()
 const NAME_KEY = 'paisano:nombre';
 const CHARACTER_KEY = 'paisano:personaje';
 const COLOR_KEY = 'paisano:color';
-const PLAYERS_KEY = 'paisano:jugadores';
 /** El id de `SEAT_COLORS[0]` en `board.js` (rojo): mismo valor por defecto que ya tenía la persona antes de poder elegir. */
 export const DEFAULT_COLOR_ID = 'red';
 
@@ -96,24 +95,6 @@ export function lastColor(storage: Pick<Storage, 'getItem'> | null = safeStorage
   }
 }
 
-/** Cuántos juegan contra bots (3 o 4): se guarda junto con el nombre, el personaje y el color. */
-export function savePlayerCount(n: number, storage: Pick<Storage, 'setItem'> | null = safeStorage()): void {
-  try {
-    storage?.setItem(PLAYERS_KEY, String(n));
-  } catch {
-    /* sin almacenamiento: se sigue jugando */
-  }
-}
-
-/** La última cantidad elegida; 4 (el juego base) si no hay o no es válida. */
-export function lastPlayerCount(storage: Pick<Storage, 'getItem'> | null = safeStorage()): number {
-  try {
-    return storage?.getItem(PLAYERS_KEY) === '3' ? 3 : 4;
-  } catch {
-    return 4;
-  }
-}
-
 function safeStorage(): Storage | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;
@@ -141,11 +122,4 @@ export const colorStore = {
   subscribe: (): (() => void) => () => {},
   get: (): string => lastColor() ?? DEFAULT_COLOR_ID,
   getServer: (): string => DEFAULT_COLOR_ID,
-};
-
-/** Para React: la última cantidad de jugadores elegida contra bots (4 la primera vez). Mismo patrón que `nameStore`. */
-export const playerCountStore = {
-  subscribe: (): (() => void) => () => {},
-  get: (): number => lastPlayerCount(),
-  getServer: (): number => 4,
 };

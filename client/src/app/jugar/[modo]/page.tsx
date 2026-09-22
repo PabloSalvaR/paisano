@@ -5,7 +5,7 @@ import { notFound, useParams } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { MARKUP, SEAT_COLORS, characterSVG, initBoard } from "@/lib/board";
 import { CHARACTERS } from "@/lib/characters";
-import { characterStore, colorStore, nameStore, playerCountStore, saveCharacter, saveColor, saveName, savePlayerCount } from "@/lib/identity";
+import { characterStore, colorStore, nameStore, saveCharacter, saveColor, saveName } from "@/lib/identity";
 
 const MODES = ["bots", "local"];
 
@@ -25,9 +25,7 @@ export default function LocalBoard() {
   const [typedColor, setTypedColor] = useState<string | null>(null);
   const colorId = typedColor ?? storedColor; // el elegido, o el último usado en este navegador
   const previewCss = SEAT_COLORS.find((c) => c.id === colorId)?.css ?? SEAT_COLORS[0].css;
-  const storedPlayers = useSyncExternalStore(playerCountStore.subscribe, playerCountStore.get, playerCountStore.getServer);
-  const [typedPlayers, setTypedPlayers] = useState<number | null>(null);
-  const players = typedPlayers ?? storedPlayers; // 3 o 4: vos y dos o tres bots
+  const [players, setPlayers] = useState(3); // vos y dos o tres bots. Siempre arranca en 3 (no se recuerda, como «Caos»)
   const [chaos, setChaos] = useState(false); // «Caos»: números del mapa al azar. Siempre arranca apagado (en serie, como el juego original)
   const [player, setPlayer] = useState<{ name: string; characterId: string; colorId: string; players: number; chaos: boolean } | null>(null); // ya elegidos: recién ahí arranca el tablero
   const [loading, setLoading] = useState(true); // armar la escena 3D bloquea la página un par de segundos: mientras, se ve el loader
@@ -61,7 +59,6 @@ export default function LocalBoard() {
     saveName(n);
     saveCharacter(characterId);
     saveColor(colorId);
-    savePlayerCount(players);
     setPlayer({ name: n, characterId, colorId, players, chaos });
   }
 
@@ -83,17 +80,15 @@ export default function LocalBoard() {
               onKeyDown={(e) => e.key === "Enter" && start()}
             />
           </label>
-          <div className="char-block">
-            <p className="char-heading">Jugadores</p>
-            <div className="count-picker" role="radiogroup" aria-label="Cantidad de jugadores">
-              {[3, 4].map((n) => (
-                <button key={n} type="button" role="radio" aria-checked={n === players} className="count-opt" onClick={() => setTypedPlayers(n)}>
-                  {n}
-                  <small>{n === 3 ? "vos y 2 bots" : "vos y 3 bots"}</small>
-                </button>
-              ))}
-            </div>
-          </div>
+          <fieldset className="count-radio">
+            <legend>Jugadores</legend>
+            {[3, 4].map((n) => (
+              <label key={n}>
+                <input type="radio" name="players" checked={players === n} onChange={() => setPlayers(n)} />
+                {n}
+              </label>
+            ))}
+          </fieldset>
           <div className="char-block">
             <p className="char-heading">Elegí tu color</p>
             <div className="color-picker" role="radiogroup" aria-label="Tu color">
