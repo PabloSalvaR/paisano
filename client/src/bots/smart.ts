@@ -106,7 +106,7 @@ function distance(hand: Hand, goals: Cost[]): number {
   return Math.min(...goals.map((g) => RESOURCES.reduce((n, r) => n + Math.max(0, (g[r] ?? 0) - hand[r]), 0)));
 }
 
-const BOT_MAX_OFFERS = 3; // el bot no insiste más que esto por turno (el tope de las reglas es mayor)
+const BOT_MAX_OFFERS = 2; // el bot no insiste más que esto por turno (el tope de las reglas es mayor)
 
 /** Acepta si el cambio lo acerca a una compra (o, a igual distancia, recibe más cartas de las que da) y quien propone no está por ganar. */
 function answerTrade(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAction, { type: 'respondTrade' }>): boolean {
@@ -127,21 +127,34 @@ function answerTrade(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAct
   return now < before || (now === before && gets > gives);
 }
 
-/** Propone 1 carta que le sobra por 1 que le falta, cuando está a 1 o 2 cartas de una compra; insiste poco y varía lo que ofrece. */
+/**
+ * Propone 1 carta que le sobra por 1 que le falta, cuando está a 1 o 2 cartas de una compra. Arma todas las ofertas
+ * distintas que tiene sentido probar (cada recurso sobrante, y si con 1 no alcanzaría a nadie también con 2) y usa
+ * `tradeOffers` como índice: así cada intento del turno es una oferta distinta y, si ya probó todas, no insiste más.
+ */
 function proposeCommand(s: GameState, me: PlayerId, hand: Hand): Command | null {
-  if ((s.tradeOffers ?? 0) >= BOT_MAX_OFFERS) return null;
+  const k = s.tradeOffers ?? 0;
+  if (k >= BOT_MAX_OFFERS) return null;
+  const seen = new Set<string>(); // dos objetivos distintos (casa, carta...) pueden terminar pidiendo lo mismo: no la repite
+  const candidates: Command[] = [];
+  const add = (give: Resource, amount: number, get: Resource) => {
+    const key = give + amount + get;
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push({ type: 'proposeTrade', player: me, give: { [give]: amount }, get: { [get]: 1 } });
+  };
   for (const goal of goalsFor(s, me)) {
     const missing = missingFor(hand, goal);
     const short = missing.reduce((n, r) => n + (goal[r] ?? 0) - hand[r], 0);
     if (!missing.length || short > 2) continue;
     const spare = RESOURCES.filter((r) => hand[r] - (goal[r] ?? 0) >= 1 && !missing.includes(r)).sort((a, b) => hand[b] - (goal[b] ?? 0) - (hand[a] - (goal[a] ?? 0)));
-    if (!spare.length) continue;
-    const k = s.tradeOffers ?? 0;
-    const give = spare[k % spare.length];
-    const amount = k >= spare.length ? Math.min(2, hand[give] - (goal[give] ?? 0)) : 1; // si nadie aceptó 1 por 1, prueba con 2 por 1
-    return { type: 'proposeTrade', player: me, give: { [give]: amount }, get: { [missing[0]]: 1 } };
+    for (const give of spare) add(give, 1, missing[0]);
+    for (const give of spare) {
+      const amount = Math.min(2, hand[give] - (goal[give] ?? 0));
+      if (amount > 1) add(give, amount, missing[0]); // si 1 por 1 no alcanzaría, prueba con 2
+    }
   }
-  return null;
+  return candidates[k] ?? null;
 }
 
 /** Comercia con el banco solo si con ese único cambio queda pagable una construcción (estancia, casa o carta). */

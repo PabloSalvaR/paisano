@@ -69,22 +69,33 @@ describe('bot con criterio', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const rng = mulberry32(seed * 5);
       let s = createGame(NAMES.slice(0, 3 + (seed % 2)), seed);
+      // no debe repetir la misma oferta (mismo give/get) sin que haya pasado algo distinto en el medio (un rechazo solo,
+      // que la vuelve a dejar exactamente en la misma situación, no cuenta como "algo distinto")
+      let lastOffer: string | null = null;
       for (let guard = 0; guard < 3000 && s.phase.kind !== 'finished'; guard++) {
         const me = nextBot(s, () => true)!;
         const r = applyCommand(s, smartBot({ me, legal: legalActions(s, me), hand: s.players[me].hand, state: s }, rng));
         expect(r.ok).toBe(true);
         if (!r.ok) break;
         for (const e of r.events) {
-          if (e.type === 'TradeProposed') seen.proposed++;
+          if (e.type === 'TurnChanged') lastOffer = null;
+          else if (e.type === 'TradeProposed') {
+            seen.proposed++;
+            const key = JSON.stringify({ give: e.give, get: e.get });
+            expect(key).not.toBe(lastOffer); // no insiste con la oferta que ya le rechazaron, sin más vueltas
+            lastOffer = key;
+          } else if (e.type !== 'TradeResponded' && e.type !== 'TradeCancelled') {
+            lastOffer = null; // cualquier otra cosa (construir, comerciar con el banco, un cambio concretado…) habilita a repetir si hace falta
+          }
           if (e.type === 'TradeCompleted') seen.completed++;
           if (e.type === 'TradeCancelled' && e.reason === 'rejected') seen.rejected++;
         }
-        expect(s.tradeOffers).toBeLessThanOrEqual(3); // el bot no insiste más de 3 veces por turno
+        expect(s.tradeOffers).toBeLessThanOrEqual(2); // el bot no insiste más de 2 veces por turno
         s = r.state;
       }
       expectConserved(s);
     }
-    expect(seen.proposed).toBeGreaterThan(20);
+    expect(seen.proposed).toBeGreaterThan(15);
     expect(seen.completed).toBeGreaterThan(5);
   });
 
