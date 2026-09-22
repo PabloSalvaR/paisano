@@ -84,11 +84,11 @@ export const MARKUP = `
       <b>0</b>
     </div>
     <div class="res" style="--c:#e8bf45" title="Maíz" data-res="fields">
-      <svg viewBox="0 0 48 48" aria-hidden="true"><g fill="#4c9a3f"><path d="M24 43 L8 21 L20 32Z"/><path d="M24 43 L40 21 L28 32Z"/></g><ellipse cx="24" cy="22" rx="7" ry="16" fill="#f2c230"/></svg>
+      <svg viewBox="0 0 48 48" aria-hidden="true"><g fill="#4c9a3f"><path d="M24 43 L8 21 L20 32Z"/><path d="M24 43 L40 21 L28 32Z"/></g><ellipse cx="24" cy="22" rx="7" ry="16" fill="#f2c230"/><g stroke="#d9a52a" stroke-width="1.3" fill="none" stroke-linecap="round"><path d="M17.5 12 Q24 14.3 30.5 12"/><path d="M17 18 Q24 20.4 31 18"/><path d="M17 24 Q24 26.4 31 24"/><path d="M17.3 30 Q24 32.3 30.7 30"/></g><path d="M24 4 L22.5 9 M24 4 L24 10 M24 4 L25.5 9" stroke="#5a9c4a" stroke-width="1.5" stroke-linecap="round"/></svg>
       <b>4</b>
     </div>
     <div class="res" style="--c:#8d949c" title="Piedra" data-res="mountains">
-      <svg viewBox="0 0 48 48" aria-hidden="true"><polygon points="4,41 10,20 22,11 32,20 35,41" fill="#8d949c"/><polygon points="20,41 25,28 37,25 45,32 44,41" fill="#a9b0b8"/></svg>
+      <svg viewBox="0 0 48 48" aria-hidden="true"><polygon points="4,41 10,20 22,11 20,41" fill="#9aa1a8"/><polygon points="22,11 32,20 35,41 20,41" fill="#767d85"/><polygon points="20,41 25,28 37,25 34,41" fill="#b7bec5"/><polygon points="37,25 45,32 44,41 34,41" fill="#8d949c"/><path d="M13 33 L17 26 L15 22" stroke="#6b7178" stroke-width="1.1" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/><path d="M28 35 L31 30 L29 27" stroke="#8f959b" stroke-width="1" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/></svg>
       <b>1</b>
     </div>
   </section>
@@ -951,6 +951,7 @@ export function initBoard(opts) {
             var b = mesh(G.crown[c[3]], MAT.leaf[Math.floor(rnd() * 3)]); b.position.set(c[0], c[1], c[2]); b.rotation.y = rnd() * 6; t.add(b);
           });
           t.scale.setScalar(s); t.rotation.y = rnd() * 6.28; t.position.set(p.x, 0, p.z); g.add(t);
+          t.userData.swayPhase = rnd() * 6.2832; trees.push(t); // se mecen apenas en `frame()` (rotation.x/z, no tocan la orientación fija en Y)
         });
       } else if (kind === 'pasture') {
         scatter(4, 0.19, 0.36, rnd).forEach(function (p) {
@@ -1136,7 +1137,7 @@ export function initBoard(opts) {
     }
 
     // ------------------------------------------------------------------ tablero
-    var board = null, tiles = [], tileMeshes = [], ships = [], robber = null, robberBase = 0, robberPulse = 0, piecesGroup = null, markersGroup = null, ghostGroup = null;
+    var board = null, tiles = [], tileMeshes = [], ships = [], trees = [], robber = null, robberBase = 0, robberPulse = 0, piecesGroup = null, markersGroup = null, ghostGroup = null;
     var session = null; // GameSession: dueña de la partida (hoy local, después remota)
     var game = null, legal = [], me = 0; // última vista de la sesión: partida visible, acciones legales y jugador que mira
     var sending = false; // true mientras espera la respuesta de la sesión a un comando
@@ -1158,7 +1159,7 @@ export function initBoard(opts) {
       session = online ? opts.session : new LocalSession(PLAYER_INFO.map(function (p) { return p.name; }), seed, { firstPlayer: null }, withOthers ? { bots: [false, true, true, true] } : {}); pull();
       var topo = topology();
       board = new THREE.Group(); scene.add(board);
-      setOrbit(false); closeOpening(); tiles = []; tileMeshes = []; ships = []; robber = null; hoverTile = null; busy = false; sending = false; pieceSeen = {};
+      setOrbit(false); closeOpening(); tiles = []; tileMeshes = []; ships = []; trees = []; robber = null; hoverTile = null; busy = false; sending = false; pieceSeen = {};
 
       // casillas (mismo orden e ids que las del motor)
       topo.tiles.forEach(function (et) {
@@ -1560,7 +1561,11 @@ export function initBoard(opts) {
     }
     function resetPlayers() { VIEWER = me; turn = game.turn; syncHands(); renderHand(); renderSeats(); }
     // Pone la pantalla al día con el estado (banner del jugador de turno, puestos, ladrón, marcadores, botones y diálogos).
-    function applyView() { VIEWER = me; turn = game.turn; syncHands(); renderHand(); renderSeats(); syncRobber(); refreshUi(); setOrbit(game.phase.kind === 'finished'); } // al recargar una partida terminada gira; con una nueva vuelve a la vista de siempre
+    function applyView() {
+      VIEWER = me; turn = game.turn; syncHands(); renderHand(); renderSeats(); syncRobber();
+      if (game.phase.kind === 'finished' && !summaryShown) summaryUI = summaryShown = true; // se entró a una partida ya terminada: el resumen no se vio con un evento en vivo
+      refreshUi(); setOrbit(game.phase.kind === 'finished'); // al recargar una partida terminada gira; con una nueva vuelve a la vista de siempre
+    }
     function refreshUi() { refreshMarkers(); updateControls(); renderDialog(); showStatus(statusText(), false); }
 
     // El ladrón se dibuja sobre la casilla del estado (con un saltito al llegar). Fuera del desierto va corrido hacia adelante
@@ -1674,6 +1679,7 @@ export function initBoard(opts) {
       }
       clearGhost();
       dialogEl.className = 'panel dialog'; dialogEl.style.left = dialogEl.style.top = dialogEl.style.transform = '';
+      if (summaryUI && !busy) { dialogKey = ''; renderSummary(); return; }
       if (game.trade && !busy && renderOffer()) { dialogKey = ''; return; }
       if (tradeUI && !busy && ph.kind === 'main') { dialogKey = ''; renderTrade(); return; }
       if (cardsUI && !busy) { dialogKey = ''; renderCards(); return; }
@@ -1705,6 +1711,9 @@ export function initBoard(opts) {
     // Mis cartas: las cartas de desarrollo de la mano y, para Acopio y Buena cosecha, la elección de recursos. Qué se puede jugar y
     // cuándo lo dice el motor (legalActions); acá solo se explica por qué una carta no se puede jugar ahora.
     var cardsUI = null; // { mode: 'hand' | 'monopoly' | 'plenty', res, picks } (null = panel cerrado)
+    // Resumen de fin de partida: se abre solo, una vez (con el evento en vivo, o al entrar a una partida que ya terminó) y no
+    // vuelve a abrirse sola después de que se cierra (importa en línea: el polling no la tiene que forzar de nuevo).
+    var summaryUI = null, summaryShown = false;
     function devTotal() { var n = 0; DEV_ORDER.forEach(function (k) { n += game.dev.hand[k]; }); return n; }
     function cardReason(k, can) {
       var d = game.dev, ph = game.phase.kind;
@@ -1748,6 +1757,24 @@ export function initBoard(opts) {
           }).join('') + '</div>';
       }
       dialogEl.innerHTML = html;
+      dialogEl.hidden = false;
+    }
+    // Resumen de fin de partida: una fila bien corta por jugador (para entrar en el ancho de un celular), con lo que ya es
+    // público durante la partida (nada de manos ni cartas de desarrollo ajenas). Se arma con lo mismo que ya pinta cada
+    // puesto (`vps`, `awardRoad`/`awardArmy`) más las casas/estancias contadas de `shown.vertexBuildings`.
+    function renderSummary() {
+      var ph = game.phase, seats = online ? opts.seats.length : PLAYER_INFO.length;
+      var rows = PLAYER_INFO.slice(0, seats).map(function (pl, p) {
+        var settlements = 0, cities = 0;
+        shown.vertexBuildings.forEach(function (b) { if (b && b.player === p) { if (b.city) cities++; else settlements++; } });
+        var badges = (awardRoad.holder === p ? BADGE_ROAD : '') + (awardArmy.holder === p ? BADGE_ARMY : '');
+        return '<div class="row' + (p === ph.winner ? ' winner' : '') + '" style="--pc:' + pl.css + '"><span class="av">' + avatarSVG(p) + '</span>' +
+          '<span class="nm">' + pl.name + '</span>' + (badges ? '<span class="bdg">' + badges + '</span>' : '') +
+          '<small>' + settlements + ' casa' + (settlements === 1 ? '' : 's') + ' · ' + cities + ' estancia' + (cities === 1 ? '' : 's') + '</small>' +
+          '<span class="vp">' + STAR + vps[p] + '</span></div>';
+      }).join('');
+      dialogEl.className = 'panel dialog summary';
+      dialogEl.innerHTML = '<button type="button" class="x" data-close aria-label="Cerrar" title="Cerrar">✕</button><h3>Fin de la partida</h3><div class="rows">' + rows + '</div>';
       dialogEl.hidden = false;
     }
     function plentyNeed() { var a = legal.filter(function (x) { return x.type === 'playYearOfPlenty'; })[0]; return a ? a.count : 2; } // cuántas cartas pide Buena cosecha (2, o 1 si el banco casi no tiene)
@@ -1825,18 +1852,19 @@ export function initBoard(opts) {
     }
     // Oferta abierta: a quien la recibe le pregunta (aceptar / rechazar); a quien la hizo le muestra las respuestas y le deja elegir con quién
     // concreta o cancelar. Los demás solo la ven en el texto de estado. Devuelve false si no hay nada que mostrarle a quien mira.
+    function dirIco(down, label) { return '<span class="dir ' + (down ? 'in' : 'out') + '" title="' + label + '" aria-label="' + label + '">' + (down ? '↓' : '↑') + '</span>'; }
     function renderOffer() {
       var t = game.trade, mine = legal.filter(function (a) { return a.type === 'respondTrade'; })[0], from = PLAYER_INFO[t.from];
       if (mine) {
         dialogEl.className = 'panel dialog trade offer';
-        dialogEl.innerHTML = '<h3></h3><p>Te ofrece</p><div class="swap">' + cardChips(t.give) + '</div><p>y te pide</p><div class="swap">' + cardChips(t.get) + '</div>' +
+        dialogEl.innerHTML = '<h3></h3><div class="swap">' + dirIco(true, 'Esto te entra') + cardChips(t.give) + '</div><div class="swap">' + dirIco(false, 'Esto se te va') + cardChips(t.get) + '</div>' +
           (mine.canAccept ? '' : '<div class="sum">No tenés lo que te piden</div>') +
-          '<div class="yesno"><button type="button" class="no" data-reject aria-label="Rechazar" title="Rechazar">✕</button><button type="button" class="yes" data-accept aria-label="Aceptar" title="Aceptar"' + (mine.canAccept ? '' : ' disabled') + '>✓</button></div>';
+          '<div class="yesno"><button type="button" class="no" data-reject aria-label="Rechazar" title="Rechazar">✕</button>' + (mine.canAccept ? '<button type="button" class="yes" data-accept aria-label="Aceptar" title="Aceptar">✓</button>' : '') + '</div>';
         dialogEl.querySelector('h3').textContent = from.name + ' quiere comerciar';
       } else if (t.from === me) {
         var stat = { pending: 'pensando…', accepted: 'aceptó', rejected: 'rechazó' };
         dialogEl.className = 'panel dialog trade offer';
-        dialogEl.innerHTML = '<h3>Tu oferta</h3><div class="swap">' + cardChips(t.give) + '<span class="arrow">⇄</span>' + cardChips(t.get) + '</div><div class="rows">' +
+        dialogEl.innerHTML = '<h3>Tu oferta</h3><div class="swap">' + dirIco(false, 'Esto se te va') + cardChips(t.give) + '</div><div class="swap">' + dirIco(true, 'Esto te entra') + cardChips(t.get) + '</div><div class="rows">' +
           t.responses.map(function (r) {
             return '<div class="row st-' + r.status + '" style="--pc:' + PLAYER_INFO[r.player].css + '"><span class="av">' + avatarSVG(r.player) + '</span><span class="nm"></span><em>' + stat[r.status] + '</em>' +
               (r.status === 'accepted' ? '<button type="button" class="deal" data-with="' + r.player + '">Cambiar</button>' : '') + '</div>';
@@ -1853,6 +1881,7 @@ export function initBoard(opts) {
         if (b.hasAttribute('data-ok')) confirmDrop(cmd); else renderDialog();
         return;
       }
+      if (summaryUI) { if (b.hasAttribute('data-close')) summaryUI = null; refreshUi(); return; } // se cierra y no vuelve a abrirse sola
       if (game.trade) { // oferta abierta: responder, concretar con quien aceptó o cancelar
         var tc = null;
         if (b.hasAttribute('data-accept')) tc = { type: 'respondTrade', player: me, accept: true };
@@ -2066,7 +2095,7 @@ export function initBoard(opts) {
             return gap(p, function () {
               devCounts[p] = Math.max(0, devCounts[p] - 1); knights[p]++; renderSeats();
               if (foreign(p)) audio.card();
-              if (animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
+              if (animate) { pop(seatsEl.children[p], PLAYER_INFO[p].css); cardLeaves(p, 'knight'); }
               showStatus((p === VIEWER ? 'Jugaste un Gaucho' : PLAYER_INFO[p].name + ' jugó un Gaucho'), false, true, p);
               pause(cont, foreign(p) ? 900 : 0);
             });
@@ -2082,7 +2111,7 @@ export function initBoard(opts) {
               counts[p] += total; if (p === VIEWER) myHand[ev.resource] += total;
               renderSeats(); renderHand();
               if (foreign(p)) audio.card();
-              if (animate) { pop(seatsEl.children[p], css); if (total) floatText(seatsEl.children[p], '+' + total, css); }
+              if (animate) { pop(seatsEl.children[p], css); cardLeaves(p, 'monopoly'); if (total) floatText(seatsEl.children[p], '+' + total, css); }
               showStatus((p === VIEWER ? 'Jugaste Acopio' : PLAYER_INFO[p].name + ' jugó Acopio') + ': ' + TERRAINS[ev.resource].res.toLowerCase() + (total ? ' (+' + total + ')' : ' (nadie tenía)'), false, true, p);
               pause(cont, 1100);
             });
@@ -2095,10 +2124,13 @@ export function initBoard(opts) {
               });
               renderSeats(); renderHand();
               if (foreign(p)) audio.card();
-              if (animate) ev.gains.forEach(function (g) {
-                var card = g.player === VIEWER ? handEl.querySelector('[data-res="' + g.resource + '"]') : seatsEl.children[g.player], col = g.player === VIEWER ? card.style.getPropertyValue('--c') : PLAYER_INFO[g.player].css;
-                pop(card, col); floatText(card, '+' + g.amount, col);
-              });
+              if (animate) {
+                cardLeaves(p, 'yearOfPlenty');
+                ev.gains.forEach(function (g) {
+                  var card = g.player === VIEWER ? handEl.querySelector('[data-res="' + g.resource + '"]') : seatsEl.children[g.player], col = g.player === VIEWER ? card.style.getPropertyValue('--c') : PLAYER_INFO[g.player].css;
+                  pop(card, col); floatText(card, '+' + g.amount, col);
+                });
+              }
               showStatus((p === VIEWER ? 'Jugaste Buena cosecha' : PLAYER_INFO[p].name + ' jugó Buena cosecha'), false, true, p);
               pause(cont, 900);
             });
@@ -2106,7 +2138,7 @@ export function initBoard(opts) {
             return gap(p, function () {
               devCounts[p] = Math.max(0, devCounts[p] - 1); renderSeats();
               if (foreign(p)) audio.card();
-              if (animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
+              if (animate) { pop(seatsEl.children[p], PLAYER_INFO[p].css); cardLeaves(p, 'roadBuilding'); }
               showStatus((p === VIEWER ? 'Jugaste Vialidad' : PLAYER_INFO[p].name + ' jugó Vialidad') + ': 2 caminos gratis', false, true, p);
               pause(cont, foreign(p) ? 700 : 0);
             });
@@ -2131,7 +2163,10 @@ export function initBoard(opts) {
             return pause(cont, 1000);
           }
           case 'Stolen': return stolen(ev, cont);
-          case 'GameWon': if (animate && ev.player === VIEWER) audio.victory(); setOrbit(true); return cont(); // solo suena si ganaste; el tablero empieza a girar en todos los casos
+          case 'GameWon': // solo suena si ganaste, la copa, el resumen y el giro de cámara son para toda la mesa
+            if (animate) { if (ev.player === VIEWER) audio.victory(); showTrophy(); summaryUI = summaryShown = true; }
+            setOrbit(true);
+            return cont();
           case 'TurnChanged':
             turn = ev.player; renderSeats();
             if (withOthers) showStatus(ev.player === VIEWER ? 'Tu turno' : 'Turno de ' + PLAYER_INFO[ev.player].name, false, false, ev.player);
@@ -2193,6 +2228,22 @@ export function initBoard(opts) {
         { transform: 'translate(-50%,-80%) scale(.9) rotate(4deg)', opacity: 0 }
       ], { duration: 1700, easing: 'ease-out' }).onfinish = function () { img.remove(); };
     }
+    // Copa dorada de campeón (dibujo propio, dos tonos para dar volumen): aparece un instante en el centro al ganar la
+    // partida, la vean todos o no (solo quien ganó escucha la fanfarria, pero la copa es para toda la mesa).
+    var TROPHY = '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M20 8h24v14c0 9-5 15-12 15S20 31 20 22V8z" fill="#f2c230"/>' +
+      '<path d="M32 8h12v14c0 9-5 15-12 15z" fill="#d9a52a"/>' +
+      '<path d="M20 10c-7 0-9 5-9 9s3 9 9 9" fill="none" stroke="#d9a52a" stroke-width="3.4" stroke-linecap="round"/>' +
+      '<path d="M44 10c7 0 9 5 9 9s-3 9-9 9" fill="none" stroke="#f2c230" stroke-width="3.4" stroke-linecap="round"/>' +
+      '<rect x="29" y="36" width="6" height="10" fill="#d9a52a"/><path d="M18 48h28l-3 8H21z" fill="#f2c230"/><path d="M32 48h14l-3 8H32z" fill="#d9a52a"/></svg>';
+    function showTrophy() {
+      var el = document.createElement('div'); el.className = 'trophy'; el.innerHTML = TROPHY; stage.appendChild(el);
+      el.animate([
+        { transform: 'translate(-50%,-30%) scale(.4) rotate(-10deg)', opacity: 0 },
+        { transform: 'translate(-50%,-50%) scale(1.15) rotate(4deg)', opacity: 1, offset: 0.3 },
+        { transform: 'translate(-50%,-50%) scale(1) rotate(0deg)', opacity: 1, offset: 0.78 },
+        { transform: 'translate(-50%,-65%) scale(.9) rotate(-4deg)', opacity: 0 }
+      ], { duration: 2200, easing: 'ease-out' }).onfinish = function () { el.remove(); };
+    }
     function pop(el, color) {
       el.animate([{ transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }, { transform: 'scale(1.2)', boxShadow: '0 0 18px 5px ' + color, offset: 0.35 }, { transform: 'scale(1)', boxShadow: '0 0 0 0 transparent' }], { duration: 520, easing: 'ease-out' });
     }
@@ -2246,6 +2297,19 @@ export function initBoard(opts) {
         ], { duration: 1000, delay: delay, easing: 'ease-in-out', fill: 'both' }).onfinish = function () { fly.remove(); gain(); };
       });
       return animate && jobs.length ? 450 + (jobs.length - 1) * 260 + 1000 + 600 : 0;
+    }
+
+    // Al jugar una carta de desarrollo (Gaucho, Acopio, Buena cosecha, Vialidad) se pierde de la mano en el acto: en vez de
+    // desaparecer sin más, sale volando del puesto y se desvanece, mismo lenguaje visual que el ícono que "se va" cuando
+    // te roban un recurso — pero sin nadie del otro lado, porque la carta se descarta.
+    function cardLeaves(p, kind) {
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      var sr = stage.getBoundingClientRect(), ar = seatsEl.children[p].querySelector('.av').getBoundingClientRect();
+      var sx = ar.left - sr.left + ar.width / 2, sy = ar.top - sr.top + ar.height / 2;
+      var fly = document.createElement('div'); fly.className = 'fly leaves';
+      var img = document.createElement('img'); img.src = devCardURL(kind); fly.appendChild(img); stage.appendChild(fly);
+      var at = function (x, y, sc) { return 'translate(' + (x - 13) + 'px,' + (y - 20) + 'px) scale(' + sc + ')'; };
+      fly.animate([{ transform: at(sx, sy, 1), opacity: 1 }, { transform: at(sx, sy - 55, 0.5), opacity: 0 }], { duration: 650, easing: 'ease-in', fill: 'both' }).onfinish = function () { fly.remove(); };
     }
 
     function pressed(btn, on) { btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
@@ -2499,6 +2563,12 @@ export function initBoard(opts) {
         var sh = ships[s], ph = sh.userData.phase;
         sh.position.y = sh.userData.baseY + Math.sin(time * 1.4 + ph) * 0.025 + 0.02;
         sh.rotation.z = Math.sin(time * 1.1 + ph) * 0.05;
+      }
+      // árboles: brisa apenas perceptible (dos senos de distinta frecuencia, como el titileo del farol) para que no se muevan todos igual
+      for (var tr = 0; tr < trees.length; tr++) {
+        var tg = trees[tr], tph = tg.userData.swayPhase;
+        tg.rotation.z = Math.sin(time * 0.7 + tph) * 0.025 + Math.sin(time * 1.7 + tph * 1.3) * 0.01;
+        tg.rotation.x = Math.sin(time * 0.55 + tph * 1.6) * 0.015;
       }
       // farol: la llama se enciende con la noche (cur.lamps: 0 de día, 0.35 al atardecer, 1.25 de noche) y titila
       if (lantern) {

@@ -50,9 +50,8 @@ export default function LocalBoard() {
         <div className="room-card">
           <div className="logo" role="img" aria-label="Paisano" />
           <h1>Jugar contra bots</h1>
-          <p>Vas a jugar contra tres bots. Ponete un nombre y elegí tu personaje para que te vean en la mesa.</p>
           <label>
-            Tu nombre
+            Ingresá tu nombre
             <input
               value={name}
               maxLength={20}
@@ -63,20 +62,23 @@ export default function LocalBoard() {
               onKeyDown={(e) => e.key === "Enter" && start()}
             />
           </label>
-          <div className="char-picker" role="radiogroup" aria-label="Tu personaje">
-            {CHARACTERS.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                role="radio"
-                aria-checked={c.id === characterId}
-                className="char-opt"
-                onClick={() => setTypedCharacter(c.id)}
-                dangerouslySetInnerHTML={{
-                  __html: characterSVG({ ...c, css: SEAT_COLORS[0].css }) + "<span>" + c.label + "</span>",
-                }}
-              />
-            ))}
+          <div className="char-block">
+            <p className="char-heading">Elegí tu personaje</p>
+            <div className="char-picker" role="radiogroup" aria-label="Tu personaje">
+              {CHARACTERS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={c.id === characterId}
+                  aria-label={c.label}
+                  title={c.label}
+                  className="char-opt"
+                  onClick={() => setTypedCharacter(c.id)}
+                  dangerouslySetInnerHTML={{ __html: characterSVG({ ...c, css: SEAT_COLORS[0].css }) }}
+                />
+              ))}
+            </div>
           </div>
           <button type="button" className="room-btn primary" disabled={!name.trim()} onClick={start}>
             Jugar

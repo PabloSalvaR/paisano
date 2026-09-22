@@ -127,14 +127,27 @@ function answerTrade(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAct
   return now < before || (now === before && gets > gives);
 }
 
+/** Probabilidad de arriesgar una oferta en un turno, según cuánto le falte para la compra más cercana: casi seguro si es una sola carta, más dudoso con dos. */
+const TRADE_EAGERNESS: Record<1 | 2, number> = { 1: 0.65, 2: 0.35 };
+
 /**
- * Propone 1 carta que le sobra por 1 que le falta, cuando está a 1 o 2 cartas de una compra. Arma todas las ofertas
- * distintas que tiene sentido probar (cada recurso sobrante, y si con 1 no alcanzaría a nadie también con 2) y usa
- * `tradeOffers` como índice: así cada intento del turno es una oferta distinta y, si ya probó todas, no insiste más.
+ * Propone 1 carta que le sobra por 1 que le falta, cuando está a 1 o 2 cartas de una compra. No ofrece todos los turnos:
+ * antes de tradear, en la vida real uno prefiere ir juntando por su cuenta (con un 7 puede perder de más, o el ladrón le
+ * puede robar justo lo que dio), así que el primer intento del turno se arriesga solo con una probabilidad
+ * (`TRADE_EAGERNESS`, más alta cuanto más cerca está de completar la compra); si ya ofreció este turno, sigue insistiendo
+ * sin volver a tirar la moneda. Arma todas las ofertas distintas que tiene sentido probar (cada recurso sobrante, y si con
+ * 1 no alcanzaría a nadie también con 2) y usa `tradeOffers` como índice: así cada intento del turno es una oferta
+ * distinta y, si ya probó todas, no insiste más.
  */
-function proposeCommand(s: GameState, me: PlayerId, hand: Hand): Command | null {
+function proposeCommand(s: GameState, me: PlayerId, hand: Hand, rng: Rng): Command | null {
   const k = s.tradeOffers ?? 0;
   if (k >= BOT_MAX_OFFERS) return null;
+  const shortest = Math.min(...goalsFor(s, me).map((goal) => {
+    const missing = missingFor(hand, goal);
+    return missing.length ? missing.reduce((n, r) => n + (goal[r] ?? 0) - hand[r], 0) : Infinity;
+  }));
+  if (shortest > 2) return null;
+  if (k === 0 && rng() > TRADE_EAGERNESS[shortest as 1 | 2]) return null; // paciencia: no siempre arriesga el primer intento
   const seen = new Set<string>(); // dos objetivos distintos (casa, carta...) pueden terminar pidiendo lo mismo: no la repite
   const candidates: Command[] = [];
   const add = (give: Resource, amount: number, get: Resource) => {
@@ -252,7 +265,7 @@ export const smartBot: Bot = (input: BotInput, rng: Rng): Command => {
 
   // si le falta poco para una compra, ofrece un cambio a los demás
   if (has('proposeTrade')) {
-    const offer = proposeCommand(s, me, hand);
+    const offer = proposeCommand(s, me, hand, rng);
     if (offer) return offer;
   }
 

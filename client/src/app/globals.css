@@ -180,6 +180,10 @@ body{
 .fly{position:absolute;z-index:4;left:0;top:0;width:40px;height:40px;border-radius:50%;border:2px solid #fff;
   display:flex;align-items:center;justify-content:center;pointer-events:none;box-shadow:0 3px 8px rgba(0,0,0,.45)}
 .fly svg{width:28px;height:28px;stroke:#3b2a18;stroke-width:2.2;stroke-linejoin:round;background:rgba(255,255,255,.85);border-radius:50%;padding:2px}
+/* Variante para una carta de desarrollo jugada: recorte de la carta (en vez del círculo de recurso) que sale volando del
+   puesto y se pierde de vista; mismo elemento `.fly`, sin destino porque la carta se descarta. */
+.fly.leaves{width:26px;height:40px;border-radius:5px}
+.fly.leaves img{width:100%;height:100%;object-fit:cover;border-radius:3px}
 
 /* Puestos de los jugadores (a la izquierda, bajo el título): avatar, nombre y cantidad de cartas. El que tiene el turno resalta. */
 .seats{top:150px;left:14px;display:flex;flex-direction:column;gap:6px;padding:8px}
@@ -388,17 +392,19 @@ body{
 .room-error{color:#b3261e;font-size:.88rem;font-weight:600;text-align:center;min-height:1.2em}
 :root[data-theme="dark"] .room-error{color:#ff8b80}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .room-error{color:#ff8b80}}
-/* Selector de personaje (pantalla "Tu nombre" de la partida contra bots): grid de 8, con el dibujo de `characterSVG` y
-   el nombre debajo; el elegido se resalta con el borde de acento. */
+/* Selector de personaje (pantalla "Tu nombre" de la partida contra bots): grid de 8 con solo el dibujo de `characterSVG`,
+   sin nombre (para no ser invasivo; el nombre que importa es el que escribe arriba, y ese sí se ve en la mesa); el
+   elegido se resalta con el borde de acento. El nombre de cada personaje queda como `title`/`aria-label` del botón. */
+.char-block{display:flex;flex-direction:column;gap:5px}
+.char-heading{font-size:.82rem;font-weight:700;text-align:left;color:var(--text)}
 .char-picker{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.char-opt{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px 5px;border-radius:8px;
+.char-opt{display:flex;align-items:center;justify-content:center;padding:6px 2px;border-radius:8px;
   border:2px solid var(--border);background:var(--btn);cursor:pointer;font:inherit;color:var(--text)}
 .char-opt:hover{background:var(--btn-hover)}
 .char-opt:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .char-opt[aria-checked="true"]{border-color:var(--accent);background:var(--btn-on)}
 .char-opt svg{width:44px;height:44px}
-.char-opt span{font-size:.7rem;font-weight:700;line-height:1.1}
-@media (max-width:420px){.char-picker{grid-template-columns:repeat(4,1fr);gap:6px}.char-opt svg{width:38px;height:38px}.char-opt span{font-size:.64rem}}
+@media (max-width:420px){.char-picker{grid-template-columns:repeat(4,1fr);gap:6px}.char-opt svg{width:38px;height:38px}}
 
 .room-seats{list-style:none;display:flex;flex-direction:column;gap:8px}
 .room-seats li{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--btn);font-weight:700}
@@ -445,10 +451,26 @@ body{
 .dialog.cards .dcard button{width:100%;padding:5px 8px;font-size:.85rem;min-height:32px}
 .dialog.cards .dcard small{display:block;color:var(--muted);font-weight:600;font-size:.68rem;line-height:1.25;min-height:2.5em}
 .reveal{position:absolute;left:50%;top:42%;width:150px;transform:translate(-50%,-50%);z-index:7;pointer-events:none;filter:drop-shadow(0 8px 14px rgba(0,0,0,.5))}
+/* Copa de campeón (fin de partida): mismo lenguaje que `.reveal`, en el centro y para todos. */
+.trophy{position:absolute;left:50%;top:38%;width:100px;z-index:7;pointer-events:none;filter:drop-shadow(0 8px 14px rgba(0,0,0,.5))}
+/* Resumen de fin de partida: una fila corta por jugador (avatar, nombre, insignias si tiene, casas/estancias y puntos),
+   pensada para el ancho de un celular; se cierra con la ✕ y no vuelve a abrirse sola. */
+.dialog.summary{width:min(300px,calc(100% - 20px))}
+.dialog.summary h3{padding:0 26px;text-align:center}
+.dialog.summary .x{position:absolute;top:8px;right:8px;width:30px;height:30px;font-size:1rem;line-height:1}
+.dialog.summary .row{display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:8px;background:var(--btn);border:2px solid transparent}
+.dialog.summary .row.winner{border-color:var(--accent)}
+.dialog.summary .row .av{width:28px;height:28px;border-radius:50%;overflow:hidden;box-shadow:0 0 0 2px var(--pc);flex:none}
+.dialog.summary .row .av svg{display:block;width:100%;height:100%}
+.dialog.summary .row .nm{font-weight:700;font-size:.8rem;flex:none;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dialog.summary .row .bdg{display:flex;gap:1px;flex:none}
+.dialog.summary .row .bdg svg{width:14px;height:14px}
+.dialog.summary .row small{flex:1;min-width:0;color:var(--muted);font-size:.66rem;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:640px){
   .dialog.cards .cardgrid{gap:10px 6px}
   .dialog.cards .dcard{width:88px}
   .reveal{width:120px}
+  .trophy{width:82px}
 }
 
 /* Reglamento: secciones plegables, texto corto (se lee en el celular) */
@@ -507,7 +529,9 @@ body{
 .dialog.offer .chip{display:inline-flex;align-items:center;gap:2px;padding:3px 8px 3px 4px;border-radius:10px;background:var(--btn);border-bottom:3px solid var(--c)}
 .dialog.offer .chip .ico svg{display:block;width:26px;height:26px;stroke:#3b2a18;stroke-width:2.2;stroke-linejoin:round}
 .dialog.offer .chip b{font-size:.95rem}
-.dialog.offer .arrow{font-size:1.3rem;color:var(--muted)}
+.dialog.offer .dir{font-size:1.4rem;font-weight:700;line-height:1;width:20px;flex:none;text-align:center}
+.dialog.offer .dir.in{color:#2e9e4f}
+.dialog.offer .dir.out{color:#d94141}
 .dialog.offer .yesno{justify-content:center;margin-top:8px}
 .dialog.offer .row .av{width:28px;height:28px;border-radius:50%;overflow:hidden;box-shadow:0 0 0 2px var(--pc);flex:none}
 .dialog.offer .row .av svg{display:block;width:100%;height:100%}

@@ -9,13 +9,13 @@ export default function Menu() {
         <div className="logo" role="img" aria-label="Paisano" />
         <h1>Piedra y camino</h1>
         <span className="room-version">v{version}</span>
-        <p>Elegí cómo querés jugar.</p>
         <Link className="room-btn primary" href="/jugar/bots" title="Jugás vos contra tres bots que juegan solos">
           Partida contra bots
         </Link>
-        <Link className="room-btn primary" href="/sala" title="Armá una sala y jugá con amigos pasándoles un link">
+        {/* Deshabilitado a propósito (sept 2026): por ahora solo se puede probar contra bots; ver "Decisiones tomadas" en CLAUDE.md. */}
+        <button type="button" className="room-btn" disabled>
           Jugar online
-        </Link>
+        </button>
         <Link className="room-btn" href="/jugar/local" title="Los cuatro jugadores en la misma pantalla">
           Mesa local
         </Link>
