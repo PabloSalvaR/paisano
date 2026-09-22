@@ -1547,6 +1547,7 @@ export function initBoard(opts) {
         '<span class="dv" title="Cartas de desarrollo" hidden><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#8f2a2a" stroke="#e8d6a0" stroke-width="1.6"/></svg><b>0</b></span></span></div>';
     }).join('');
     for (var si = SEATS; si < seatsEl.children.length; si++) seatsEl.children[si].hidden = true; // partidas de 3: sin el 4.º puesto
+    seatsEl.setAttribute('data-n', SEATS); // con 3 puestos, en el celular cada uno tiene más ancho y muestra el nombre
     function handTotal(p) { return counts[p]; }
     function renderHand() {
       var pl = PLAYER_INFO[VIEWER];
@@ -1671,10 +1672,10 @@ export function initBoard(opts) {
         default: return ph.winner === VIEWER ? '¡Ganaste la partida con ' + vps[ph.winner] + ' puntos!' : '¡' + PLAYER_INFO[ph.winner].name + ' ganó la partida con ' + vps[ph.winner] + ' puntos!';
       }
     }
-    var statusEl = document.getElementById('status'), statusTimer = null;
+    var statusEl = document.getElementById('status'), statusTimer = null, statusSeq = 0; // statusSeq: cuántos mensajes se mostraron (para saber si uno sigue siendo el último)
     // Muestra un mensaje. Los errores y avisos "temporales" vuelven solos al texto de siempre.
     function showStatus(text, isError, temporary, who) {
-      clearTimeout(statusTimer);
+      clearTimeout(statusTimer); statusSeq++;
       statusEl.innerHTML = '<i style="background:' + PLAYER_INFO[who !== undefined ? who : openingOn ? VIEWER : playing ? turn : game.turn].css + '"></i><span></span>';
       statusEl.lastChild.textContent = text;
       statusEl.classList.toggle('error', !!isError);
@@ -1818,19 +1819,22 @@ export function initBoard(opts) {
     function renderPlayersTab() {
       var o = offerState(), pl = legal.filter(function (a) { return a.type === 'proposeTrade'; })[0];
       var sg = sumOf(o.give), st = sumOf(o.get), ok = sg > 0 && st > 0 && o.to.length > 0;
-      var rows = HAND_KINDS.map(function (k) {
-        var g = o.give[k] || 0, t = o.get[k] || 0;
-        return '<div class="row"><span class="ico" title="' + TERRAINS[k].res + '">' + resIcon(k) + '</span><span class="nm">' + TERRAINS[k].res + '</span>' +
-          '<button type="button" data-og-dec="' + k + '" aria-label="Menos ' + TERRAINS[k].res + ' que doy"' + (g ? '' : ' disabled') + '>−</button><b>' + g + '</b>' +
-          '<button type="button" data-og-inc="' + k + '" aria-label="Más ' + TERRAINS[k].res + ' que doy"' + (g < myHand[k] && !t ? '' : ' disabled') + '>+</button>' +
-          '<span class="gap"></span>' +
-          '<button type="button" data-ot-dec="' + k + '" aria-label="Menos ' + TERRAINS[k].res + ' que pido"' + (t ? '' : ' disabled') + '>−</button><b>' + t + '</b>' +
-          '<button type="button" data-ot-inc="' + k + '" aria-label="Más ' + TERRAINS[k].res + ' que pido"' + (t < OFFER_MAX && !g ? '' : ' disabled') + '>+</button></div>';
-      }).join('');
+      // Dos franjas horizontales, una columna por recurso con + arriba y − abajo de la cantidad. Las flechas son las mismas de la
+      // oferta recibida: roja ↑ lo que se te va, verde ↓ lo que te entra.
+      function strip(side) {
+        var giving = side === 'give', mine = giving ? o.give : o.get, other = giving ? o.get : o.give, pre = giving ? 'data-og-' : 'data-ot-', verb = giving ? ' que doy' : ' que pido';
+        return '<div class="side ' + side + '"><p>' + dirIco(!giving, giving ? 'Esto se te va' : 'Esto te entra') + (giving ? 'Doy' : 'Pido') + '</p><div class="steps">' + HAND_KINDS.map(function (k) {
+          var n = mine[k] || 0, max = giving ? myHand[k] : OFFER_MAX;
+          return '<div class="step' + (n ? ' on' : '') + '" style="--c:' + handEl.querySelector('[data-res="' + k + '"]').style.getPropertyValue('--c') + '">' +
+            '<button type="button" ' + pre + 'inc="' + k + '" aria-label="Más ' + TERRAINS[k].res + verb + '"' + (n < max && !other[k] ? '' : ' disabled') + '>+</button>' +
+            '<span class="card" title="' + TERRAINS[k].res + '"><span class="ico">' + resIcon(k) + '</span><b>' + n + '</b></span>' +
+            '<button type="button" ' + pre + 'dec="' + k + '" aria-label="Menos ' + TERRAINS[k].res + verb + '"' + (n ? '' : ' disabled') + '>−</button></div>';
+        }).join('') + '</div></div>';
+      }
       var tos = others().map(function (p) {
         return '<button type="button" class="to" data-to="' + p + '" aria-pressed="' + (o.to.indexOf(p) >= 0 ? 'true' : 'false') + '" style="--pc:' + PLAYER_INFO[p].css + '"><span class="av">' + avatarSVG(p) + '</span><small></small></button>';
       }).join('');
-      return '<div class="cols"><span></span><span>Doy</span><span>Pido</span></div><div class="rows">' + rows + '</div>' +
+      return strip('give') + strip('get') +
         '<p>Se lo ofrezco a</p><div class="tos">' + tos + '</div>' +
         '<div class="sum">' + (sg && st ? '' : 'Elegí qué das y qué pedís') + '</div>' +
         '<button type="button" class="primary" data-offer' + (ok ? '' : ' disabled') + '>Ofrecer' + (pl ? ' <small>(te quedan ' + pl.left + ')</small>' : '') + '</button>';
@@ -1860,9 +1864,9 @@ export function initBoard(opts) {
             ' style="--c:' + handEl.querySelector('[data-res="' + k + '"]').style.getPropertyValue('--c') + '" title="' + TERRAINS[k].res + '"><span class="ico">' + resIcon(k) + '</span><small>' + lab + '</small></button>';
         }).join('') + '</div>';
       }
-      dialogEl.innerHTML = '<h3>' + (tabs ? 'Comerciar' : 'Comerciar con el banco') + '</h3>' + tabs + '<p>Doy</p>' +
+      dialogEl.innerHTML = '<h3>' + (tabs ? 'Comerciar' : 'Comerciar con el banco') + '</h3>' + tabs + '<p>' + dirIco(false, 'Esto se te va') + 'Doy</p>' +
         chips('give', tradeUI.give, function (k) { return !!byGive[k]; }, function (k) { return byGive[k] ? byGive[k].rate + ':1' : '&nbsp;'; }) +
-        '<p>Recibo</p>' +
+        '<p>' + dirIco(true, 'Esto te entra') + 'Recibo</p>' +
         chips('get', tradeUI.get, function (k) { return !!give && give.get.indexOf(k) >= 0; }, function () { return '1'; }) +
         '<div class="sum">' + (give && tradeUI.get ? give.rate + ' × ' + TERRAINS[tradeUI.give].res + ' → 1 × ' + TERRAINS[tradeUI.get].res : 'Elegí qué dar y qué recibir') + '</div>' +
         '<div class="yesno"' + (give && tradeUI.get ? '' : ' style="visibility:hidden"') + '><button type="button" class="no" data-cancel aria-label="Cancelar" title="Cancelar">✕</button><button type="button" class="yes" data-ok aria-label="Confirmar" title="Confirmar">✓</button></div>';
@@ -2020,8 +2024,11 @@ export function initBoard(opts) {
       function next() {
         if (i >= events.length) {
           if (queue.length) { events = queue.shift(); i = 0; return next(); } // sigue con lo que llegó mientras tanto
+          // el aviso del robo sobrevive al refresco final, pero solo si sigue siendo lo último que se mostró: si después pasó
+          // otra cosa (sobre todo el cambio de turno) no se repone, para que no quede colgado cuando te toca tirar
+          var keep = note && note.seq === statusSeq;
           playing = false; busy = false; pull(); syncPieces(); applyView();
-          if (note) showStatus(note.text, false, true, note.who); // el aviso del robo sobrevive al refresco
+          if (keep) showStatus(note.text, false, true, note.who);
           return;
         }
         handle(events[i++], next);
@@ -2218,11 +2225,11 @@ export function initBoard(opts) {
         if (ev.victim === VIEWER && animate) audio.robbed(); // la melodía es solo para quien perdió la carta
         if (ev.resource) { // los dos implicados ven qué carta fue
           note = { text: (ev.thief === VIEWER ? 'Le robaste ' : PLAYER_INFO[ev.thief].name + ' le robó ') + TERRAINS[ev.resource].res.toLowerCase() + ' a ' + PLAYER_INFO[ev.victim].name, who: ev.thief };
-          showStatus(note.text, false, true, note.who);
+          showStatus(note.text, false, true, note.who); note.seq = statusSeq;
           return pause(cont, flyGains([{ from: ev.victim, p: ev.thief, k: ev.resource, n: 1 }], animate));
         }
         note = { text: PLAYER_INFO[ev.thief].name + ' le robó una carta a ' + PLAYER_INFO[ev.victim].name, who: ev.thief }; // un tercero no ve cuál
-        showStatus(note.text, false, true, note.who);
+        showStatus(note.text, false, true, note.who); note.seq = statusSeq;
         counts[ev.victim] -= 1; counts[ev.thief] += 1; renderSeats();
         if (animate) { pop(seatsEl.children[ev.victim], PLAYER_INFO[ev.victim].css); pop(seatsEl.children[ev.thief], PLAYER_INFO[ev.thief].css); }
         return pause(cont, 700);
@@ -2482,7 +2489,7 @@ export function initBoard(opts) {
       return round.map(function (r, i) {
         var pl = PLAYER_INFO[r.player], out = i < shownN;
         if (i === spinIdx) return '<div class="orow spin" style="--pc:' + pl.css + '"><i></i><span class="nm"></span>' + miniDie(1 + Math.floor(Math.random() * 6)) + miniDie(1 + Math.floor(Math.random() * 6)) + '<b>…</b></div>'; // dados rodando (caras al azar, solo de adorno)
-        if (i === rollIdx) return '<div class="orow mine" style="--pc:' + pl.css + '"><i></i><span class="nm"></span><button type="button" class="oroll">Tirar mis dados</button></div>'; // tu tirada: la hacés vos
+        if (i === rollIdx) return '<div class="orow mine" style="--pc:' + pl.css + '"><i></i><span class="nm"></span><button type="button" class="oroll">Tirar dados</button></div>'; // tu tirada: la hacés vos
         return '<div class="orow' + (winners && winners.indexOf(r.player) >= 0 ? ' win' : '') + '" style="--pc:' + pl.css + '"><i></i><span class="nm"></span>' +
           (out ? miniDie(r.roll[0], i === fresh) + miniDie(r.roll[1], i === fresh) + '<b>' + (r.roll[0] + r.roll[1]) + '</b>' : '<span class="odie ph"></span><span class="odie ph"></span><b>?</b>') + '</div>';
       }).join('');
@@ -2516,7 +2523,7 @@ export function initBoard(opts) {
           });
         }
         // Los otros tiran solos, de a uno y con pausas para que se entienda: «Tira X…» con los dados rodando (~0,9 s),
-        // el resultado queda a la vista (~0,9 s) y recién ahí tira el siguiente. Cuando le toca a quien mira, se frena hasta que toque «Tirar mis dados».
+        // el resultado queda a la vista (~0,9 s) y recién ahí tira el siguiente. Cuando le toca a quien mira, se frena hasta que toque «Tirar dados».
         // Mientras ruedan (el revolcón es CSS, `.orow.spin .odie`) solo se cambia la cara de los dados de esa fila, sin reemplazarlos,
         // para no cortar la animación ni redibujar el panel (eso repetía la entrada de todos los dados y parpadeaban).
         function spin(i, left, done) {
@@ -2528,7 +2535,7 @@ export function initBoard(opts) {
         function step(i) {
           if (i >= round.length) return conclude();
           if (withOthers && round[i].player === VIEWER) {
-            draw(i, 'Te toca: tirá tus dados', false, i);
+            draw(i, 'Tu turno: tirá los dados', false, i);
             openingEl.querySelector('.oroll').onclick = function (e) {
               e.stopPropagation();
               if (animate) audio.rollDice();
