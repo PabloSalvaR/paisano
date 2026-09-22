@@ -381,6 +381,9 @@ body{
 .room-card label{display:flex;flex-direction:column;gap:5px;font-size:.82rem;font-weight:700}
 .room-card input{font:inherit;font-size:1rem;font-weight:600;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--btn);color:var(--text);min-height:42px}
 .room-card input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+/* Check «Caos» (números al azar) de la partida contra bots: en fila, con el cuadradito del tamaño del texto */
+.room-card label.chaos-toggle{flex-direction:row;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.room-card .chaos-toggle input{min-height:0;width:18px;height:18px;padding:0;margin:0;accent-color:var(--accent);cursor:pointer}
 .room-card .row{display:flex;gap:8px}
 .room-card .row > *{flex:1;min-width:0}
 .room-btn{font:inherit;font-size:.92rem;font-weight:700;color:var(--text);background:var(--btn);border:1px solid var(--border);border-radius:8px;padding:9px 14px;min-height:42px;cursor:pointer;

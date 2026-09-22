@@ -32,7 +32,7 @@ export function createGame(names: string[], seed: number, config?: Partial<GameC
   if (names.length < 3 || names.length > 4) throw new Error('createGame: la partida es de 3 o 4 jugadores');
   const cfg: GameConfig = { ...defaultConfig(names.length), ...config, players: names.length };
   const topo = topology();
-  const map = generateMap(topo, mulberry32(seed));
+  const map = generateMap(topo, mulberry32(seed), cfg.numberPlacement);
   const bank = emptyHand();
   for (const r of RESOURCES) bank[r] = cfg.bankPerResource;
   const draw = cfg.firstPlayer === null ? drawFirstPlayer(names.length, (seed ^ 0x1b873593) | 0) : null; // flujo aparte, como los demás

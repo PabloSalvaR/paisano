@@ -20,6 +20,7 @@ export function defaultConfig(players: number): GameConfig {
     longestRoadMin: 5,
     largestArmyMin: 3,
     awardPoints: 2,
+    numberPlacement: 'spiral', // como el juego base; 'random' es el modo «Caos»
     firstPlayer: 0, // en las partidas reales se pasa null: se sortea con la semilla
   };
 }

@@ -1158,7 +1158,7 @@ export function initBoard(opts) {
     function buildBoard(seed) {
       if (board) scene.remove(board);
       var rnd = mulberry32(seed);
-      session = online ? opts.session : new LocalSession(PLAYER_INFO.map(function (p) { return p.name; }), seed, { firstPlayer: null }, withOthers ? { bots: [false, true, true, true] } : {}); pull();
+      session = online ? opts.session : new LocalSession(PLAYER_INFO.map(function (p) { return p.name; }), seed, { firstPlayer: null, numberPlacement: opts.chaos ? 'random' : 'spiral' }, withOthers ? { bots: [false, true, true, true] } : {}); pull();
       var topo = topology();
       board = new THREE.Group(); scene.add(board);
       setOrbit(false); closeOpening(); tiles = []; tileMeshes = []; ships = []; trees = []; robber = null; hoverTile = null; busy = false; sending = false; pieceSeen = {};

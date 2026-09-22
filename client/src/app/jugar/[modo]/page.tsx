@@ -25,13 +25,14 @@ export default function LocalBoard() {
   const [typedColor, setTypedColor] = useState<string | null>(null);
   const colorId = typedColor ?? storedColor; // el elegido, o el último usado en este navegador
   const previewCss = SEAT_COLORS.find((c) => c.id === colorId)?.css ?? SEAT_COLORS[0].css;
-  const [player, setPlayer] = useState<{ name: string; characterId: string; colorId: string } | null>(null); // ya elegidos: recién ahí arranca el tablero
+  const [chaos, setChaos] = useState(false); // «Caos»: números del mapa al azar. Siempre arranca apagado (en serie, como el juego original)
+  const [player, setPlayer] = useState<{ name: string; characterId: string; colorId: string; chaos: boolean } | null>(null); // ya elegidos: recién ahí arranca el tablero
 
   useEffect(() => {
     if (!valid || (needsName && player === null)) return;
     const root = rootRef.current!;
     root.innerHTML = MARKUP; // DOM nuevo en cada montaje: evita listeners duplicados
-    const dispose = initBoard({ mode: modo, name: player?.name, characterId: player?.characterId, colorId: player?.colorId });
+    const dispose = initBoard({ mode: modo, name: player?.name, characterId: player?.characterId, colorId: player?.colorId, chaos: player?.chaos });
     return () => {
       dispose();
       root.innerHTML = "";
@@ -46,7 +47,7 @@ export default function LocalBoard() {
     saveName(n);
     saveCharacter(characterId);
     saveColor(colorId);
-    setPlayer({ name: n, characterId, colorId });
+    setPlayer({ name: n, characterId, colorId, chaos });
   }
 
   if (needsName && player === null) {
@@ -103,6 +104,10 @@ export default function LocalBoard() {
               ))}
             </div>
           </div>
+          <label className="chaos-toggle" title="Apagado, los números van en serie como en el juego original. Prendido, se reparten al azar.">
+            <input type="checkbox" checked={chaos} onChange={(e) => setChaos(e.target.checked)} />
+            Caos: números al azar
+          </label>
           <button type="button" className="room-btn primary" disabled={!name.trim()} onClick={start}>
             Jugar
           </button>

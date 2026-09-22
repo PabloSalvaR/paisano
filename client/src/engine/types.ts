@@ -1,6 +1,6 @@
 // Tipos del estado de la partida, comandos y eventos. Todo es JSON puro (se guarda tal cual en Redis/Neon).
 
-import type { GameMap, Resource } from './map';
+import type { GameMap, NumberPlacement, Resource } from './map';
 
 export type PlayerId = number; // índice del jugador en el orden de mesa (0 = primero)
 export type Hand = Record<Resource, number>;
@@ -22,6 +22,7 @@ export interface GameConfig {
   longestRoadMin: number; // largo mínimo para el reconocimiento de la ruta más larga
   largestArmyMin: number; // caballeros jugados mínimos para el de la milicia más grande
   awardPoints: number; // puntos de cada reconocimiento
+  numberPlacement: NumberPlacement; // fichas de número: 'spiral' (en serie, orden de las letras del juego original) o 'random' (caos: al azar sin vecinos iguales ni 6/8 juntos)
   firstPlayer: PlayerId | null; // quién abre la colocación y la partida; null = se sortea con la semilla
 }
 

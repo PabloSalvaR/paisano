@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildTopology, HEX_NEIGHBORS } from './board';
-import { generateMap, RESOURCES } from './map';
+import { generateMap, RESOURCES, spiralNumbers, spiralOrder, type Terrain } from './map';
 import { mulberry32, shuffled } from './rng';
 
 const topo = buildTopology();
@@ -109,5 +109,93 @@ describe('mapa base: determinismo', () => {
     expect(generateMap(topo, mulberry32(123))).toEqual(generateMap(topo, mulberry32(123)));
     const distinct = new Set(maps.map((m) => JSON.stringify([m.terrains, m.numbers])));
     expect(distinct.size).toBeGreaterThan(290);
+  });
+});
+
+describe('mapa base: números en espiral (orden de las letras A–R del juego original)', () => {
+  // A5 B2 C6 D3 E8 F10 G9 H12 I11 J4 K8 L10 M9 N4 O5 P6 Q3 R11
+  const LETTERS = [5, 2, 6, 3, 8, 10, 9, 12, 11, 4, 8, 10, 9, 4, 5, 6, 3, 11];
+  const center = topo.tileAt(0, 0)!.id;
+  const ring = (t: { q: number; r: number }) => Math.max(Math.abs(t.q), Math.abs(t.r), Math.abs(t.q + t.r));
+  const corners = topo.tiles.filter((t) => ring(t) === 2 && (t.q === 0 || t.r === 0 || t.q + t.r === 0)).map((t) => t.id);
+  const adjacent = (a: number, b: number) =>
+    HEX_NEIGHBORS.some((d) => topo.tileAt(topo.tiles[a].q + d.q, topo.tiles[a].r + d.r)?.id === b);
+  // visto desde arriba (x a la derecha, -z arriba), b está en sentido antihorario respecto de a alrededor del centro
+  const ccw = (a: number, b: number) => topo.tiles[a].x * -topo.tiles[b].z - -topo.tiles[a].z * topo.tiles[b].x > 0;
+  const withDesert = (d: number) => topo.tiles.map((_, i) => (i === d ? 'desert' : 'forest')) as Terrain[];
+  const cases = corners.flatMap((_, start) => topo.tiles.map((t) => ({ start, desert: t.id })));
+
+  it('hay 6 esquinas donde puede arrancar la espiral', () => {
+    expect(corners).toHaveLength(6);
+  });
+
+  it('arranca en la esquina elegida con la A (5), sigue en sentido antihorario y termina en el centro', () => {
+    for (let start = 0; start < 6; start++) {
+      const nums = spiralNumbers(topo, withDesert(center), start);
+      expect(nums[corners[start]]).toBe(5);
+      // la B (2) es la casilla del anillo de afuera pegada a la esquina, del lado antihorario
+      const b = topo.tiles.findIndex((_, i) => nums[i] === 2);
+      expect(adjacent(corners[start], b)).toBe(true);
+      expect(ring(topo.tiles[b])).toBe(2);
+      expect(ccw(corners[start], b)).toBe(true);
+    }
+    // sin desierto en el centro, la última ficha (R = 11) va en el centro
+    const desertOuter = topo.tiles.find((t) => ring(t) === 2 && !corners.includes(t.id))!.id;
+    expect(spiralNumbers(topo, withDesert(desertOuter), 0)[center]).toBe(11);
+  });
+
+  it('pone las 18 fichas en orden alfabético por un camino de casillas vecinas, salteando el desierto', () => {
+    for (const { start, desert } of cases) {
+      const nums = spiralNumbers(topo, withDesert(desert), start);
+      expect(nums[desert]).toBe(0);
+      expect([...nums].filter((n) => n > 0).sort((x, y) => x - y)).toEqual([...LETTERS].sort((x, y) => x - y));
+    }
+    // con el desierto en el centro, el recorrido completo son casillas vecinas una tras otra
+    for (let start = 0; start < 6; start++) {
+      const nums = spiralNumbers(topo, withDesert(center), start);
+      const order = spiralOrder(topo, start).filter((id) => id !== center);
+      expect(order.map((id) => nums[id])).toEqual(LETTERS);
+      for (let i = 1; i < order.length; i++) expect(adjacent(order[i - 1], order[i])).toBe(true);
+    }
+  });
+
+  it('esté donde esté el desierto y arranque donde arranque, nunca quedan 6 y 8 vecinos ni dos números iguales pegados', () => {
+    for (const { start, desert } of cases) {
+      const nums = spiralNumbers(topo, withDesert(desert), start);
+      for (const t of topo.tiles) {
+        for (const d of HEX_NEIGHBORS) {
+          const n = topo.tileAt(t.q + d.q, t.r + d.r);
+          const a = nums[t.id];
+          const b = n ? nums[n.id] : 0;
+          if (!a || !b) continue;
+          expect(a === b || ([6, 8].includes(a) && [6, 8].includes(b))).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('el recorrido pasa por las 19 casillas una sola vez: 12 de afuera, 6 del medio y el centro', () => {
+    for (let start = 0; start < 6; start++) {
+      const order = spiralOrder(topo, start);
+      expect(new Set(order).size).toBe(19);
+      expect(order.map((id) => ring(topo.tiles[id]))).toEqual([...Array(12).fill(2), ...Array(6).fill(1), 0]);
+      for (let i = 1; i < order.length; i++) expect(adjacent(order[i - 1], order[i])).toBe(true);
+    }
+  });
+
+  it('con numberPlacement "spiral", generateMap reparte en espiral desde una esquina al azar (reproducible por semilla)', () => {
+    const spiralMaps = SEEDS.slice(0, 60).map((s) => generateMap(topo, mulberry32(s), 'spiral'));
+    const starts = new Set<number>();
+    for (const m of spiralMaps) {
+      const start = corners.findIndex((_, i) => JSON.stringify(spiralNumbers(topo, m.terrains, i)) === JSON.stringify(m.numbers));
+      expect(start).toBeGreaterThanOrEqual(0);
+      starts.add(start);
+    }
+    expect(starts.size).toBe(6);
+    expect(generateMap(topo, mulberry32(5), 'spiral')).toEqual(generateMap(topo, mulberry32(5), 'spiral'));
+  });
+
+  it('el modo aleatorio (por defecto) no cambia: mismo mapa que antes para la misma semilla', () => {
+    expect(generateMap(topo, mulberry32(123), 'random')).toEqual(generateMap(topo, mulberry32(123)));
   });
 });

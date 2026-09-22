@@ -59,6 +59,16 @@ const SECTIONS: { title: string; items: string[]; open?: boolean }[] = [
     ],
   },
   {
+    title: "El mapa",
+    items: [
+      "Los terrenos y los Puertos cambian en cada partida.",
+      "Números en serie (lo normal): las 18 fichas de número se ponen en espiral. Se arranca en una esquina del borde, se da la vuelta por afuera en sentido antihorario, se sigue por el anillo del medio y se termina en el centro, salteando el desierto.",
+      "El orden de la espiral es el de las letras de las fichas del juego de mesa original: A5, B2, C6, D3, E8, F10, G9, H12, I11, J4, K8, L10, M9, N4, O5, P6, Q3 y R11. En el tablero no se ven las letras: solo fijan el orden.",
+      "Así nunca quedan juntos un 6 y un 8, ni dos casillas vecinas con el mismo número.",
+      "Modo Caos: si activás «Caos: números al azar» al armar la partida contra bots, las fichas se reparten al azar, cuidando igual que no queden juntos un 6 y un 8 ni dos números iguales.",
+    ],
+  },
+  {
     title: "Al empezar",
     items: [
       "Cada uno tira dos dados y empieza el que saque más (si hay empate arriba, tiran de nuevo solo los empatados). Después son dos fases: en la Fase 1 cada uno pone una casa y un camino, en sentido horario; en la Fase 2 ponen la segunda casa y su camino en sentido antihorario (el último de la Fase 1 juega dos veces seguidas).",

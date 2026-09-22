@@ -3,7 +3,7 @@ import { topology } from './board';
 import { applyCommand, createGame, legalActions, setupPlayer } from './game';
 import { canSettleAt } from './helpers';
 import { rollDiceFor } from './dice';
-import { RESOURCES, type Resource } from './map';
+import { generateMap, RESOURCES, spiralNumbers, type Resource } from './map';
 import { mulberry32 } from './rng';
 import { commandFor } from './testutil';
 import type { Command, GameEvent, GameState, PlayerId, Result } from './types';
@@ -421,5 +421,17 @@ describe('sorteo de quién abre (tirada de dados)', () => {
     const s = createGame(['A', 'B', 'C'], 4, { firstPlayer: null });
     expect(s.opening![0].map((r) => r.player)).toEqual([0, 1, 2]);
     expect(s.turn).toBe(s.first);
+  });
+});
+
+describe('reparto de números (GameConfig.numberPlacement)', () => {
+  it('por defecto va en serie (espiral de las letras); con "random" (Caos) sale el reparto al azar', () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const serie = createGame(NAMES, seed);
+      expect(serie.config.numberPlacement).toBe('spiral');
+      expect([0, 1, 2, 3, 4, 5].some((start) => JSON.stringify(spiralNumbers(topology(), serie.map.terrains, start)) === JSON.stringify(serie.map.numbers))).toBe(true);
+      const caos = createGame(NAMES, seed, { numberPlacement: 'random' });
+      expect(caos.map).toEqual(generateMap(topology(), mulberry32(seed), 'random'));
+    }
   });
 });

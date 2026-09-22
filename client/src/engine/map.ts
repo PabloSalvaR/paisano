@@ -1,6 +1,6 @@
 // Generación del mapa base: terrenos, fichas de número y puertos, a partir de una topología y una fuente de azar con semilla.
 
-import { HEX_NEIGHBORS, type Topology } from './board';
+import { HEX_NEIGHBORS, type Tile, type Topology } from './board';
 import { shuffled, type Rng } from './rng';
 
 export type Resource = 'forest' | 'hills' | 'pasture' | 'fields' | 'mountains';
@@ -37,12 +37,49 @@ export interface GameMap {
   desert: number; // casilla del desierto, donde arranca el ladrón
 }
 
-export function generateMap(topo: Topology, rng: Rng): GameMap {
+/**
+ * Fichas en el orden de sus letras del juego original (A, B, C… R): A5 B2 C6 D3 E8 F10 G9 H12 I11 J4 K8 L10 M9 N4 O5 P6 Q3 R11.
+ * Las letras no se muestran: solo fijan el orden en que se colocan en espiral.
+ */
+const LETTER_TOKENS = [5, 2, 6, 3, 8, 10, 9, 12, 11, 4, 8, 10, 9, 4, 5, 6, 3, 11];
+
+/** Cómo se reparten las fichas de número: al azar (con reintento) o en espiral en el orden de las letras. */
+export type NumberPlacement = 'random' | 'spiral';
+
+export function generateMap(topo: Topology, rng: Rng, placement: NumberPlacement = 'random'): GameMap {
   const pool: Terrain[] = TERRAIN_COUNTS.flatMap(([t, n]) => Array<Terrain>(n).fill(t));
   if (pool.length !== topo.tiles.length) throw new Error('generateMap: solo soporta el tablero base de 19 casillas');
   const terrains = shuffled(pool, rng);
-  const numbers = placeNumbers(topo, terrains, rng);
+  const numbers = placement === 'spiral' ? spiralNumbers(topo, terrains, Math.floor(rng() * 6)) : placeNumbers(topo, terrains, rng);
   return { terrains, numbers, ports: placePorts(topo, rng), desert: terrains.indexOf('desert') };
+}
+
+const ringOf = (t: { q: number; r: number }) => Math.max(Math.abs(t.q), Math.abs(t.r), Math.abs(t.q + t.r));
+// Ángulo visto desde arriba (x a la derecha, -z arriba): crece en sentido antihorario, como los vértices de cada casilla.
+const angleOf = (t: { x: number; z: number }) => Math.atan2(-t.z, t.x);
+
+/**
+ * Recorrido en espiral del juego original: arranca en una de las 6 esquinas de afuera (`start`, 0..5, en el orden de
+ * los ids), da la vuelta al anillo de afuera en sentido antihorario, sigue por el anillo del medio desde la casilla
+ * pegada a esa esquina (mismo sentido) y termina en el centro. Siempre pasa de una casilla a una vecina.
+ */
+export function spiralOrder(topo: Topology, start: number): number[] {
+  const corners = topo.tiles.filter((t) => ringOf(t) === 2 && (t.q === 0 || t.r === 0 || t.q + t.r === 0));
+  const from = angleOf(corners[start]);
+  const turn = (t: Tile) => {
+    const d = (((angleOf(t) - from) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    return d > 2 * Math.PI - 1e-9 ? 0 : d; // la esquina de arranque (y la casilla del medio pegada a ella) van primero
+  };
+  const ring = (k: number) => topo.tiles.filter((t) => ringOf(t) === k).sort((a, b) => turn(a) - turn(b));
+  return [...ring(2), ...ring(1), ...ring(0)].map((t) => t.id);
+}
+
+/** Números en espiral: las fichas en el orden de las letras a lo largo de `spiralOrder`, salteando el desierto. */
+export function spiralNumbers(topo: Topology, terrains: Terrain[], start: number): number[] {
+  const numbers = terrains.map(() => 0);
+  let next = 0;
+  for (const id of spiralOrder(topo, start)) if (terrains[id] !== 'desert') numbers[id] = LETTER_TOKENS[next++];
+  return numbers;
 }
 
 /**
