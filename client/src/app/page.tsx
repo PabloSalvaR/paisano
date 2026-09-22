@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { version } from "../../package.json";
 
-// Menú de inicio: de acá sale toda la navegación (partida contra bots, mesa local de 4, sala online y el reglamento, que solo se ve desde acá).
+// Menú de inicio: de acá sale toda la navegación (partida contra bots, sala online y el reglamento, que solo se ve desde acá).
+// La mesa local de 4 (/jugar/local) no tiene botón a propósito (sept 2026): sigue andando por URL directa; ver "Decisiones tomadas" en CLAUDE.md.
 export default function Menu() {
   return (
     <main className="room-page">
@@ -16,9 +17,6 @@ export default function Menu() {
         <button type="button" className="room-btn" disabled>
           Jugar online
         </button>
-        <Link className="room-btn" href="/jugar/local" title="Los cuatro jugadores en la misma pantalla">
-          Mesa local
-        </Link>
         <Link className="room-btn" href="/reglamento" title="Cómo se juega, en pocas líneas">
           Reglamento
         </Link>
