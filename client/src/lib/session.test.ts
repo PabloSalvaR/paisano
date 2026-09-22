@@ -149,6 +149,22 @@ describe('LocalSession contra bots', () => {
     expect(session.debugState().vertexBuildings.filter(Boolean).length).toBeGreaterThan(8); // pasó la colocación y construyeron
   });
 
+  it('partida de 3 (vos y dos bots): colocación en serpentina de 3 y el humano siempre tiene acciones legales', async () => {
+    const session = new LocalSession(NAMES.slice(0, 3), SEED, undefined, { bots: [false, true, true], rng: mulberry32(6) });
+    expect(session.view().seats.map((s) => s.bot)).toEqual([false, true, true]);
+    await session.send(setupCmd(session));
+    const r = await session.send(setupCmd(session)); // juegan los bots 1, 2, 2, 1
+    expect(r.ok && r.events.filter((e) => e.type === 'SettlementBuilt').map((e) => (e as { player: number }).player)).toEqual([1, 2, 2, 1]);
+    const rng = mulberry32(7);
+    for (let i = 0; i < 300 && session.view().game!.phase.kind !== 'finished'; i++) {
+      const v = session.view();
+      expect(v.legal.length).toBeGreaterThan(0);
+      const s = await session.send(randomBot({ me: 0, legal: v.legal, hand: v.game!.hand }, rng));
+      expect(s.ok).toBe(true);
+      expectConserved(session.debugState());
+    }
+  });
+
   it('la vista no revela lo que hicieron los bots a escondidas: el robo entre bots llega sin recurso', async () => {
     const session = new LocalSession(NAMES, SEED, undefined, { bots: BOTS, rng: mulberry32(4) });
     const rng = mulberry32(5);

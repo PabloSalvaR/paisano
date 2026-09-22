@@ -1158,7 +1158,7 @@ export function initBoard(opts) {
     function buildBoard(seed) {
       if (board) scene.remove(board);
       var rnd = mulberry32(seed);
-      session = online ? opts.session : new LocalSession(PLAYER_INFO.map(function (p) { return p.name; }), seed, { firstPlayer: null, numberPlacement: opts.chaos ? 'random' : 'spiral' }, withOthers ? { bots: [false, true, true, true] } : {}); pull();
+      session = online ? opts.session : new LocalSession(PLAYER_INFO.slice(0, SEATS).map(function (p) { return p.name; }), seed, { firstPlayer: null, numberPlacement: opts.chaos ? 'random' : 'spiral' }, withOthers ? { bots: [false, true, true, true].slice(0, SEATS) } : {}); pull();
       var topo = topology();
       board = new THREE.Group(); scene.add(board);
       setOrbit(false); closeOpening(); tiles = []; tileMeshes = []; ships = []; trees = []; robber = null; hoverTile = null; busy = false; sending = false; pieceSeen = {};
@@ -1514,6 +1514,8 @@ export function initBoard(opts) {
       return { name: ch.label, css: sc.css, text: sc.text, skin: ch.skin, hair: ch.hair, hat: ch.hat, mustache: !!ch.mustache, headscarf: !!ch.headscarf };
     });
     if (online) opts.seats.forEach(function (st, i) { if (PLAYER_INFO[i]) PLAYER_INFO[i].name = st.name; }); // los nombres vienen de la sala
+    // cuántos juegan: en línea, los de la sala; contra bots, lo elegido (3 o 4); en la mesa local, siempre 4
+    var SEATS = online ? opts.seats.length : opts.mode === 'bots' && opts.players === 3 ? 3 : 4;
     if (!online && opts.mode === 'bots' && opts.name) { // contra bots: el primer asiento es la persona, con el nombre que puso
       PLAYER_INFO[0].name = opts.name;
       // Color elegido: se intercambia con el que tenía ese color por posición, así siguen habiendo 4 colores distintos
@@ -1523,6 +1525,9 @@ export function initBoard(opts) {
         var mineCss = PLAYER_INFO[0].css, mineText = PLAYER_INFO[0].text;
         PLAYER_INFO[0].css = PLAYER_INFO[colorIx].css; PLAYER_INFO[0].text = PLAYER_INFO[colorIx].text;
         PLAYER_INFO[colorIx].css = mineCss; PLAYER_INFO[colorIx].text = mineText;
+        // las piezas 3D usan su propio material por asiento: se intercambian igual (si no, el fantasma sale del color
+        // elegido y la pieza puesta, del color fijo del asiento)
+        var mineMat = PLAYERS[0]; PLAYERS[0] = PLAYERS[colorIx]; PLAYERS[colorIx] = mineMat;
       }
       var chosen = characterById(opts.characterId);
       if (chosen) { PLAYER_INFO[0].skin = chosen.skin; PLAYER_INFO[0].hair = chosen.hair; PLAYER_INFO[0].hat = chosen.hat; PLAYER_INFO[0].mustache = !!chosen.mustache; PLAYER_INFO[0].headscarf = !!chosen.headscarf; }
@@ -1541,7 +1546,7 @@ export function initBoard(opts) {
         '<span class="aw"><span class="bdg road" title="Ruta más larga">' + BADGE_ROAD + '<b></b></span><span class="bdg army" title="Gauchos jugados">' + BADGE_ARMY + '<b></b></span>' +
         '<span class="dv" title="Cartas de desarrollo" hidden><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#8f2a2a" stroke="#e8d6a0" stroke-width="1.6"/></svg><b>0</b></span></span></div>';
     }).join('');
-    if (online) for (var si = opts.seats.length; si < seatsEl.children.length; si++) seatsEl.children[si].hidden = true; // partidas de 3: sin el 4.º puesto
+    for (var si = SEATS; si < seatsEl.children.length; si++) seatsEl.children[si].hidden = true; // partidas de 3: sin el 4.º puesto
     function handTotal(p) { return counts[p]; }
     function renderHand() {
       var pl = PLAYER_INFO[VIEWER];
@@ -1776,7 +1781,7 @@ export function initBoard(opts) {
     // público durante la partida (nada de manos ni cartas de desarrollo ajenas). Se arma con lo mismo que ya pinta cada
     // puesto (`vps`, `awardRoad`/`awardArmy`) más las casas/estancias contadas de `shown.vertexBuildings`.
     function renderSummary() {
-      var ph = game.phase, seats = online ? opts.seats.length : PLAYER_INFO.length;
+      var ph = game.phase, seats = SEATS;
       var rows = PLAYER_INFO.slice(0, seats).map(function (pl, p) {
         var settlements = 0, cities = 0;
         shown.vertexBuildings.forEach(function (b) { if (b && b.player === p) { if (b.city) cities++; else settlements++; } });

@@ -374,6 +374,13 @@ body{
   box-shadow:var(--shadow),inset 0 0 0 3px var(--panel),inset 0 0 0 4px var(--border);display:flex;flex-direction:column;gap:14px;margin:auto}
 .room-card .logo{width:170px;aspect-ratio:900/297;margin:0 auto;background:var(--text);
   -webkit-mask:url(/logo-paisano.png) center/contain no-repeat;mask:url(/logo-paisano.png) center/contain no-repeat}
+/* Loader mientras se arma el tablero 3D (/jugar/*): tapa la página hasta el primer cuadro de la escena */
+.board-loader{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:16px;background:var(--bg)}
+.board-loader .logo{width:170px;aspect-ratio:900/297;background:var(--text);
+  -webkit-mask:url(/logo-paisano.png) center/contain no-repeat;mask:url(/logo-paisano.png) center/contain no-repeat}
+.board-loader .spin{width:34px;height:34px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:board-spin .8s linear infinite}
+.board-loader p{color:var(--muted);font-size:.95rem}
+@keyframes board-spin{to{transform:rotate(360deg)}}
 .room-card h1{font-family:'Fraunces',Georgia,serif;font-size:1.3rem;line-height:1.2;text-align:center}
 .room-card p{color:var(--muted);font-size:.92rem;line-height:1.4;text-align:center}
 .room-card .room-version{margin-top:-8px;text-align:center;font-size:.75rem;font-weight:600;letter-spacing:.06em;color:var(--muted)}
@@ -419,6 +426,15 @@ body{
 .char-opt svg{width:44px;height:44px}
 /* Selector de color de asiento (misma pantalla, arriba del de personaje): 4 círculos de color, sin nombre (el color
    ya se distingue solo). Se intercambia con el del bot que lo tenía, para que sigan siendo 4 colores distintos. */
+/* Selector de cantidad de jugadores (contra bots): dos opciones con el mismo marco que las de personaje */
+.count-picker{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.count-opt{display:flex;align-items:baseline;justify-content:center;gap:8px;padding:8px 6px;border-radius:8px;border:2px solid var(--border);
+  background:var(--btn);cursor:pointer;font:inherit;font-size:1.05rem;font-weight:700;color:var(--text)}
+.count-opt small{font-size:.78rem;font-weight:500;color:var(--muted)}
+.count-opt:hover{background:var(--btn-hover)}
+.count-opt:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.count-opt[aria-checked="true"]{border-color:var(--accent);background:var(--btn-on);color:var(--btn-on-text)}
+.count-opt[aria-checked="true"] small{color:var(--btn-on-text);opacity:.8}
 .color-picker{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;justify-items:center}
 .color-opt{width:32px;height:32px;border-radius:50%;border:2px solid var(--border);cursor:pointer;box-shadow:inset 0 0 0 3px rgba(0,0,0,.15)}
 .color-opt:hover{filter:brightness(1.08)}
