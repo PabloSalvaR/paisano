@@ -381,9 +381,19 @@ body{
 .room-card label{display:flex;flex-direction:column;gap:5px;font-size:.82rem;font-weight:700}
 .room-card input{font:inherit;font-size:1rem;font-weight:600;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--btn);color:var(--text);min-height:42px}
 .room-card input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-/* Check «Caos» (números al azar) de la partida contra bots: en fila, con el cuadradito del tamaño del texto */
-.room-card label.chaos-toggle{flex-direction:row;align-items:center;gap:8px;cursor:pointer;user-select:none}
-.room-card .chaos-toggle input{min-height:0;width:18px;height:18px;padding:0;margin:0;accent-color:var(--accent);cursor:pointer}
+/* Interruptor «Caos» (números al azar) de la partida contra bots: checkbox nativo con role="switch", dibujado con CSS.
+   Apagado se ve como un botón común; prendido, como el elegido de los selectores de color y personaje (fondo `--btn-on`,
+   borde y anillo de acento), para que se lea con el mismo lenguaje. */
+.room-card label.chaos-toggle{flex-direction:row;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.room-card .chaos-toggle input{appearance:none;-webkit-appearance:none;position:relative;flex:none;width:44px;height:24px;min-height:0;padding:0;margin:0;
+  border-radius:999px;border:2px solid var(--border);background:var(--btn);cursor:pointer;transition:background-color .2s,border-color .2s,box-shadow .2s}
+.room-card .chaos-toggle input::before{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+  background:var(--muted);box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .2s,background-color .2s}
+.room-card .chaos-toggle:hover input{background:var(--btn-hover)}
+.room-card .chaos-toggle input:checked{background:var(--btn-on);border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.room-card .chaos-toggle input:checked::before{transform:translateX(20px);background:var(--btn-on-text)}
+.room-card .chaos-toggle input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media (prefers-reduced-motion: reduce){.room-card .chaos-toggle input,.room-card .chaos-toggle input::before{transition:none}}
 .room-card .row{display:flex;gap:8px}
 .room-card .row > *{flex:1;min-width:0}
 .room-btn{font:inherit;font-size:.92rem;font-weight:700;color:var(--text);background:var(--btn);border:1px solid var(--border);border-radius:8px;padding:9px 14px;min-height:42px;cursor:pointer;
