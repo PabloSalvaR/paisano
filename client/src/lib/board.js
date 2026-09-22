@@ -1645,6 +1645,9 @@ export function initBoard(opts) {
     function statusText() {
       // Si el que juega es quien mira (VIEWER) se le habla de vos; si no, se nombra a esa persona.
       var ph = game.phase, name = PLAYER_INFO[game.turn].name, me = game.turn === VIEWER;
+      // Mientras se reproducen eventos, `game` todavía es la vista de antes (se actualiza al final): cuando un aviso temporal
+      // vuelve al texto de siempre, se usa el turno ya mostrado (`turn`), no el viejo (si no, en el turno de un bot decía «Tu turno»).
+      if (playing) return turn === VIEWER ? 'Tu turno' : 'Turno de ' + PLAYER_INFO[turn].name;
       switch (ph.kind) {
         case 'setup': {
           if (openingOn) return 'Sorteando quién empieza…';
@@ -1667,7 +1670,7 @@ export function initBoard(opts) {
     // Muestra un mensaje. Los errores y avisos "temporales" vuelven solos al texto de siempre.
     function showStatus(text, isError, temporary, who) {
       clearTimeout(statusTimer);
-      statusEl.innerHTML = '<i style="background:' + PLAYER_INFO[who !== undefined ? who : openingOn ? VIEWER : game.turn].css + '"></i><span></span>';
+      statusEl.innerHTML = '<i style="background:' + PLAYER_INFO[who !== undefined ? who : openingOn ? VIEWER : playing ? turn : game.turn].css + '"></i><span></span>';
       statusEl.lastChild.textContent = text;
       statusEl.classList.toggle('error', !!isError);
       if (isError || temporary) statusTimer = setTimeout(function () { showStatus(statusText(), false); }, isError ? 2500 : 4000);
@@ -2464,16 +2467,19 @@ export function initBoard(opts) {
     // Acá solo se muestra, una tirada por vez, y al terminar arranca la colocación (y, si abre un bot, empieza a jugar). Tocar lo salta.
     var openingEl = document.getElementById('opening'), openingTimers = [];
     openingOn = false; // mientras dura el sorteo no se marca de quién es el turno (sería adelantar el resultado)
-    function miniDie(v) {
-      return '<svg class="odie" viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="6" fill="#c81e1e" stroke="#6e1414" stroke-width="2"/>' +
-        DIE_PIPS[v].map(function (i) { return '<circle cx="' + (6.5 + (i % 3) * 6.5) + '" cy="' + (6.5 + Math.floor(i / 3) * 6.5) + '" r="2.2" fill="#fff"/>'; }).join('') + '</svg>';
+    function miniDieFace(v) {
+      return '<rect x="1" y="1" width="24" height="24" rx="6" fill="#c81e1e" stroke="#6e1414" stroke-width="2"/>' +
+        DIE_PIPS[v].map(function (i) { return '<circle cx="' + (6.5 + (i % 3) * 6.5) + '" cy="' + (6.5 + Math.floor(i / 3) * 6.5) + '" r="2.2" fill="#fff"/>'; }).join('');
     }
-    function openingRows(round, shownN, winners, rollIdx) {
+    function miniDie(v, fresh) { return '<svg class="odie' + (fresh ? ' fresh' : '') + '" viewBox="0 0 26 26" aria-hidden="true">' + miniDieFace(v) + '</svg>'; }
+    // `fresh`: la única fila cuyos dados entran con animación (la recién revelada); las demás se redibujan quietas.
+    function openingRows(round, shownN, winners, rollIdx, spinIdx, fresh) {
       return round.map(function (r, i) {
         var pl = PLAYER_INFO[r.player], out = i < shownN;
+        if (i === spinIdx) return '<div class="orow spin" style="--pc:' + pl.css + '"><i></i><span class="nm"></span>' + miniDie(1 + Math.floor(Math.random() * 6)) + miniDie(1 + Math.floor(Math.random() * 6)) + '<b>…</b></div>'; // dados rodando (caras al azar, solo de adorno)
         if (i === rollIdx) return '<div class="orow mine" style="--pc:' + pl.css + '"><i></i><span class="nm"></span><button type="button" class="oroll">Tirar mis dados</button></div>'; // tu tirada: la hacés vos
         return '<div class="orow' + (winners && winners.indexOf(r.player) >= 0 ? ' win' : '') + '" style="--pc:' + pl.css + '"><i></i><span class="nm"></span>' +
-          (out ? miniDie(r.roll[0]) + miniDie(r.roll[1]) + '<b>' + (r.roll[0] + r.roll[1]) + '</b>' : '<span class="odie ph"></span><span class="odie ph"></span><b>?</b>') + '</div>';
+          (out ? miniDie(r.roll[0], i === fresh) + miniDie(r.roll[1], i === fresh) + '<b>' + (r.roll[0] + r.roll[1]) + '</b>' : '<span class="odie ph"></span><span class="odie ph"></span><b>?</b>') + '</div>';
       }).join('');
     }
     function closeOpening() { openingTimers.forEach(clearTimeout); openingTimers = []; openingEl.hidden = true; openingEl.onclick = null; openingOn = false; }
@@ -2493,8 +2499,8 @@ export function initBoard(opts) {
       function playRound(ri) {
         var round = rounds[ri], last = ri === rounds.length - 1, max = Math.max.apply(null, round.map(function (r) { return r.roll[0] + r.roll[1]; }));
         var winners = round.filter(function (r) { return r.roll[0] + r.roll[1] === max; }).map(function (r) { return r.player; });
-        function draw(n, note, win, rollIdx) {
-          openingEl.innerHTML = '<h3>' + (ri === 0 ? '¿Quién empieza?' : 'Desempate') + '</h3><div class="orows">' + openingRows(round, n, win ? winners : null, rollIdx) + '</div><p class="onote">' + (note || '&nbsp;') + '</p>';
+        function draw(n, note, win, rollIdx, spinIdx, fresh) {
+          openingEl.innerHTML = '<h3>' + (ri === 0 ? '¿Quién empieza?' : 'Desempate') + '</h3><div class="orows">' + openingRows(round, n, win ? winners : null, rollIdx, spinIdx, fresh) + '</div><p class="onote">' + (note || '&nbsp;') + '</p>';
           Array.prototype.forEach.call(openingEl.querySelectorAll('.orow .nm'), function (el, i) { el.textContent = PLAYER_INFO[round[i].player].name; });
         }
         var intro = ri === 0 ? 'Tira cada uno dos dados; abre el mayor' : 'Tiran de nuevo solo los empatados';
@@ -2505,7 +2511,16 @@ export function initBoard(opts) {
             later(last ? 1900 : 1700, function () { if (last) finish(); else playRound(ri + 1); });
           });
         }
-        // Los otros tiran solos, uno cada 0,65 s. Cuando le toca a quien mira, se frena hasta que toque «Tirar mis dados».
+        // Los otros tiran solos, de a uno y con pausas para que se entienda: «Tira X…» con los dados rodando (~0,9 s),
+        // el resultado queda a la vista (~0,9 s) y recién ahí tira el siguiente. Cuando le toca a quien mira, se frena hasta que toque «Tirar mis dados».
+        // Mientras ruedan (el revolcón es CSS, `.orow.spin .odie`) solo se cambia la cara de los dados de esa fila, sin reemplazarlos,
+        // para no cortar la animación ni redibujar el panel (eso repetía la entrada de todos los dados y parpadeaban).
+        function spin(i, left, done) {
+          var row = openingEl.querySelector('.orow.spin');
+          if (!row) draw(i, withOthers && round[i].player === VIEWER ? 'Tirás…' : 'Tira ' + PLAYER_INFO[round[i].player].name + '…', false, null, i);
+          else Array.prototype.forEach.call(row.querySelectorAll('.odie'), function (d) { d.innerHTML = miniDieFace(1 + Math.floor(Math.random() * 6)); });
+          if (left <= 0) done(); else later(110, function () { spin(i, left - 1, done); });
+        }
         function step(i) {
           if (i >= round.length) return conclude();
           if (withOthers && round[i].player === VIEWER) {
@@ -2513,15 +2528,16 @@ export function initBoard(opts) {
             openingEl.querySelector('.oroll').onclick = function (e) {
               e.stopPropagation();
               if (animate) audio.rollDice();
-              draw(i + 1, intro);
-              later(animate ? 800 : 0, function () { step(i + 1); });
+              spin(i, 8, function () { draw(i + 1, intro, false, null, null, i); later(900, function () { step(i + 1); }); }); // tus dados también ruedan antes de mostrar el resultado
             };
             return;
           }
-          later(i === 0 ? 900 : 650, function () { draw(i + 1, intro); step(i + 1); });
+          later(i === 0 ? 1100 : 350, function () {
+            if (animate) audio.rollDice(); // suenan los dados de cada uno que tira solo
+            spin(i, 8, function () { draw(i + 1, intro, false, null, null, i); later(900, function () { step(i + 1); }); });
+          });
         }
         draw(0, intro);
-        if (animate && !(withOthers && round[0].player === VIEWER)) audio.rollDice(); // suenan los dados de los que tiran solos
         step(0);
       }
       playRound(0);
