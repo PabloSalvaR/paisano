@@ -1619,7 +1619,7 @@ export function initBoard(opts) {
       switch (ph.kind) {
         case 'setup': {
           if (openingOn) return 'Sorteando quién empieza…';
-          var fase = ph.step < game.players.length ? 'fase 1, sentido horario' : 'fase 2, sentido antihorario';
+          var fase = ph.step < game.players.length ? 'Fase 1' : 'Fase 2'; // el sentido (horario/antihorario) va en el reglamento, no acá: no sobrecargar el mensaje
           return (me ? 'Tu turno' : name) + ' · ' + fase + ': ' + (ph.part === 'settlement' ? (me ? 'tocá un punto para colocar tu casa' : 'coloca su casa') : (me ? 'tocá un camino junto a tu casa' : 'coloca su camino'));
         }
         case 'roll': return me ? 'Tu turno: jugá los dados' : 'Turno de ' + name;

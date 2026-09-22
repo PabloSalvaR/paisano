@@ -1,7 +1,51 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Fragment } from "react";
 
 export const metadata: Metadata = { title: "Reglamento · Paisano" };
+
+// Palabras del juego que se resaltan donde aparezcan (piezas, cartas y reconocimientos), sin tener que marcarlas a mano
+// en cada frase. Orden de más larga a más corta: si no, "Punto de victoria" nunca se probaría entera porque "Punto" ya
+// la habría cortado antes. Insensible a mayúsculas; el resaltado respeta cómo esté escrita en el texto original.
+const TERMS = [
+  "Puntos de victoria",
+  "Punto de victoria",
+  "Ruta más larga",
+  "Milicia más grande",
+  "Cartas de desarrollo",
+  "Carta de desarrollo",
+  "Buena cosecha",
+  "Fase 1",
+  "Fase 2",
+  "Estancias",
+  "Estancia",
+  "Caminos",
+  "Camino",
+  "Puertos",
+  "Puerto",
+  "Gauchos",
+  "Gaucho",
+  "Vialidad",
+  "Acopio",
+  "Casas",
+  "Casa",
+  "Banco",
+  "Ladrón",
+].sort((a, b) => b.length - a.length);
+const TERMS_RE = new RegExp(`(${TERMS.join("|")})`, "gi");
+
+/** Resalta las palabras de `TERMS` dentro de `text`, conservando el resto tal cual. */
+function highlight(text: string) {
+  return text.split(TERMS_RE).map((part, i) =>
+    i % 2 === 1 ? (
+      <b className="term" key={i}>
+        {part}
+      </b>
+    ) : (
+      <Fragment key={i}>{part}</Fragment>
+    ),
+  );
+}
 
 // Reglamento corto para leer en el celular: secciones plegables y frases cortas. Solo se llega desde el menú de inicio.
 // Los números salen de engine/config.ts (costos, piezas, puntos): si se cambian allá, hay que actualizarlos acá.
@@ -10,15 +54,15 @@ const SECTIONS: { title: string; items: string[]; open?: boolean }[] = [
     title: "Objetivo",
     open: true,
     items: [
-      "Jugás de 3 a 4. Gana el primero que llega a 10 puntos.",
+      "Número de jugadores: 3 o 4. Gana el primero que llega a 10 puntos.",
       "Una casa vale 1 punto, una estancia 2, la Ruta más larga 2 y la Milicia más grande 2. Cada carta de Punto de victoria vale 1.",
     ],
   },
   {
     title: "Al empezar",
     items: [
-      "Cada uno tira dos dados y empieza el que saque más (si hay empate arriba, tiran de nuevo solo los empatados). Después son dos fases: en la fase 1 cada uno pone una casa y un camino, en sentido horario; en la fase 2 ponen la segunda casa y su camino en sentido antihorario (el último de la fase 1 juega dos veces seguidas).",
-      "Después empieza el juego: el primer turno es de quien abrió la fase 1 y los turnos siguen en sentido horario.",
+      "Cada uno tira dos dados y empieza el que saque más (si hay empate arriba, tiran de nuevo solo los empatados). Después son dos fases: en la Fase 1 cada uno pone una casa y un camino, en sentido horario; en la Fase 2 ponen la segunda casa y su camino en sentido antihorario (el último de la Fase 1 juega dos veces seguidas).",
+      "Después empieza el juego: el primer turno es de quien abrió la Fase 1 y los turnos siguen en sentido horario.",
       "La 2.ª casa te da 1 recurso por cada casilla que toca.",
       "Dos casas (o estancias) nunca pueden quedar pegadas: hace falta al menos un vértice libre entre ellas.",
     ],
@@ -103,7 +147,7 @@ export default function Reglamento() {
               <summary>{s.title}</summary>
               <ul>
                 {s.items.map((t) => (
-                  <li key={t}>{t}</li>
+                  <li key={t}>{highlight(t)}</li>
                 ))}
               </ul>
             </details>
