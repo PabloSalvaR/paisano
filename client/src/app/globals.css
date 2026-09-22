@@ -385,6 +385,18 @@ body{
 .room-error{color:#b3261e;font-size:.88rem;font-weight:600;text-align:center;min-height:1.2em}
 :root[data-theme="dark"] .room-error{color:#ff8b80}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .room-error{color:#ff8b80}}
+/* Selector de personaje (pantalla "Tu nombre" de la partida contra bots): grid de 8, con el dibujo de `characterSVG` y
+   el nombre debajo; el elegido se resalta con el borde de acento. */
+.char-picker{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.char-opt{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px 5px;border-radius:8px;
+  border:2px solid var(--border);background:var(--btn);cursor:pointer;font:inherit;color:var(--text)}
+.char-opt:hover{background:var(--btn-hover)}
+.char-opt:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.char-opt[aria-checked="true"]{border-color:var(--accent);background:var(--btn-on)}
+.char-opt svg{width:44px;height:44px}
+.char-opt span{font-size:.7rem;font-weight:700;line-height:1.1}
+@media (max-width:420px){.char-picker{grid-template-columns:repeat(4,1fr);gap:6px}.char-opt svg{width:38px;height:38px}.char-opt span{font-size:.64rem}}
+
 .room-seats{list-style:none;display:flex;flex-direction:column;gap:8px}
 .room-seats li{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--btn);font-weight:700}
 .room-seats li.empty{color:var(--muted);font-weight:600;border-style:dashed;background:transparent}

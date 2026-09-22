@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { MARKUP, initBoard } from "@/lib/board";
-import { nameStore, saveName } from "@/lib/identity";
+import { MARKUP, SEAT_COLORS, characterSVG, initBoard } from "@/lib/board";
+import { CHARACTERS } from "@/lib/characters";
+import { characterStore, nameStore, saveCharacter, saveName } from "@/lib/identity";
 
 const MODES = ["bots", "local"];
 
@@ -17,13 +18,16 @@ export default function LocalBoard() {
   const stored = useSyncExternalStore(nameStore.subscribe, nameStore.get, nameStore.getServer);
   const [typed, setTyped] = useState<string | null>(null);
   const name = typed ?? stored; // lo que escribió, o el último nombre usado en este navegador
-  const [player, setPlayer] = useState<string | null>(null); // el nombre ya elegido: recién ahí arranca el tablero
+  const storedCharacter = useSyncExternalStore(characterStore.subscribe, characterStore.get, characterStore.getServer);
+  const [typedCharacter, setTypedCharacter] = useState<string | null>(null);
+  const characterId = typedCharacter ?? storedCharacter; // el elegido, o el último usado en este navegador
+  const [player, setPlayer] = useState<{ name: string; characterId: string } | null>(null); // ya elegidos: recién ahí arranca el tablero
 
   useEffect(() => {
     if (!valid || (needsName && player === null)) return;
     const root = rootRef.current!;
     root.innerHTML = MARKUP; // DOM nuevo en cada montaje: evita listeners duplicados
-    const dispose = initBoard({ mode: modo, name: player ?? undefined });
+    const dispose = initBoard({ mode: modo, name: player?.name, characterId: player?.characterId });
     return () => {
       dispose();
       root.innerHTML = "";
@@ -36,7 +40,8 @@ export default function LocalBoard() {
     const n = name.trim();
     if (!n) return;
     saveName(n);
-    setPlayer(n);
+    saveCharacter(characterId);
+    setPlayer({ name: n, characterId });
   }
 
   if (needsName && player === null) {
@@ -45,7 +50,7 @@ export default function LocalBoard() {
         <div className="room-card">
           <div className="logo" role="img" aria-label="Paisano" />
           <h1>Jugar contra bots</h1>
-          <p>Vas a jugar contra tres bots. Ponete un nombre para que te vean en la mesa.</p>
+          <p>Vas a jugar contra tres bots. Ponete un nombre y elegí tu personaje para que te vean en la mesa.</p>
           <label>
             Tu nombre
             <input
@@ -58,6 +63,21 @@ export default function LocalBoard() {
               onKeyDown={(e) => e.key === "Enter" && start()}
             />
           </label>
+          <div className="char-picker" role="radiogroup" aria-label="Tu personaje">
+            {CHARACTERS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                role="radio"
+                aria-checked={c.id === characterId}
+                className="char-opt"
+                onClick={() => setTypedCharacter(c.id)}
+                dangerouslySetInnerHTML={{
+                  __html: characterSVG({ ...c, css: SEAT_COLORS[0].css }) + "<span>" + c.label + "</span>",
+                }}
+              />
+            ))}
+          </div>
           <button type="button" className="room-btn primary" disabled={!name.trim()} onClick={start}>
             Jugar
           </button>

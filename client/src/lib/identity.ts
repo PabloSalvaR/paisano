@@ -2,6 +2,8 @@
 // Puede fallar o venir vacío (ventana privada, datos borrados): todo va con try/catch y la app funciona sin esto,
 // solo que hay que volver a presentarse.
 
+import { DEFAULT_CHARACTER_ID } from './characters';
+
 export interface Identity {
   token: string;
   name: string;
@@ -9,6 +11,7 @@ export interface Identity {
 
 const roomKey = (roomId: string): string => `paisano:sala:${roomId.toUpperCase()}`;
 const NAME_KEY = 'paisano:nombre';
+const CHARACTER_KEY = 'paisano:personaje';
 
 export function loadIdentity(roomId: string, storage: Pick<Storage, 'getItem'> | null = safeStorage()): Identity | null {
   try {
@@ -55,6 +58,23 @@ export function lastName(storage: Pick<Storage, 'getItem'> | null = safeStorage(
   }
 }
 
+/** El personaje elegido para el avatar (solo partida contra bots, por ahora): se guarda junto con el nombre. */
+export function saveCharacter(id: string, storage: Pick<Storage, 'setItem'> | null = safeStorage()): void {
+  try {
+    storage?.setItem(CHARACTER_KEY, id);
+  } catch {
+    /* sin almacenamiento: se sigue jugando */
+  }
+}
+
+export function lastCharacter(storage: Pick<Storage, 'getItem'> | null = safeStorage()): string | null {
+  try {
+    return storage?.getItem(CHARACTER_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function safeStorage(): Storage | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;
@@ -68,4 +88,11 @@ export const nameStore = {
   subscribe: (): (() => void) => () => {},
   get: (): string => lastName(),
   getServer: (): string => '',
+};
+
+/** Para React: el último personaje elegido (o `DEFAULT_CHARACTER_ID` la primera vez). Mismo patrón que `nameStore`. */
+export const characterStore = {
+  subscribe: (): (() => void) => () => {},
+  get: (): string => lastCharacter() ?? DEFAULT_CHARACTER_ID,
+  getServer: (): string => DEFAULT_CHARACTER_ID,
 };

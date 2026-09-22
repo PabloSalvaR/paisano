@@ -9,6 +9,7 @@ import { createAudio } from './audio.js';
 import { topology } from '../engine';
 import { LocalSession } from './session';
 import { drawBastos11, devCardURL } from './cardart';
+import { CHARACTERS, characterById } from './characters';
 
 export const MARKUP = `
 <div id="stage">
@@ -129,6 +130,36 @@ export const MARKUP = `
   <div class="err" id="err" hidden></div>
 </div>
 `;
+
+// Color y texto de cada asiento: fijos por posición (así las piezas del tablero se distinguen siempre igual). El asiento
+// 0 (rojo) es siempre el de la persona en la partida contra bots: el selector de personaje del menú lo usa para la
+// muestra, así se ve igual que en la mesa.
+export var SEAT_COLORS = [
+  { css: '#d94141', text: '#ffffff' },
+  { css: '#3b6fd6', text: '#ffffff' },
+  { css: '#f0932b', text: '#2b1a05' },
+  { css: '#f1eee6', text: '#2b2216' }
+];
+
+/**
+ * Dibuja un personaje (cara, pelo, sombrero o pañuelo, bigote) con el poncho del color `i.css`. `i` trae los campos de
+ * `Character` (`skin`, `hair`, `hat`, `mustache`, `headscarf`) más `css` (color del poncho). Se usa en la mesa
+ * (`avatarSVG`, con el color del asiento) y en el selector de personaje del menú (con el color del asiento 0).
+ */
+export function characterSVG(i) {
+  var hair = i.headscarf ? '' : '<path d="M11.5 17 Q12 8 20 8 Q28 8 28.5 17 Q24 12 20 12 Q16 12 11.5 17Z" fill="' + i.hair + '"/>';
+  var topgear = i.hat
+    ? '<ellipse cx="20" cy="10.5" rx="13" ry="3" fill="#2b2118"/><path d="M13 10.5 Q13 3 20 3 Q27 3 27 10.5Z" fill="#2b2118"/>'
+    : i.headscarf
+    ? '<path d="M9.5 15 Q9 5 20 5 Q31 5 30.5 15 Q25 10.5 20 10.5 Q15 10.5 9.5 15Z" fill="#d9a441" stroke="#8a5a1e" stroke-width="1.2"/><circle cx="29.5" cy="13.5" r="2.4" fill="#d9a441" stroke="#8a5a1e" stroke-width="1"/>'
+    : '';
+  var mustache = i.mustache ? '<path d="M16 21.6 Q20 24 24 21.6" stroke="' + i.hair + '" stroke-width="1.8" fill="none" stroke-linecap="round"/>' : '';
+  return '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#e7dfcc"/>' +
+    '<path d="M5 40 Q8 28 20 28 Q32 28 35 40Z" fill="' + i.css + '" stroke="#3b2a18" stroke-width="1.5"/>' +
+    '<circle cx="20" cy="18" r="8" fill="' + i.skin + '" stroke="#3b2a18" stroke-width="1.5"/>' +
+    hair + topgear +
+    '<circle cx="17" cy="19" r="1" fill="#2b2118"/><circle cx="23" cy="19" r="1" fill="#2b2118"/>' + mustache + '</svg>';
+}
 
 // opts (en línea): { session, seats: [{ name, bot }], seed }. Sin `session` es partida local: opts.mode 'bots' (vos contra tres bots) o 'local' (los 4 en la pantalla).
 export function initBoard(opts) {
@@ -1460,26 +1491,19 @@ export function initBoard(opts) {
     };
     var BADGE_ROAD = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="8" width="16" height="4.5" rx="1.5" transform="rotate(-25 10 10)" fill="currentColor"/></svg>';
     var BADGE_ARMY = '<svg viewBox="0 0 20 20" aria-hidden="true"><g transform="rotate(-40 10 10)" fill="currentColor"><path d="M8 7.8H15.6Q18.6 8.4 19.6 10.4Q17.4 12.3 14.2 12.4H8Z"/><rect x="5.9" y="5.8" width="2.3" height="9" rx="1"/><rect x="0.8" y="8.6" width="5.4" height="3.6" rx="1.6"/></g></svg>'; // silueta de un facón: hoja con punta, guarda y mango
-    var PLAYER_INFO = [
-      { name: 'Tomás', css: '#d94141', text: '#ffffff', skin: '#f1c9a5', hair: '#5a3a22', hat: true },
-      { name: 'Lucía', css: '#3b6fd6', text: '#ffffff', skin: '#c98f66', hair: '#2b2118', hat: false },
-      { name: 'Mateo', css: '#f0932b', text: '#2b1a05', skin: '#8d5a3b', hair: '#2b2118', hat: true },
-      { name: 'Sofía', css: '#f1eee6', text: '#2b2216', skin: '#f4d3b5', hair: '#a3402b', hat: false }
-    ];
+    // El personaje (piel, pelo, sombrero o pañuelo) sale de `characters.ts` y sí se puede elegir (ver `opts.characterId`).
+    var PLAYER_INFO = SEAT_COLORS.map(function (sc, i) {
+      var ch = CHARACTERS[i];
+      return { name: ch.label, css: sc.css, text: sc.text, skin: ch.skin, hair: ch.hair, hat: ch.hat, mustache: !!ch.mustache, headscarf: !!ch.headscarf };
+    });
     if (online) opts.seats.forEach(function (st, i) { if (PLAYER_INFO[i]) PLAYER_INFO[i].name = st.name; }); // los nombres vienen de la sala
     if (!online && opts.mode === 'bots' && opts.name) { // contra bots: el primer asiento es la persona, con el nombre que puso
       PLAYER_INFO[0].name = opts.name;
+      var chosen = characterById(opts.characterId);
+      if (chosen) { PLAYER_INFO[0].skin = chosen.skin; PLAYER_INFO[0].hair = chosen.hair; PLAYER_INFO[0].hat = chosen.hat; PLAYER_INFO[0].mustache = !!chosen.mustache; PLAYER_INFO[0].headscarf = !!chosen.headscarf; }
       PLAYER_INFO.forEach(function (pl, i) { if (i > 0 && pl.name.toLowerCase() === opts.name.toLowerCase()) pl.name += ' (bot)'; }); // si coincide con un bot, se distinguen
     }
-    function avatarSVG(p) {
-      var i = PLAYER_INFO[p];
-      return '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#e7dfcc"/>' +
-        '<path d="M5 40 Q8 28 20 28 Q32 28 35 40Z" fill="' + i.css + '" stroke="#3b2a18" stroke-width="1.5"/>' +
-        '<circle cx="20" cy="18" r="8" fill="' + i.skin + '" stroke="#3b2a18" stroke-width="1.5"/>' +
-        '<path d="M11.5 17 Q12 8 20 8 Q28 8 28.5 17 Q24 12 20 12 Q16 12 11.5 17Z" fill="' + i.hair + '"/>' +
-        (i.hat ? '<ellipse cx="20" cy="10.5" rx="13" ry="3" fill="#2b2118"/><path d="M13 10.5 Q13 3 20 3 Q27 3 27 10.5Z" fill="#2b2118"/>' : '') +
-        '<circle cx="17" cy="19" r="1" fill="#2b2118"/><circle cx="23" cy="19" r="1" fill="#2b2118"/></svg>';
-    }
+    function avatarSVG(p) { return characterSVG(PLAYER_INFO[p]); }
     var handEl = stage.querySelector('.hand'), whoEl = document.getElementById('who'), seatsEl = document.getElementById('seats');
     var STAR = '<svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="10,1.5 12.6,7.2 18.8,7.8 14.1,12 15.5,18.2 10,15 4.5,18.2 5.9,12 1.2,7.8 7.4,7.2" fill="#f2c230" stroke="#7a5a10" stroke-width="1.4" stroke-linejoin="round"/></svg>';
     var vps = [0, 0, 0, 0]; // puntos de victoria que se ven: casas, estancias y reconocimientos (los Puntos de victoria ajenos no se ven)
