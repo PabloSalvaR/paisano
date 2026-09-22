@@ -217,8 +217,10 @@ Las fases 1-4 del plan original (Java/Spring) quedan pospuestas: se hicieron en 
 
 **Pausa de reglas (sept 2026).** El desarrollador cerró la lógica hasta acá: el reloj de turno y las variantes quedan pendientes, sin urgencia. El foco pasa al pulido gráfico (fase 8) y a probar con amigos.
 
+**Sesión del 22 de sept 2026 (después del push anterior, ya commiteada y pusheada):** oferta de comercio sin repetirse y recuadro de dados más chico (verificados); **selector de personaje** (8 avatares, solo `/jugar/bots`); **reglamento** con palabras del juego resaltadas y «Fase 1»/«Fase 2» con mayúscula (sin «sentido horario» en el juego, eso queda solo en el reglamento); **puertos** rediseñados como plataforma chata entre los muelles, sin «2:1» en el específico; **logo** movido al menú desplegable en celular. Todo verificado con Chrome (viewport de 390 px simulado con un iframe, porque `resize_window` no achicaba la ventana esa sesión), `npm test` (234), `tsc`, `eslint` y `npm run build`.
+
 **Al retomar (pendiente inmediato, en este orden)**
-1. **Probar en Chrome y/o celular real** los dos arreglos de arriba (oferta de comercio sin repetirse y recuadro de dados más chico) antes de commitear: `npm test` (234), `tsc` y `eslint` de los archivos tocados ya pasan, falta la mirada del desarrollador.
+1. **Probar en un celular real** lo de la sesión del 22 de sept: el selector de personaje, los puertos nuevos y el logo dentro del menú (solo se vieron en el viewport simulado de Chrome, nunca en pantalla real).
 2. Antes de invitar a mucha gente: leer en el FAQ de Upstash qué pasa al llegar al tope del plan gratis (el consumo medido: ~660 comandos en una tarde corta de pruebas; ver `docs/multijugador.md`).
 
 **Siguiente (sin orden fijo, a elección del desarrollador)**
