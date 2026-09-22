@@ -11,6 +11,43 @@ board.js ──► GameSession ──┬─► LocalSession   (motor en el naveg
                            └─► RemoteSession  (fetch + polling a /api/rooms/…: partida online por sala)
 ```
 
+**Dónde vive cada cosa (partida online), en detalle:** quien hace polling es **el navegador** (`RemoteSession`), no el servidor. Todo el proyecto se despliega junto en Vercel, pero el navegador (front) y los Route Handlers (backend) son dos ámbitos distintos que corren en dos lugares distintos — comparten repo y despliegue, no memoria ni proceso. Por eso hace falta Upstash: una función serverless no recuerda nada de un pedido al siguiente.
+
+```
+ ┌────────────────────────┐
+ │  NAVEGADOR (front)      │
+ │  board.js + RemoteSession│
+ └───────────┬─────────────┘
+             │ (1) fetch POST /api/rooms/:id/command  { command }   ← cuando VOS jugás
+             │ (2) fetch GET  /api/rooms/:id?since=N               ← polling, cada 1,5 s SIEMPRE
+             ▼
+ ┌──────────────────────────────────────────┐
+ │  VERCEL — Route Handlers (BACKEND)        │
+ │  app/api/rooms/** → server/api.ts         │
+ │  → server/rooms.ts                        │
+ │  el MOTOR corre ACÁ (autoritativo):       │
+ │  valida el token, aplica el comando,      │
+ │  arma la RoomView filtrada                │
+ └───────────┬────────────────────────────────┘
+             │ fetch REST (Upstash)
+             ▼
+ ┌──────────────────────────────────────────┐
+ │  UPSTASH REDIS (fuera de Vercel)          │
+ │  paisano:sala:CODIGO   (doc JSON)         │
+ │  paisano:sala:CODIGO:v (versión)          │
+ └───────────┬────────────────────────────────┘
+             │ devuelve el doc (o guarda si la versión no cambió)
+             ▼
+ Route Handler arma la RoomView y responde JSON
+             │
+             ▼
+ NAVEGADOR: playEvents() dibuja lo nuevo en el tablero
+
+ ⟲ el paso (2) se repite solo cada 1,5 s mientras la pestaña esté en la partida
+```
+
+En el modo bots no hay nada de esto: el motor corre directo en el navegador (`LocalSession`), así que no toca Route Handlers ni Upstash para nada.
+
 ## Módulos (`client/src/`)
 
 | Módulo | Qué hace |
@@ -113,3 +150,25 @@ Pedido por el desarrollador (sept 2026): si alguien deja de responder, la partid
 2. ¿Duración por defecto y opciones? → 3 minutos por defecto; sin límite / 1 / 2 / 3 / 5.
 3. ¿Reemplazo permanente («lo echa») o el humano puede recuperar su asiento si vuelve? → permanente en la primera versión; recuperar el asiento queda como mejora futura (volver a entrar por nombre).
 4. ¿Aviso previo con contador a los 30 s? → sí, aunque puede ir en una segunda etapa.
+
+## Fin del flujo hoy, y qué falta para escalar (sept 2026, análisis, sin implementar)
+
+Pedido por el desarrollador: dejar anotado qué pasa hoy cuando termina una partida y qué haría falta si el juego crece más allá de "probar con amigos" — por ejemplo, para publicarlo en la Play Store.
+
+**Qué pasa hoy al terminar una partida (en los dos modos):**
+- **Contra bots:** nada persiste. Todo vive en la pestaña (`LocalSession`, motor en el navegador); al cerrarla o recargar se pierde la partida entera. No hay historial ni estadísticas: es coherente con el alcance recortado actual (una sola instancia, sin base de datos para esto).
+- **Online:** la sala queda en Upstash sin ningún paso de "cierre" o archivado; vence sola con las demás a las 6 horas sin actividad, haya terminado o no. No hay historial de partidas, estadísticas por jugador ni revancha con un clic (hay que crear sala de nuevo). El panel de resumen (ver «Decisiones tomadas» en `CLAUDE.md`) es puramente del cliente: no queda guardado en ningún lado.
+- En síntesis: hoy "termina la partida" es *el final*, no un cierre con memoria. Alcanza para el objetivo actual; es la primera limitación real si el juego escala.
+
+**Qué haría falta para escalar de verdad**, de más a menos urgente:
+
+1. **Tiempo real sin polling.** El polling de 1,5 s gasta cuota de Upstash todo el tiempo que alguien está conectado, juegue o no; con más gente simultánea es el primer cuello de botella. Es lo que ya preveía el plan original (Spring WebSocket) o, sin volver a Java, un servicio de tiempo real (Upstash con plan pago, o algo tipo Ably/Pusher/Supabase Realtime).
+2. **Backend y persistencia reales.** Salir del free tier de Upstash (o migrar a Postgres, el plan original: "snapshots y eventos de partida") y, sobre todo, empezar a **guardar algo que sobreviva a la partida** — hoy no existe historial ni estadísticas en absoluto.
+3. **Cuentas de verdad.** Nombre + token en `localStorage` no sobrevive un desinstalado de la app ni un cambio de dispositivo. Una app de tienda casi siempre pide login (Google Sign-In es lo natural en Android).
+4. **Notificaciones.** Sin tiempo real ni push, "es tu turno" solo lo sabe quien tiene la app abierta — casi obligatorio en una app de celular, y se conecta con el reloj de turno pendiente (sección de arriba).
+5. **Moderación básica.** Hoy cualquiera con el link entra con el nombre que quiera, sin límites ni forma de bloquear o reportar a alguien.
+6. **Empaquetar para Android (la parte fácil):** como el servidor ya es autoritativo y el cliente es intercambiable (misma razón por la que se anotó un posible cliente Unity para Steam en `CLAUDE.md`), **no hace falta reescribir el motor** para llegar a la Play Store. El camino corto es envolver la web actual como **TWA** (*Trusted Web Activity*) o con **Capacitor**: la app de la tienda abre esta misma web. Un cliente nativo o Unity quedaría solo si algún día se quisiera algo gráfico que el navegador no puede dar.
+7. **Trámites y políticas de la tienda.** Cuenta de desarrollador de Google (pago único), política de privacidad publicada (hoy no existe: se guardan nombres y tokens, hay que declararlo igual), formulario de seguridad de datos de Google Play.
+8. **Costos.** Todo lo anterior probablemente rompe el "gratis" actual (Vercel Hobby + Upstash free); escalar implica aceptar un costo mensual o revisar la decisión de "sin monetización" (ver "Decisiones tomadas" en `CLAUDE.md`). No hace falta resolverlo ahora, pero es una bifurcación futura a tener presente, no algo que se resuelve solo.
+
+Nada de esto es urgente ni bloquea nada hoy: queda como mapa de ruta para cuando (si) haga falta.

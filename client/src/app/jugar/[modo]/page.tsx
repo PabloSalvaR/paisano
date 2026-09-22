@@ -5,7 +5,7 @@ import { notFound, useParams } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { MARKUP, SEAT_COLORS, characterSVG, initBoard } from "@/lib/board";
 import { CHARACTERS } from "@/lib/characters";
-import { characterStore, nameStore, saveCharacter, saveName } from "@/lib/identity";
+import { characterStore, colorStore, nameStore, saveCharacter, saveColor, saveName } from "@/lib/identity";
 
 const MODES = ["bots", "local"];
 
@@ -21,13 +21,17 @@ export default function LocalBoard() {
   const storedCharacter = useSyncExternalStore(characterStore.subscribe, characterStore.get, characterStore.getServer);
   const [typedCharacter, setTypedCharacter] = useState<string | null>(null);
   const characterId = typedCharacter ?? storedCharacter; // el elegido, o el último usado en este navegador
-  const [player, setPlayer] = useState<{ name: string; characterId: string } | null>(null); // ya elegidos: recién ahí arranca el tablero
+  const storedColor = useSyncExternalStore(colorStore.subscribe, colorStore.get, colorStore.getServer);
+  const [typedColor, setTypedColor] = useState<string | null>(null);
+  const colorId = typedColor ?? storedColor; // el elegido, o el último usado en este navegador
+  const previewCss = SEAT_COLORS.find((c) => c.id === colorId)?.css ?? SEAT_COLORS[0].css;
+  const [player, setPlayer] = useState<{ name: string; characterId: string; colorId: string } | null>(null); // ya elegidos: recién ahí arranca el tablero
 
   useEffect(() => {
     if (!valid || (needsName && player === null)) return;
     const root = rootRef.current!;
     root.innerHTML = MARKUP; // DOM nuevo en cada montaje: evita listeners duplicados
-    const dispose = initBoard({ mode: modo, name: player?.name, characterId: player?.characterId });
+    const dispose = initBoard({ mode: modo, name: player?.name, characterId: player?.characterId, colorId: player?.colorId });
     return () => {
       dispose();
       root.innerHTML = "";
@@ -41,7 +45,8 @@ export default function LocalBoard() {
     if (!n) return;
     saveName(n);
     saveCharacter(characterId);
-    setPlayer({ name: n, characterId });
+    saveColor(colorId);
+    setPlayer({ name: n, characterId, colorId });
   }
 
   if (needsName && player === null) {
@@ -63,6 +68,24 @@ export default function LocalBoard() {
             />
           </label>
           <div className="char-block">
+            <p className="char-heading">Elegí tu color</p>
+            <div className="color-picker" role="radiogroup" aria-label="Tu color">
+              {SEAT_COLORS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={c.id === colorId}
+                  aria-label={c.id}
+                  title={c.id}
+                  className="color-opt"
+                  style={{ background: c.css }}
+                  onClick={() => setTypedColor(c.id)}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="char-block">
             <p className="char-heading">Elegí tu personaje</p>
             <div className="char-picker" role="radiogroup" aria-label="Tu personaje">
               {CHARACTERS.map((c) => (
@@ -75,7 +98,7 @@ export default function LocalBoard() {
                   title={c.label}
                   className="char-opt"
                   onClick={() => setTypedCharacter(c.id)}
-                  dangerouslySetInnerHTML={{ __html: characterSVG({ ...c, css: SEAT_COLORS[0].css }) }}
+                  dangerouslySetInnerHTML={{ __html: characterSVG({ ...c, css: previewCss }) }}
                 />
               ))}
             </div>

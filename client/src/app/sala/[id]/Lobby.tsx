@@ -6,7 +6,7 @@ import { MAX_SEATS, MIN_SEATS } from "@/server/room";
 import type { RoomView } from "@/server/view";
 
 // Colores de los puestos: los mismos que las piezas del tablero, en orden de mesa.
-export const SEAT_COLORS = ["#d94141", "#3b6fd6", "#f0932b", "#f1eee6"];
+export const SEAT_COLORS = ["#c81e1e", "#3b6fd6", "#f0932b", "#f1eee6"];
 
 export default function Lobby({
   view,

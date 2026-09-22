@@ -21,7 +21,7 @@
   <!-- casa -->
   <ellipse cx="256" cy="300" rx="84" ry="14" fill="#2d5a12" opacity=".28"/>
   <polygon points="190,296 322,296 322,216 190,216" fill="#f6f1e3"/>
-  <polygon points="176,222 256,142 336,222" fill="#d94141" stroke="#d94141" stroke-width="12" stroke-linejoin="round"/>
+  <polygon points="176,222 256,142 336,222" fill="#c81e1e" stroke="#c81e1e" stroke-width="12" stroke-linejoin="round"/>
   <rect x="240" y="244" width="32" height="52" rx="6" fill="#8a5a2b"/>
   <rect x="200" y="238" width="26" height="26" rx="4" fill="#8fd0ea"/>
   <rect x="286" y="238" width="26" height="26" rx="4" fill="#8fd0ea"/>

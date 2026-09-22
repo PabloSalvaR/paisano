@@ -12,6 +12,9 @@ export interface Identity {
 const roomKey = (roomId: string): string => `paisano:sala:${roomId.toUpperCase()}`;
 const NAME_KEY = 'paisano:nombre';
 const CHARACTER_KEY = 'paisano:personaje';
+const COLOR_KEY = 'paisano:color';
+/** El id de `SEAT_COLORS[0]` en `board.js` (rojo): mismo valor por defecto que ya tenía la persona antes de poder elegir. */
+export const DEFAULT_COLOR_ID = 'red';
 
 export function loadIdentity(roomId: string, storage: Pick<Storage, 'getItem'> | null = safeStorage()): Identity | null {
   try {
@@ -75,6 +78,23 @@ export function lastCharacter(storage: Pick<Storage, 'getItem'> | null = safeSto
   }
 }
 
+/** El color de asiento elegido (solo partida contra bots, por ahora): se guarda junto con el nombre y el personaje. */
+export function saveColor(id: string, storage: Pick<Storage, 'setItem'> | null = safeStorage()): void {
+  try {
+    storage?.setItem(COLOR_KEY, id);
+  } catch {
+    /* sin almacenamiento: se sigue jugando */
+  }
+}
+
+export function lastColor(storage: Pick<Storage, 'getItem'> | null = safeStorage()): string | null {
+  try {
+    return storage?.getItem(COLOR_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function safeStorage(): Storage | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;
@@ -95,4 +115,11 @@ export const characterStore = {
   subscribe: (): (() => void) => () => {},
   get: (): string => lastCharacter() ?? DEFAULT_CHARACTER_ID,
   getServer: (): string => DEFAULT_CHARACTER_ID,
+};
+
+/** Para React: el último color elegido (o `DEFAULT_COLOR_ID` la primera vez). Mismo patrón que `nameStore`. */
+export const colorStore = {
+  subscribe: (): (() => void) => () => {},
+  get: (): string => lastColor() ?? DEFAULT_COLOR_ID,
+  getServer: (): string => DEFAULT_COLOR_ID,
 };

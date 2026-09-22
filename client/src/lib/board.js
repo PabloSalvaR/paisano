@@ -137,13 +137,14 @@ export const MARKUP = `
 `;
 
 // Color y texto de cada asiento: fijos por posición (así las piezas del tablero se distinguen siempre igual). El asiento
-// 0 (rojo) es siempre el de la persona en la partida contra bots: el selector de personaje del menú lo usa para la
-// muestra, así se ve igual que en la mesa.
+// `id` es estable (no cambia si el orden del arreglo cambia): lo usa el selector de color de la partida contra bots
+// para guardar la elección en localStorage. Por defecto (sin elegir todavía) 0 (rojo) es el de la persona; el selector
+// de personaje del menú también usa ese color fijo para la muestra, así se ve igual que en la mesa.
 export var SEAT_COLORS = [
-  { css: '#d94141', text: '#ffffff' },
-  { css: '#3b6fd6', text: '#ffffff' },
-  { css: '#f0932b', text: '#2b1a05' },
-  { css: '#f1eee6', text: '#2b2216' }
+  { id: 'red', css: '#c81e1e', text: '#ffffff' },
+  { id: 'blue', css: '#3b6fd6', text: '#ffffff' },
+  { id: 'orange', css: '#f0932b', text: '#2b1a05' },
+  { id: 'white', css: '#f1eee6', text: '#2b2216' }
 ];
 
 /**
@@ -861,7 +862,7 @@ export function initBoard(opts) {
     };
     MAT.cowBody.vertexColors = true; // las manchas van en el color de los vértices del cuerpo
     MAT.token.emissive = new THREE.Color(0xf3e6c4); MAT.token.emissiveIntensity = 0.35;
-    var PLAYERS = [0xd94141, 0x3b6fd6, 0xf0932b, 0xf1eee6].map(function (h) {
+    var PLAYERS = [0xc81e1e, 0x3b6fd6, 0xf0932b, 0xf1eee6].map(function (h) {
       var m = M(h, 0.38, 0.05, { env: 0.6 }), hsl = { h: 0, s: 0, l: 0 };
       // color base guardado: applyLight() lo ajusta (intensidad y brillo propio) según día/atardecer/noche
       m.userData.base = m.color.clone(); m.emissive = new THREE.Color(); m.emissiveIntensity = 0;
@@ -904,6 +905,7 @@ export function initBoard(opts) {
     function makeRobber() {
       var g = new THREE.Group(); g.add(mesh(robberGeo, MAT.robber));
       var h = mesh(headGeo, MAT.robber); h.position.y = 0.31; g.add(h);
+      g.scale.setScalar(1.25); // un poco más grande que el resto de las piezas, para que se lo note en el tablero
       return g;
     }
     function segment(a, b, y, thick, height, mat) {
@@ -1514,6 +1516,14 @@ export function initBoard(opts) {
     if (online) opts.seats.forEach(function (st, i) { if (PLAYER_INFO[i]) PLAYER_INFO[i].name = st.name; }); // los nombres vienen de la sala
     if (!online && opts.mode === 'bots' && opts.name) { // contra bots: el primer asiento es la persona, con el nombre que puso
       PLAYER_INFO[0].name = opts.name;
+      // Color elegido: se intercambia con el que tenía ese color por posición, así siguen habiendo 4 colores distintos
+      // (el bot que lo tenía se queda con el rojo de seat 0; nombre y personaje de cada asiento no se mueven, solo el color).
+      var colorIx = SEAT_COLORS.findIndex(function (c) { return c.id === opts.colorId; });
+      if (colorIx > 0) {
+        var mineCss = PLAYER_INFO[0].css, mineText = PLAYER_INFO[0].text;
+        PLAYER_INFO[0].css = PLAYER_INFO[colorIx].css; PLAYER_INFO[0].text = PLAYER_INFO[colorIx].text;
+        PLAYER_INFO[colorIx].css = mineCss; PLAYER_INFO[colorIx].text = mineText;
+      }
       var chosen = characterById(opts.characterId);
       if (chosen) { PLAYER_INFO[0].skin = chosen.skin; PLAYER_INFO[0].hair = chosen.hair; PLAYER_INFO[0].hat = chosen.hat; PLAYER_INFO[0].mustache = !!chosen.mustache; PLAYER_INFO[0].headscarf = !!chosen.headscarf; }
       PLAYER_INFO.forEach(function (pl, i) { if (i > 0 && pl.name.toLowerCase() === opts.name.toLowerCase()) pl.name += ' (bot)'; }); // si coincide con un bot, se distinguen
@@ -1582,7 +1592,7 @@ export function initBoard(opts) {
     // Botón único de turno. Antes de tirar: dos dados. Después de tirar: flecha con el color de quien sigue.
     var btnTurn = document.getElementById('btnTurn'), btnDev = document.getElementById('btnDev'), btnTrade = document.getElementById('btnTrade'), btnCards = document.getElementById('btnCards'), cardsN = document.getElementById('cardsN');
     function dieSVG(x, y, rot, pips) {
-      return '<g transform="translate(' + x + ' ' + y + ') rotate(' + rot + ' 13 13)"><rect width="26" height="26" rx="6" fill="#d94141" stroke="#7a1f1f" stroke-width="2"/>' +
+      return '<g transform="translate(' + x + ' ' + y + ') rotate(' + rot + ' 13 13)"><rect width="26" height="26" rx="6" fill="#c81e1e" stroke="#6e1414" stroke-width="2"/>' +
         pips.map(function (i) { return '<circle cx="' + (6.5 + (i % 3) * 6.5) + '" cy="' + (6.5 + Math.floor(i / 3) * 6.5) + '" r="2.2" fill="#fff"/>'; }).join('') + '</g>';
     }
     var TURN_DICE = '<svg viewBox="0 0 64 48" aria-hidden="true">' + dieSVG(3, 14, -10, [0, 4, 8]) + dieSVG(35, 7, 9, [0, 2, 4, 6, 8]) + '</svg>';
@@ -2455,7 +2465,7 @@ export function initBoard(opts) {
     var openingEl = document.getElementById('opening'), openingTimers = [];
     openingOn = false; // mientras dura el sorteo no se marca de quién es el turno (sería adelantar el resultado)
     function miniDie(v) {
-      return '<svg class="odie" viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="6" fill="#d94141" stroke="#7a1f1f" stroke-width="2"/>' +
+      return '<svg class="odie" viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="24" height="24" rx="6" fill="#c81e1e" stroke="#6e1414" stroke-width="2"/>' +
         DIE_PIPS[v].map(function (i) { return '<circle cx="' + (6.5 + (i % 3) * 6.5) + '" cy="' + (6.5 + Math.floor(i / 3) * 6.5) + '" r="2.2" fill="#fff"/>'; }).join('') + '</svg>';
     }
     function openingRows(round, shownN, winners, rollIdx) {
