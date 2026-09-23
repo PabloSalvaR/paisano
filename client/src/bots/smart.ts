@@ -126,8 +126,8 @@ function best<T>(xs: readonly T[], score: (x: T) => number, rng: Rng): T {
   return top;
 }
 
-/** Las compras que le interesan, de más a menos valiosa: estancia (si tiene una casa para subir), casa y carta de desarrollo. */
-function goalsFor(s: GameState, me: PlayerId): Cost[] {
+/** Las compras que le interesan, de más a menos valiosa: estancia (si tiene una casa para subir), casa y carta de desarrollo (salvo que esté juntando para las otras). */
+function goalsFor(s: GameState, me: PlayerId, hand: Hand): Cost[] {
   const { costs, maxPieces } = s.config;
   let settlements = 0;
   let cities = 0;
@@ -139,8 +139,42 @@ function goalsFor(s: GameState, me: PlayerId): Cost[] {
   const goals: Cost[] = [];
   if (cities < maxPieces.cities && settlements > 0) goals.push(costs.city);
   if (settlements < maxPieces.settlements) goals.push(costs.settlement);
-  goals.push(costs.developmentCard);
+  if (!savingForBuilding(s, me, hand)) goals.push(costs.developmentCard); // si está juntando, no comercia para la carta
   return goals;
+}
+
+const SAVE_WITHIN = 2; // si a la estancia o a la casa le faltan hasta estas cartas, junta para ella en vez de comprar una carta
+const SAVE_MAX_HAND = 7; // con más cartas que esto gasta igual: con un 7 perdería la mitad
+
+/** Las construcciones para las que tiene sentido juntar: estancia (si tiene una casa para subir) y casa (si ya llega a un lugar libre). */
+function buildingTargets(s: GameState, me: PlayerId): Cost[] {
+  const { costs, maxPieces } = s.config;
+  let settlements = 0;
+  let cities = 0;
+  for (const b of s.vertexBuildings) {
+    if (b?.player !== me) continue;
+    if (b.city) cities++;
+    else settlements++;
+  }
+  const targets: Cost[] = [];
+  if (cities < maxPieces.cities && settlements > 0) targets.push(costs.city);
+  if (settlements < maxPieces.settlements && hasReachableSpot(s, me)) targets.push(costs.settlement);
+  return targets;
+}
+
+/**
+ * Si conviene guardar en vez de comprar una carta de desarrollo: la carta usa vaca, maíz y piedra, lo mismo que piden la
+ * estancia y la casa, así que comprarla apenas alcanzaba le comía lo que venía juntando. Guarda si le faltan pocas cartas
+ * para una de las dos y la carta lo alejaría de ella, salvo con la mano llena (con un 7 perdería la mitad).
+ */
+function savingForBuilding(s: GameState, me: PlayerId, hand: Hand): boolean {
+  if (handTotal(hand) > SAVE_MAX_HAND) return false;
+  const after = { ...hand };
+  for (const r of RESOURCES) after[r] -= s.config.costs.developmentCard[r] ?? 0;
+  return buildingTargets(s, me).some((goal) => {
+    const d = distance(hand, [goal]);
+    return d <= SAVE_WITHIN && distance(after, [goal]) > d;
+  });
 }
 
 /** Cuántas cartas le faltan a esta mano para su compra más cercana. */
@@ -186,7 +220,7 @@ function answerTrade(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAct
     gets += offer.give[r] ?? 0;
     gives += offer.get[r] ?? 0;
   }
-  const goals = goalsFor(s, me);
+  const goals = goalsFor(s, me, hand);
   const before = distance(hand, goals);
   const now = distance(after, goals);
   return now < before || (now === before && gets > gives);
@@ -207,7 +241,7 @@ const TRADE_EAGERNESS: Record<1 | 2, number> = { 1: 0.65, 2: 0.35 }; // al princ
 function proposeCommand(s: GameState, me: PlayerId, hand: Hand, rng: Rng): Command | null {
   const k = s.tradeOffers ?? 0;
   if (k >= BOT_MAX_OFFERS) return null;
-  const shortest = Math.min(...goalsFor(s, me).map((goal) => {
+  const shortest = Math.min(...goalsFor(s, me, hand).map((goal) => {
     const missing = missingFor(hand, goal);
     return missing.length ? missing.reduce((n, r) => n + (goal[r] ?? 0) - hand[r], 0) : Infinity;
   }));
@@ -227,7 +261,7 @@ function proposeCommand(s: GameState, me: PlayerId, hand: Hand, rng: Rng): Comma
     seen.add(key);
     candidates.push({ type: 'proposeTrade', player: me, give: { [give]: amount }, get: { [get]: 1 }, ...(to ? { to } : {}) });
   };
-  for (const goal of goalsFor(s, me)) {
+  for (const goal of goalsFor(s, me, hand)) {
     const missing = missingFor(hand, goal);
     const short = missing.reduce((n, r) => n + (goal[r] ?? 0) - hand[r], 0);
     if (!missing.length || short > 2) continue;
@@ -243,7 +277,7 @@ function proposeCommand(s: GameState, me: PlayerId, hand: Hand, rng: Rng): Comma
 
 /** Comercia con el banco solo si con ese único cambio queda pagable una construcción (estancia, casa o carta). */
 function tradeForGoal(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAction, { type: 'bankTrade' }>): Command | null {
-  const goals = goalsFor(s, me);
+  const goals = goalsFor(s, me, hand);
   for (const goal of goals) {
     const missing = missingFor(hand, goal);
     if (missing.length !== 1 || (goal[missing[0]] ?? 0) - hand[missing[0]] !== 1) continue; // solo si UN cambio la completa
@@ -252,6 +286,29 @@ function tradeForGoal(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAc
         return { type: 'bankTrade', player: me, give: t.give, get: missing[0] };
       }
     }
+  }
+  return null;
+}
+
+/**
+ * Cambios con el banco en varios pasos para subir una estancia o poner una casa (con un lugar al que ya llega): si con lo que
+ * le sobra alcanza para todos los cambios que faltan, hace el primero (entrega lo que más le sobra); en las jugadas
+ * siguientes sigue. Sin esto, con la mano llena no sabía en qué gastar y compraba cartas de desarrollo (13 de cada 18 compras
+ * eran con más de 7 cartas) y el mazo se agotaba en el 70 % de las partidas.
+ */
+function tradeTowardBuilding(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAction, { type: 'bankTrade' }>): Command | null {
+  const targets = buildingTargets(s, me);
+  for (const goal of targets) {
+    const missing = missingFor(hand, goal);
+    if (!missing.length) continue;
+    const short = missing.reduce((n, r) => n + (goal[r] ?? 0) - hand[r], 0);
+    const rate = (r: Resource) => a.trades.find((t) => t.give === r)?.rate ?? Infinity;
+    const spare = RESOURCES.filter((r) => !missing.includes(r) && hand[r] - (goal[r] ?? 0) >= rate(r));
+    const capacity = spare.reduce((n, r) => n + Math.floor((hand[r] - (goal[r] ?? 0)) / rate(r)), 0);
+    if (capacity < short) continue;
+    const give = spare.reduce((x, y) => (hand[y] - (goal[y] ?? 0) > hand[x] - (goal[x] ?? 0) ? y : x));
+    const get = missing[0];
+    if (a.trades.some((t) => t.give === give && t.get.includes(get))) return { type: 'bankTrade', player: me, give, get };
   }
   return null;
 }
@@ -315,7 +372,12 @@ export const smartBot: Bot = (input: BotInput, rng: Rng): Command => {
   if (city) return { type: 'buildCity', player: me, vertex: bestVertex(city.vertices) };
   const settle = has('buildSettlement');
   if (settle) return { type: 'buildSettlement', player: me, vertex: bestVertex(settle.vertices) };
-  if (has('buyDevCard')) return { type: 'buyDevCard', player: me };
+  const btb = has('bankTrade');
+  if (btb) {
+    const trade = tradeTowardBuilding(s, me, hand, btb);
+    if (trade) return trade;
+  }
+  if (has('buyDevCard') && !savingForBuilding(s, me, hand)) return { type: 'buyDevCard', player: me };
   const road = has('buildRoad');
   if (road) {
     // si ya llega a un lugar para una casa, guarda madera y ladrillo para ella: solo gasta en un camino que abra otro lugar

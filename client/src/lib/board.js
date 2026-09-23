@@ -1929,6 +1929,10 @@ export function initBoard(opts) {
       // Cerrada la oferta vale lo que se vio abierta (la mano ya cambió con el cambio).
       var can = t.done ? offerCan : mine ? mine.canAccept : HAND_KINDS.every(function (k) { return (myHand[k] || 0) >= (t.get[k] || 0); });
       offerCan = can;
+      // Si no tenés lo que te piden, el ✕ sale en el acto, sin esperar a que se reproduzcan las respuestas de los demás: el
+      // motor ya te deja responder (los bots consultados responden antes que las personas) y la respuesta va a la cola.
+      var early = asked && !can && !mine && !t.done && playing && !sending && t.responses.some(function (r) { return r.player === me && r.status === 'pending'; });
+      var answer = !!mine || early;
       var LABEL = { pending: 'pensando', accepted: 'aceptó', rejected: 'rechazó' };
       var dots = '<div class="dots">' + t.responses.map(function (r) {
         var p = r.player, pick = !!t.done && t.done.with === p, tap = !!conf && conf.with.indexOf(p) >= 0;
@@ -1945,7 +1949,7 @@ export function initBoard(opts) {
       else dialogEl.innerHTML = (asked ? '<div class="head">' + from + '<b class="who"></b></div>' : '') +
         '<div class="swap">' + outGive + cardChips(t.give) + '</div><div class="swap">' + outGet + cardChips(t.get) + '</div>' + dots +
         (asked && !can ? '<div class="sum">No tenés lo que te piden</div>' : '') +
-        (asked ? '<div class="yesno"' + (mine ? '' : ' style="visibility:hidden"') + '><button type="button" class="no" data-reject aria-label="Rechazar" title="Rechazar"' + (mine ? '' : ' disabled') + '>✕</button>' +
+        (asked ? '<div class="yesno"' + (answer ? '' : ' style="visibility:hidden"') + '><button type="button" class="no" data-reject' + (early ? ' data-early' : '') + ' aria-label="Rechazar" title="Rechazar"' + (answer ? '' : ' disabled') + '>✕</button>' +
           (can ? '<button type="button" class="yes" data-accept aria-label="Aceptar" title="Aceptar"' + (mine ? '' : ' disabled') + '>✓</button>' : '') + '</div>' : '') +
         (own ? '<button type="button" class="primary" data-cancel-offer' + (live ? '' : ' disabled style="visibility:hidden"') + '>Cancelar oferta</button>' : '');
       Array.prototype.forEach.call(dialogEl.querySelectorAll('[data-p]'), function (el) { // los nombres van por DOM (los escribe el jugador)
@@ -1957,7 +1961,14 @@ export function initBoard(opts) {
       dialogEl.hidden = false;
     }
     dialogEl.addEventListener('click', function (e) {
-      var b = e.target.closest('button'); if (!b || b.disabled || busy) return;
+      var b = e.target.closest('button'); if (!b || b.disabled || (busy && !b.hasAttribute('data-early'))) return;
+      if (b.hasAttribute('data-early')) { // rechazo durante la reproducción: tu redondel pasa a ✕ ya; lo que sigue se reproduce después
+        if (offerShown) offerShown.responses.forEach(function (r) { if (r.player === me) r.status = 'rejected'; });
+        offerFresh = reduced() ? -1 : me;
+        dispatch({ type: 'respondTrade', player: me, accept: false });
+        renderDialog();
+        return;
+      }
       if (pendingCmd) {
         var cmd = pendingCmd; pendingCmd = null;
         if (b.hasAttribute('data-ok')) confirmDrop(cmd); else renderDialog();
@@ -2044,6 +2055,11 @@ export function initBoard(opts) {
     }
     // Respuesta de la sesión a un comando: la pantalla se pone al día (con animaciones) recién acá, no antes.
     function settle(cmd, r) {
+      if (playing) { // respuesta a un rechazo temprano (se mandó durante una reproducción): sus eventos van a la cola
+        if (r.ok) queue.push(r.events); else showStatus(r.error.message, true);
+        if (resumeReplay) { var go = resumeReplay; resumeReplay = null; go(); }
+        return;
+      }
       if (!r.ok) { showStatus(r.error.message, true); renderDialog(); return; }
       tradeUI = null; cardsUI = null; buildMode = null;
       if (cmd.type === 'buyDevCard') audio.card(); // la carta propia suena al comprarla (las de otros, al reproducir el evento)
@@ -2069,7 +2085,7 @@ export function initBoard(opts) {
     var BOT_GAP_MS = 2000; // «piensa» este rato antes de cada acción de otro, para que se pueda seguir lo que hace
     function reduced() { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
     function sumOf(o) { var n = 0; for (var k in o) n += o[k]; return n; }
-    var playing = false, queue = []; // queue: tandas de eventos de otros que llegaron mientras se reproducía otra
+    var playing = false, queue = [], resumeReplay = null; // queue: tandas de eventos de otros que llegaron mientras se reproducía otra
     function playEvents(events) {
       var animate = !reduced(), i = 0, note = null;
       playing = true; offerShown = game.trade && copyOffer(game.trade);
@@ -2083,6 +2099,7 @@ export function initBoard(opts) {
       function next() {
         if (i >= events.length) {
           if (queue.length) { events = queue.shift(); i = 0; return next(); } // sigue con lo que llegó mientras tanto
+          if (sending) { resumeReplay = next; return; } // un rechazo temprano todavía sin respuesta: se la espera para seguir
           // el aviso del robo sobrevive al refresco final, pero solo si sigue siendo lo último que se mostró: si después pasó
           // otra cosa (sobre todo el cambio de turno) no se repone, para que no quede colgado cuando te toca tirar
           var keep = note && note.seq === statusSeq;
@@ -2189,19 +2206,24 @@ export function initBoard(opts) {
             });
           case 'MonopolyPlayed':
             return gap(p, function () {
-              var total = 0, css = PLAYER_INFO[p].css;
+              var total = 0, fly = 0;
               devCounts[p] = Math.max(0, devCounts[p] - 1);
-              ev.taken.forEach(function (t) {
-                total += t.amount; counts[t.player] -= t.amount;
-                if (t.player === VIEWER) myHand[ev.resource] -= t.amount;
-                if (animate) floatText(seatsEl.children[t.player], '−' + t.amount, PLAYER_INFO[t.player].css);
+              // lo que se lleva vuela desde cada uno que lo tenía (si sos vos, desde tu banner) hasta quien jugó la carta, como en el
+              // robo; sale cuando la carta ya está a la vista en el centro
+              var jobs = ev.taken.filter(function (t) { return t.amount > 0; }).map(function (t) {
+                total += t.amount;
+                return { from: t.player, p: p, k: ev.resource, n: t.amount, wait: MONOPOLY_FLY_WAIT };
               });
-              counts[p] += total; if (p === VIEWER) myHand[ev.resource] += total;
-              renderSeats(); renderHand();
+              renderSeats();
               if (foreign(p)) audio.card();
-              if (animate) { pop(seatsEl.children[p], css); cardPlayed(p, 'monopoly', ev.resource); if (total) floatText(seatsEl.children[p], '+' + total, css); }
+              if (animate) { pop(seatsEl.children[p], PLAYER_INFO[p].css); cardPlayed(p, 'monopoly', ev.resource); fly = MONOPOLY_FLY_WAIT + flyGains(jobs, true); }
+              else {
+                jobs.forEach(function (j) { counts[j.from] -= j.n; if (j.from === VIEWER) myHand[ev.resource] -= j.n; });
+                counts[p] += total; if (p === VIEWER) myHand[ev.resource] += total;
+                renderSeats(); renderHand();
+              }
               showStatus((p === VIEWER ? 'Jugaste Acopio' : PLAYER_INFO[p].name + ' jugó Acopio') + ': ' + TERRAINS[ev.resource].res.toLowerCase() + (total ? ' (+' + total + ')' : ' (nadie tenía)'), false, true, p);
-              pause(cont, foreign(p) ? PLAYED_MS : 1100);
+              pause(cont, Math.max(foreign(p) ? PLAYED_MS : 1100, fly));
             });
           case 'YearOfPlentyPlayed':
             return gap(p, function () {
@@ -2390,14 +2412,14 @@ export function initBoard(opts) {
           pop(target, glow); floatText(target, '+' + amount, mine ? card.style.getPropertyValue('--c') : pl.css);
         };
         if (!animate) { gain(); return; }
-        var stolen = j.from !== undefined, delay = stolen ? 250 : 450 + n * 260, sx, sy;
-        if (stolen) { // robo: sale de la víctima, que pierde la carta en el momento de partir; si sos vos, de la tarjeta del recurso en el banner
+        var stolen = j.from !== undefined, delay = (stolen ? 250 : 450) + n * 260 + (j.wait || 0), sx, sy;
+        if (stolen) { // robo o Acopio: sale de la víctima, que pierde las cartas en el momento de partir; si sos vos, de la tarjeta del recurso en el banner
           var fs = seatsEl.children[j.from], robbedMe = j.from === VIEWER, fr = (robbedMe ? card.querySelector('svg') : fs.querySelector('.av')).getBoundingClientRect();
           sx = fr.left - sr.left + fr.width / 2; sy = fr.top - sr.top + fr.height / 2;
           setTimeout(function () {
-            counts[j.from] -= 1; fs.querySelector('.cnt b').textContent = handTotal(j.from);
-            if (robbedMe) { myHand[k] -= 1; card.querySelector('b').textContent = myHand[k]; pop(card, card.style.getPropertyValue('--c')); floatText(card, '−1', card.style.getPropertyValue('--c')); }
-            else pop(fs, PLAYER_INFO[j.from].css);
+            counts[j.from] -= amount; fs.querySelector('.cnt b').textContent = handTotal(j.from);
+            if (robbedMe) { myHand[k] -= amount; card.querySelector('b').textContent = myHand[k]; pop(card, card.style.getPropertyValue('--c')); floatText(card, '−' + amount, card.style.getPropertyValue('--c')); }
+            else { pop(fs, PLAYER_INFO[j.from].css); if (j.wait !== undefined) floatText(fs, '−' + amount, PLAYER_INFO[j.from].css); }
           }, delay);
         } else {
           var v = new THREE.Vector3(j.t.x, TILE_TOP + 0.35, j.t.z).project(camera); sx = (v.x * 0.5 + 0.5) * w; sy = (0.5 - v.y * 0.5) * h;
@@ -2421,6 +2443,7 @@ export function initBoard(opts) {
     // Tramos (ms): aparece, queda quieta en el centro (tiene que alcanzar para leerla), baja al tablero y se desvanece.
     var PLAYED_IN = 270, PLAYED_HOLD = 3000, PLAYED_DOWN = 570, PLAYED_FADE = 210;
     var PLAYED_MS = PLAYED_IN + PLAYED_HOLD + PLAYED_DOWN + PLAYED_FADE;
+    var MONOPOLY_FLY_WAIT = PLAYED_IN + 500; // las cartas del Acopio salen volando cuando la carta ya se asentó en el centro
     // `res` (opcional): el recurso elegido (Acopio), en una medalla sobre la esquina de la carta, para que se sepa qué se llevó sin leer el estado.
     function cardPlayed(p, kind, res) {
       var w = stage.clientWidth, h = stage.clientHeight;

@@ -220,6 +220,56 @@ describe('bot con criterio', () => {
     expect(leaderAccepted).toBeLessThanOrEqual(toLeader * 0.2);
   }, 60_000);
 
+  it('junta para la estancia: no gasta en una carta de desarrollo el maíz y la piedra que le faltan poco para subirla', () => {
+    const s = mainPhaseGame(4, NAMES.slice(0, 3));
+    setHand(s, 0, { pasture: 1, fields: 2, mountains: 2 }); // le alcanza para la carta y le falta 1 piedra para la estancia
+    expect(legalActions(s, 0).some((a) => a.type === 'buyDevCard')).toBe(true);
+    for (let i = 0; i < 30; i++) {
+      const cmd = smartBot({ me: 0, legal: legalActions(s, 0), hand: s.players[0].hand, state: s }, mulberry32(i));
+      expect(cmd.type).not.toBe('buyDevCard');
+    }
+  });
+
+  it('con más de 7 cartas compra la carta igual: con un 7 perdería la mitad de lo que junta', () => {
+    const s = mainPhaseGame(4, NAMES.slice(0, 3));
+    setHand(s, 0, { pasture: 5, fields: 1, mountains: 2 }); // 8 cartas, a 2 de la estancia
+    const cmd = smartBot({ me: 0, legal: legalActions(s, 0), hand: s.players[0].hand, state: s }, mulberry32(1));
+    expect(cmd.type).toBe('buyDevCard');
+  });
+
+  it('con la mano llena cambia con el banco en varios pasos para subir la estancia, en vez de comprar una carta', () => {
+    const s = mainPhaseGame(4, NAMES.slice(0, 3));
+    setHand(s, 0, { pasture: 8, fields: 2, mountains: 1 }); // le faltan 2 piedras: con 8 vacas alcanza para dos cambios
+    let hand = s.players[0].hand;
+    for (let step = 0; step < 2; step++) {
+      const cmd = smartBot({ me: 0, legal: legalActions(s, 0), hand, state: s }, mulberry32(step));
+      expect(cmd).toMatchObject({ type: 'bankTrade', give: 'pasture', get: 'mountains' });
+      const r = applyCommand(s, cmd);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      Object.assign(s, r.state);
+      hand = s.players[0].hand;
+    }
+    const cmd = smartBot({ me: 0, legal: legalActions(s, 0), hand, state: s }, mulberry32(9));
+    expect(cmd.type).toBe('buildCity');
+  });
+
+  it('entre bots se compran bastante menos cartas de desarrollo y se suben más estancias (antes se agotaba el mazo)', () => {
+    let bought = 0;
+    let cities = 0;
+    let emptied = 0;
+    const games = 40;
+    for (let seed = 1; seed <= games; seed++) {
+      const s = play(seed, [true, true, true, true]);
+      bought += s.config.devDeck ? Object.values(s.config.devDeck).reduce((a, b) => a + b, 0) - s.devDeck.length : 0;
+      cities += s.vertexBuildings.filter((b) => b?.city).length;
+      if (!s.devDeck.length) emptied++;
+    }
+    expect(bought / games).toBeLessThan(18); // antes, ~23 de 25 por partida
+    expect(emptied).toBeLessThan(games * 0.3); // antes se agotaba en el 70 % de las partidas
+    expect(cities / games / 4).toBeGreaterThan(1.6); // antes, ~1,2 estancias por jugador
+  }, 60_000);
+
   it('las fichas 6 y 8 puntúan más que las 2 y 12', () => {
     expect(pips(6)).toBe(5);
     expect(pips(8)).toBe(5);
