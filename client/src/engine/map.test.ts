@@ -104,6 +104,37 @@ describe('mapa base: puertos', () => {
   });
 });
 
+describe('mapa base: tipos de puerto', () => {
+  // la secuencia del tablero de referencia, en sentido horario: parado en el primer 3:1 y mirando al centro, el maíz queda a la izquierda
+  const SEQUENCE = [null, 'fields', 'mountains', null, 'pasture', null, null, 'hills', 'forest'];
+  const kinds = (m: ReturnType<typeof generateMap>) => m.ports.map((p) => p.resource); // en el orden de la costa (horario en pantalla)
+  const threeGeneric = (k: (string | null)[]) => k.some((_, i) => [0, 1, 2].every((d) => k[(i + d) % k.length] === null));
+
+  it('en serie (spiral): la secuencia del tablero, arrancando en uno de los 3 lugares equivalentes (el dibujo girado 120°)', () => {
+    const starts = new Set<number>();
+    for (const s of SEEDS.slice(0, 90)) {
+      const k = kinds(generateMap(topo, mulberry32(s), 'spiral'));
+      const start = [0, 3, 6].find((st) => k.every((x, j) => x === SEQUENCE[(j - st + 9) % 9]));
+      expect(start).toBeDefined();
+      starts.add(start!);
+    }
+    expect(starts.size).toBe(3);
+  });
+
+  it('en Caos (random): tipos al azar, pero nunca tres 3:1 seguidos (dos juntos sí, como en el tablero de referencia)', () => {
+    let pairs = 0;
+    const seen = new Set<string>();
+    for (const m of maps) {
+      const k = kinds(m);
+      expect(threeGeneric(k)).toBe(false);
+      if (k.some((x, i) => x === null && k[(i + 1) % 9] === null)) pairs++;
+      seen.add(JSON.stringify(k));
+    }
+    expect(pairs).toBeGreaterThan(0);
+    expect(seen.size).toBeGreaterThan(100); // varían de verdad
+  });
+});
+
 describe('mapa base: determinismo', () => {
   it('la misma semilla da el mismo mapa y semillas distintas dan mapas distintos', () => {
     expect(generateMap(topo, mulberry32(123))).toEqual(generateMap(topo, mulberry32(123)));

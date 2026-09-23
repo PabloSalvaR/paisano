@@ -556,6 +556,8 @@ body{
 .rules-list summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:10px}
 .rules-list ul{list-style:none;display:flex;flex-direction:column;gap:6px;padding:0 14px 13px}
 .rules-list li{font-size:.9rem;line-height:1.4;color:var(--text)}
+.rules-list ul.sub{gap:2px;padding:4px 0 0 4px} /* sublista: un renglón por cosa, con un puntito */
+.rules-list ul.sub li::before{content:'•';color:var(--muted);margin-right:7px}
 .rules-list .term{color:var(--accent);font-weight:800}
 
 /* Sorteo de quién abre: una fila por jugador con sus dos dados; gana (se ilumina) el de mayor total */

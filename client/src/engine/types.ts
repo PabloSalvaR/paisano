@@ -22,7 +22,7 @@ export interface GameConfig {
   longestRoadMin: number; // largo mínimo para el reconocimiento de la ruta más larga
   largestArmyMin: number; // caballeros jugados mínimos para el de la milicia más grande
   awardPoints: number; // puntos de cada reconocimiento
-  numberPlacement: NumberPlacement; // fichas de número: 'spiral' (en serie, orden de las letras del juego original) o 'random' (caos: al azar sin vecinos iguales ni 6/8 juntos)
+  numberPlacement: NumberPlacement; // números y tipos de puerto: 'spiral' (en serie: espiral por letras y la secuencia de puertos del tablero de referencia) o 'random' (caos: al azar, sin vecinos iguales ni 6/8 juntos, y nunca tres puertos 3:1 seguidos)
   firstPlayer: PlayerId | null; // quién abre la colocación y la partida; null = se sortea con la semilla
 }
 

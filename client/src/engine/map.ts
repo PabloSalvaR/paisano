@@ -23,6 +23,12 @@ const NUMBER_TOKENS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12
 /** Posiciones (en la costa ordenada por ángulo) de los 9 puertos: separados por 3, 3 y 4 aristas de forma cíclica. */
 const PORT_SLOTS = [0, 3, 6, 10, 13, 16, 20, 23, 26];
 
+/**
+ * Tipos de puerto del tablero de referencia, en el orden de `PORT_SLOTS` (sentido horario en pantalla: parado en el primer
+ * 3:1 y mirando al centro, el maíz queda a la izquierda). null = genérico 3:1. Tiene dos 3:1 juntos, pero nunca tres.
+ */
+const PORT_SEQUENCE: (Resource | null)[] = [null, 'fields', 'mountains', null, 'pasture', null, null, 'hills', 'forest'];
+
 export interface Port {
   edge: number; // arista de costa donde está el puerto
   vertices: [number, number]; // los dos vértices que lo usan
@@ -51,7 +57,7 @@ export function generateMap(topo: Topology, rng: Rng, placement: NumberPlacement
   if (pool.length !== topo.tiles.length) throw new Error('generateMap: solo soporta el tablero base de 19 casillas');
   const terrains = shuffled(pool, rng);
   const numbers = placement === 'spiral' ? spiralNumbers(topo, terrains, Math.floor(rng() * 6)) : placeNumbers(topo, terrains, rng);
-  return { terrains, numbers, ports: placePorts(topo, rng), desert: terrains.indexOf('desert') };
+  return { terrains, numbers, ports: placePorts(topo, rng, placement), desert: terrains.indexOf('desert') };
 }
 
 const ringOf = (t: { q: number; r: number }) => Math.max(Math.abs(t.q), Math.abs(t.r), Math.abs(t.q + t.r));
@@ -106,7 +112,13 @@ function conflict(a: number, b: number): boolean {
   return a === b || (red(a) && red(b));
 }
 
-function placePorts(topo: Topology, rng: Rng): Port[] {
+/**
+ * Los 9 puertos van siempre en los mismos lugares de la costa; lo que cambia es el tipo de cada uno. En serie (`'spiral'`), la
+ * secuencia del tablero de referencia (`PORT_SEQUENCE`), arrancando en uno de los 3 lugares equivalentes al azar (como el
+ * separado 3-3-4 se repite cada 3 puertos, es el mismo dibujo girado 120°). En Caos (`'random'`), al azar, pero nunca tres 3:1
+ * seguidos (con puro azar pasaba en ~36 % de los mapas: una costa entera de puertos genéricos).
+ */
+function placePorts(topo: Topology, rng: Rng, placement: NumberPlacement): Port[] {
   // aristas de costa ordenadas por el ángulo de su punto medio alrededor del centro
   const coast = topo.edges
     .filter((e) => e.tiles.length === 1)
@@ -116,7 +128,15 @@ function placePorts(topo: Topology, rng: Rng): Port[] {
       return { e, angle: Math.atan2((a.z + b.z) / 2, (a.x + b.x) / 2) };
     })
     .sort((p, q) => p.angle - q.angle);
-  const kinds = shuffled<Resource | null>([null, null, null, null, ...RESOURCES], rng);
+  let kinds: (Resource | null)[];
+  if (placement === 'spiral') {
+    const start = 3 * Math.floor(rng() * 3);
+    kinds = PORT_SLOTS.map((_, j) => PORT_SEQUENCE[(j - start + PORT_SEQUENCE.length) % PORT_SEQUENCE.length]);
+  } else {
+    const threeGeneric = (k: (Resource | null)[]) => k.some((_, i) => [0, 1, 2].every((d) => k[(i + d) % k.length] === null));
+    do kinds = shuffled<Resource | null>([null, null, null, null, ...RESOURCES], rng);
+    while (threeGeneric(kinds));
+  }
   return PORT_SLOTS.map((slot, i) => {
     const { e } = coast[slot % coast.length];
     return { edge: e.id, vertices: [e.a, e.b], tile: e.tiles[0], resource: kinds[i] };

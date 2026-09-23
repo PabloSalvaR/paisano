@@ -126,9 +126,9 @@ export default function LocalBoard() {
               ))}
             </div>
           </div>
-          <label className="chaos-toggle" title="Apagado, los números van en serie como en el juego original. Prendido, se reparten al azar.">
+          <label className="chaos-toggle" title="Apagado, los números y los puertos van en el orden de siempre. Prendido, se reparten al azar.">
             <input type="checkbox" role="switch" checked={chaos} onChange={(e) => setChaos(e.target.checked)} />
-            Caos: números al azar
+            Caos: números y puertos al azar
           </label>
           <button type="button" className="room-btn primary" disabled={!name.trim()} onClick={start}>
             Jugar
