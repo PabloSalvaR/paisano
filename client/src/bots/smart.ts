@@ -3,7 +3,7 @@
 // completar una compra, mueve el ladrón contra el que va ganando y descarta lo que más le sobra.
 // No es un jugador experto: la idea es que una partida contra bots tenga algo de pelea.
 
-import { RESOURCES, canAfford, canSettleAt, handTotal, publicVictoryPoints, topology } from '../engine';
+import { RESOURCES, canAfford, canSettleAt, handTotal, longestRoad, publicVictoryPoints, topology } from '../engine';
 import type { Command, Cost, GameState, Hand, LegalAction, PlayerId, Resource, Rng } from '../engine';
 import { commandFor, randomBot, type Bot, type BotInput } from './random';
 
@@ -41,17 +41,58 @@ export function vertexValue(s: GameState, v: number, mine: Set<Resource>): numbe
   return value;
 }
 
-/** Cuánto vale un camino: lo bueno que es el lugar donde dejaría construir (el extremo libre y, algo menos, sus vecinos). */
-function roadValue(s: GameState, edge: number, me: PlayerId, mine: Set<Resource>): number {
+/** Si el vértice ya es parte de la red del jugador (tiene un edificio suyo o lo toca un camino suyo). */
+function onNetwork(s: GameState, v: number, me: PlayerId): boolean {
+  return s.vertexBuildings[v]?.player === me || topology().vertices[v].edges.some((e) => s.edgeRoads[e] === me);
+}
+
+/** Si ya tiene un lugar libre para una casa al que llega con sus caminos (entonces conviene guardar para la casa). */
+function hasReachableSpot(s: GameState, me: PlayerId): boolean {
+  return topology().vertices.some((v) => canSettleAt(s, v.id) && v.edges.some((e) => s.edgeRoads[e] === me));
+}
+
+/**
+ * Puntuador de caminos. Suma dos cosas:
+ * - `spot`: lo bueno que es el lugar para una casa al que lleva (el extremo nuevo y, algo menos, sus vecinos).
+ * - `stretch`: cuánto alarga su ruta continua más larga, más un poco si el extremo nuevo queda abierto para seguir. Así
+ *   prefiere estirar la punta de la ruta hacia afuera, que es lo que suma para la Ruta más larga.
+ * Un camino con los dos extremos ya en su red (cierra un anillo o rellena un hueco) y que no alarga la ruta vale 0: antes, sin
+ * un lugar para casa a la vista, todos valían lo mismo y el bot terminaba dando vueltas en círculo alrededor de sus casas.
+ */
+function roadScorer(s: GameState, me: PlayerId, mine: Set<Resource>) {
   const topo = topology();
-  const e = topo.edges[edge];
-  let best = 0;
-  for (const v of [e.a, e.b]) {
-    if (s.vertexBuildings[v]) continue; // el extremo «de avanzada» es el que no tiene edificio
-    if (canSettleAt(s, v)) best = Math.max(best, vertexValue(s, v, mine));
-    else for (const n of topo.vertices[v].neighbors) if (canSettleAt(s, n)) best = Math.max(best, vertexValue(s, n, mine) * 0.5);
-  }
-  return best;
+  const base = longestRoad(s, me);
+  // si otro ya tiene una ruta mucho más larga, pelear el reconocimiento no vale la pena: estirar pesa menos
+  const rival = Math.max(0, ...s.players.map((_, p) => (p === me ? 0 : longestRoad(s, p))));
+  const stretchWeight = rival - base > 3 ? 0.5 : 2;
+  const parts = (edge: number) => {
+    const e = topo.edges[edge];
+    const fresh = [e.a, e.b].filter((v) => !onNetwork(s, v, me)); // el extremo «de avanzada»: el que todavía no es de su red
+    let spot = 0;
+    for (const v of fresh) {
+      if (canSettleAt(s, v)) spot = Math.max(spot, vertexValue(s, v, mine));
+      else if (!s.vertexBuildings[v]) for (const n of topo.vertices[v].neighbors) if (canSettleAt(s, n)) spot = Math.max(spot, vertexValue(s, n, mine) * 0.5);
+    }
+    const edgeRoads = s.edgeRoads.slice();
+    edgeRoads[edge] = me;
+    const gain = longestRoad({ ...s, edgeRoads }, me) - base;
+    if (!fresh.length && gain <= 0) return { spot: 0, stretch: 0 }; // anillo o relleno: no suma nada
+    // extremo abierto: caminos libres para seguir desde ahí, sin una casa rival que corte
+    let open = 0;
+    for (const v of fresh) {
+      const b = s.vertexBuildings[v];
+      if (b && b.player !== me) continue;
+      open += topo.vertices[v].edges.filter((x) => x !== edge && s.edgeRoads[x] === null).length;
+    }
+    return { spot, stretch: gain > 0 ? gain * stretchWeight + open * 0.3 : 0 };
+  };
+  return {
+    parts,
+    value: (edge: number) => {
+      const p = parts(edge);
+      return p.spot + p.stretch;
+    },
+  };
 }
 
 /** Cuánto conviene poner el ladrón en una casilla: le pega a los rivales (más si van ganando) y nunca a uno mismo. */
@@ -108,11 +149,34 @@ function distance(hand: Hand, goals: Cost[]): number {
 
 const BOT_MAX_OFFERS = 2; // el bot no insiste más que esto por turno (el tope de las reglas es mayor)
 
-/** Acepta si el cambio lo acerca a una compra (o, a igual distancia, recibe más cartas de las que da) y quien propone no está por ganar. */
-function answerTrade(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAction, { type: 'respondTrade' }>): boolean {
+/**
+ * Qué tan avanzada va la partida, de 0 a 1, según los puntos públicos del que va primero: 0 hasta el 40 % de los puntos para
+ * ganar (4 de 10) y 1 cuando está a un punto de ganar (9 de 10). Con esto los bots comercian mucho al principio y casi nada al final.
+ */
+export function lateness(s: GameState): number {
+  const top = Math.max(...s.players.map((_, p) => publicVictoryPoints(s, p)));
+  const start = s.config.victoryPoints * 0.4;
+  const end = s.config.victoryPoints - 1;
+  return Math.min(1, Math.max(0, (top - start) / Math.max(1, end - start)));
+}
+
+/** Si `p` va primero en puntos públicos y por delante de `me` (a ese no se le quiere dar cartas cuando la partida avanza). */
+function isLeader(s: GameState, p: PlayerId, me: PlayerId): boolean {
+  const vp = publicVictoryPoints(s, p);
+  return vp > publicVictoryPoints(s, me) && s.players.every((_, q) => publicVictoryPoints(s, q) <= vp);
+}
+
+/**
+ * Acepta si el cambio lo acerca a una compra (o, a igual distancia, recibe más cartas de las que da) y quien propone no está
+ * por ganar. A medida que avanza la partida rechaza más por las dudas (con probabilidad `lateness`), y el doble si quien
+ * ofrece es el que va ganando.
+ */
+function answerTrade(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAction, { type: 'respondTrade' }>, rng: Rng): boolean {
   const offer = s.trade;
   if (!offer || !a.canAccept) return false;
   if (publicVictoryPoints(s, offer.from) >= s.config.victoryPoints - 2) return false; // no ayuda al que está por ganar
+  const late = lateness(s);
+  if (late > 0 && rng() < late * (isLeader(s, offer.from, me) ? 2 : 1)) return false;
   const after = { ...hand };
   let gets = 0;
   let gives = 0;
@@ -128,7 +192,7 @@ function answerTrade(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAct
 }
 
 /** Probabilidad de arriesgar una oferta en un turno, según cuánto le falte para la compra más cercana: casi seguro si es una sola carta, más dudoso con dos. */
-const TRADE_EAGERNESS: Record<1 | 2, number> = { 1: 0.65, 2: 0.35 };
+const TRADE_EAGERNESS: Record<1 | 2, number> = { 1: 0.65, 2: 0.35 }; // al principio; después se multiplica por (1 − lateness)²
 
 /**
  * Propone 1 carta que le sobra por 1 que le falta, cuando está a 1 o 2 cartas de una compra. No ofrece todos los turnos:
@@ -147,14 +211,20 @@ function proposeCommand(s: GameState, me: PlayerId, hand: Hand, rng: Rng): Comma
     return missing.length ? missing.reduce((n, r) => n + (goal[r] ?? 0) - hand[r], 0) : Infinity;
   }));
   if (shortest > 2) return null;
-  if (k === 0 && rng() > TRADE_EAGERNESS[shortest as 1 | 2]) return null; // paciencia: no siempre arriesga el primer intento
+  // paciencia: no siempre arriesga el primer intento, y cuanto más avanzada la partida menos ganas (desde que alguien tiene 8 de 10, nada)
+  const late = lateness(s);
+  if (late >= 0.8) return null;
+  if (k === 0 && rng() > TRADE_EAGERNESS[shortest as 1 | 2] * (1 - late) ** 2) return null;
+  // ya avanzada la partida, no le ofrece al que va ganando
+  const to = late > 0 ? s.players.map((_, p) => p).filter((p) => p !== me && !isLeader(s, p, me)) : undefined;
+  if (to && !to.length) return null;
   const seen = new Set<string>(); // dos objetivos distintos (casa, carta...) pueden terminar pidiendo lo mismo: no la repite
   const candidates: Command[] = [];
   const add = (give: Resource, amount: number, get: Resource) => {
     const key = give + amount + get;
     if (seen.has(key)) return;
     seen.add(key);
-    candidates.push({ type: 'proposeTrade', player: me, give: { [give]: amount }, get: { [get]: 1 } });
+    candidates.push({ type: 'proposeTrade', player: me, give: { [give]: amount }, get: { [get]: 1 }, ...(to ? { to } : {}) });
   };
   for (const goal of goalsFor(s, me)) {
     const missing = missingFor(hand, goal);
@@ -206,7 +276,7 @@ export const smartBot: Bot = (input: BotInput, rng: Rng): Command => {
 
   // comercio con jugadores: responder (fuera de turno también) y, si propuse yo, concretar con el que aceptó y menos puntos tiene
   const rt = has('respondTrade');
-  if (rt) return { type: 'respondTrade', player: me, accept: answerTrade(s, me, hand, rt) };
+  if (rt) return { type: 'respondTrade', player: me, accept: answerTrade(s, me, hand, rt, rng) };
   const ct = has('confirmTrade');
   if (ct) return { type: 'confirmTrade', player: me, with: best(ct.with, (p) => -publicVictoryPoints(s, p), rng) };
   if (has('cancelTrade')) return { type: 'cancelTrade', player: me };
@@ -215,7 +285,10 @@ export const smartBot: Bot = (input: BotInput, rng: Rng): Command => {
   const ps = has('placeSettlement');
   if (ps) return { type: 'placeSettlement', player: me, vertex: bestVertex(ps.vertices) };
   const pr = has('placeRoad');
-  if (pr) return { type: 'placeRoad', player: me, edge: best(pr.edges, (e) => roadValue(s, e, me, mine), rng) };
+  if (pr) {
+    const roads = roadScorer(s, me, mine);
+    return { type: 'placeRoad', player: me, edge: best(pr.edges, roads.value, rng) };
+  }
 
   // descarte, ladrón y robo
   const dis = has('discard');
@@ -240,8 +313,15 @@ export const smartBot: Bot = (input: BotInput, rng: Rng): Command => {
   if (has('buyDevCard')) return { type: 'buyDevCard', player: me };
   const road = has('buildRoad');
   if (road) {
-    const e = best(road.edges, (x) => roadValue(s, x, me, mine), rng);
-    if (roadValue(s, e, me, mine) > 0) return { type: 'buildRoad', player: me, edge: e };
+    // si ya llega a un lugar para una casa, guarda madera y ladrillo para ella: solo gasta en un camino que abra otro lugar
+    const roads = roadScorer(s, me, mine);
+    const saving = hasReachableSpot(s, me);
+    const worth = (x: number) => {
+      const p = roads.parts(x);
+      return saving ? p.spot : p.spot + p.stretch;
+    };
+    const e = best(road.edges, worth, rng);
+    if (worth(e) > 0) return { type: 'buildRoad', player: me, edge: e };
   }
 
   // cartas de progreso: pedir o quitar lo que falta para la próxima construcción

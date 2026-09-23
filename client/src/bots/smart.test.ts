@@ -1,12 +1,12 @@
 // Bot con criterio: termina partidas sin trabarse ni romper reglas, coloca mejor que el azar y le gana al bot aleatorio.
 
 import { describe, expect, it } from 'vitest';
-import { applyCommand, createGame, legalActions, mulberry32, topology, victoryPoints } from '../engine';
+import { applyCommand, createGame, legalActions, longestRoad, mulberry32, publicVictoryPoints, topology, victoryPoints } from '../engine';
 import type { GameState } from '../engine';
-import { expectConserved, mainPhaseGame, NAMES } from '../engine/testutil';
+import { expectConserved, mainPhaseGame, NAMES, setHand } from '../engine/testutil';
 import { nextBot, playBots } from './play';
 import { randomBot } from './random';
-import { pips, smartBot, vertexValue } from './smart';
+import { lateness, pips, smartBot, vertexValue } from './smart';
 
 /** Juega una partida entera: los asientos en `smart` usan el bot con criterio y el resto el aleatorio. */
 function play(seed: number, smart: boolean[], victoryPointsToWin = 10): GameState {
@@ -126,6 +126,80 @@ describe('bot con criterio', () => {
     expect(waiting.state.trade!.responses.find((r) => r.player === 0)!.status).toBe('pending');
     expect(waiting.state.trade!.responses.find((r) => r.player === 2)!.status).not.toBe('pending');
   });
+
+  it('estira la ruta en vez de dar vueltas: ningún camino comprado cierra un anillo sin alargar su ruta más larga', () => {
+    const topo = topology();
+    let roads = 0;
+    let rings = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const rng = mulberry32(seed * 7);
+      let s = createGame(NAMES.slice(0, 3 + (seed % 2)), seed);
+      for (let guard = 0; guard < 3000 && s.phase.kind !== 'finished'; guard++) {
+        const me = nextBot(s, () => true)!;
+        const cmd = smartBot({ me, legal: legalActions(s, me), hand: s.players[me].hand, state: s }, rng);
+        const r = applyCommand(s, cmd);
+        expect(r.ok).toBe(true);
+        if (!r.ok) break;
+        if (cmd.type === 'buildRoad') {
+          roads++;
+          const e = topo.edges[cmd.edge];
+          const mineBefore = (v: number) => s.vertexBuildings[v]?.player === me || topo.vertices[v].edges.some((x) => s.edgeRoads[x] === me);
+          if (mineBefore(e.a) && mineBefore(e.b) && longestRoad(r.state, me) <= longestRoad(s, me)) rings++;
+        }
+        s = r.state;
+      }
+    }
+    expect(roads).toBeGreaterThan(100);
+    expect(rings).toBe(0);
+  }, 60_000);
+
+  it('al final de la partida no propone cambios aunque le falte una sola carta', () => {
+    const s = mainPhaseGame(4, NAMES.slice(0, 3));
+    s.tradeOffers = 0;
+    // el jugador 1 llega a 8 de 10: sus dos casas pasan a estancias y tiene los dos reconocimientos
+    s.vertexBuildings = s.vertexBuildings.map((b) => (b?.player === 1 ? { ...b, city: true } : b));
+    s.longestRoad = { holder: 1, length: 5 };
+    s.largestArmy = { holder: 1, size: 3 };
+    expect(publicVictoryPoints(s, 1)).toBe(8);
+    expect(lateness(s)).toBe(0.8);
+    setHand(s, 0, { forest: 1, hills: 1, pasture: 1, mountains: 2 }); // le falta solo maíz para la casa: al principio ofrecería
+    for (let i = 0; i < 50; i++) {
+      const cmd = smartBot({ me: 0, legal: legalActions(s, 0), hand: s.players[0].hand, state: s }, mulberry32(i));
+      expect(cmd.type).not.toBe('proposeTrade');
+    }
+  });
+
+  it('a medida que avanza la partida los bots comercian mucho menos, y al que va ganando casi no le dan nada', () => {
+    const early = { proposed: 0, turns: 0 };
+    const late = { proposed: 0, turns: 0 };
+    let toLeader = 0;
+    let leaderAccepted = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const rng = mulberry32(seed * 11);
+      let s = createGame(NAMES.slice(0, 3 + (seed % 2)), seed);
+      for (let guard = 0; guard < 3000 && s.phase.kind !== 'finished'; guard++) {
+        const me = nextBot(s, () => true)!;
+        const r = applyCommand(s, smartBot({ me, legal: legalActions(s, me), hand: s.players[me].hand, state: s }, rng));
+        if (!r.ok) break;
+        const bucket = lateness(s) >= 0.6 ? late : lateness(s) === 0 ? early : null;
+        for (const e of r.events) {
+          if (e.type === 'TurnChanged' && bucket) bucket.turns++;
+          if (e.type === 'TradeProposed' && bucket) bucket.proposed++;
+          // respuestas a ofertas del que va primero, ya avanzada la partida
+          if (e.type === 'TradeResponded' && s.trade && lateness(s) >= 0.4) {
+            const from = s.trade.from;
+            if (s.players.every((_, q) => publicVictoryPoints(s, q) < publicVictoryPoints(s, from) || q === from)) {
+              toLeader++;
+              if (e.accept) leaderAccepted++;
+            }
+          }
+        }
+        s = r.state;
+      }
+    }
+    expect(early.proposed / early.turns).toBeGreaterThan(3 * (late.proposed / Math.max(1, late.turns)));
+    expect(leaderAccepted).toBeLessThanOrEqual(toLeader * 0.2);
+  }, 60_000);
 
   it('las fichas 6 y 8 puntúan más que las 2 y 12', () => {
     expect(pips(6)).toBe(5);
