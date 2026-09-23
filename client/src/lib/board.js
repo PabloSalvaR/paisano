@@ -1909,9 +1909,9 @@ export function initBoard(opts) {
     // vos, desde el tuyo), abajo un redondel del color de cada consultado (pensando / ✓ / ✕). Quien ofrece concreta tocando un
     // redondel con ✓; a quien la recibe le salen además ✕ / ✓. Si no participás, la ves chica arriba, sin botones. Durante una
     // reproducción de eventos el panel sigue a `offerShown` (se llena al ritmo de las respuestas); al cerrarse queda
-    // `OFFER_END_MS` con el resultado (los dos que cambiaron resaltados, o todo apagado): 2 s quieto y medio segundo desvaneciéndose.
+    // `OFFER_END_MS` con el resultado (los dos que cambiaron resaltados, o todo apagado): 1 s quieto y 0,2 s desvaneciéndose.
     function dirIco(down, label) { return '<span class="dir ' + (down ? 'in' : 'out') + '" title="' + label + '" aria-label="' + label + '">' + (down ? '↓' : '↑') + '</span>'; }
-    var offerShown = null, offerEnd = null, offerEndTimer = null, offerFresh = -1, offerCan = true, OFFER_END_MS = 2500;
+    var offerShown = null, offerEnd = null, offerEndTimer = null, offerFresh = -1, offerCan = true, OFFER_END_MS = 1200;
     function copyOffer(t) { return { from: t.from, give: t.give, get: t.get, responses: t.responses.map(function (r) { return { player: r.player, status: r.status }; }) }; }
     function offerNow() { return (playing ? offerShown : game.trade) || offerEnd; }
     function offerWatch(t) { return t.from !== me && !t.responses.some(function (r) { return r.player === me; }); }

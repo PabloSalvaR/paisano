@@ -654,8 +654,8 @@ body{
 .dialog button.dot.tap:hover{background:var(--pc);transform:scale(1.1)}
 .dialog.offer.done .dot:not(.chosen){opacity:.3}
 .dialog.offer .dot.chosen,.dialog.offer .from.chosen .av{box-shadow:0 0 0 3px #fff,0 0 14px 4px var(--pc)}
-/* Cerrada la oferta, el panel queda 2 s quieto con el resultado y se desvanece entero en medio segundo (suman OFFER_END_MS en board.js) */
-.dialog.offer.done{animation:offer-out .5s ease-in 2s forwards;pointer-events:none}
+/* Cerrada la oferta, el panel queda 1 s quieto con el resultado y se desvanece entero en 0,2 s (suman OFFER_END_MS en board.js) */
+.dialog.offer.done{animation:offer-out .2s ease-in 1s forwards;pointer-events:none}
 @keyframes offer-out{from{opacity:1}to{opacity:0}}
 @keyframes dot-think{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1.15)}}
 @keyframes dot-pop{0%{transform:scale(.6)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
