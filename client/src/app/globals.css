@@ -152,7 +152,7 @@ body{
 .dialog .victims{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .dialog .victim{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;min-width:84px}
 .dialog .victim .av{width:46px;height:46px;border-radius:50%;overflow:hidden;box-shadow:0 0 0 3px var(--pc)}
-.dialog .victim .av svg{display:block;width:100%;height:100%}
+.dialog .victim .av img{display:block;width:100%;height:100%}
 .dialog .victim small{color:var(--muted);font-weight:600}
 
 /* Estadística de tiradas: abajo a la izquierda, sobre el banner de recursos. Barras verticales que crecen con cada tirada. */
@@ -173,7 +173,8 @@ body{
   border:2px solid rgba(0,0,0,.35);transition:background-color .45s}
 .who{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:58px;color:var(--pt,#fff)}
 .who .av,.seat .av{width:44px;height:44px;border-radius:50%;box-shadow:0 0 0 3px rgba(255,255,255,.85),0 2px 6px rgba(0,0,0,.35);overflow:hidden}
-.av svg{display:block;width:100%;height:100%}
+.av img{display:block;width:100%;height:100%}
+.av{background:#f3ead9} /* fondo crema detrás del retrato (tiene fondo transparente) */
 .who .nm{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:.95rem;line-height:1.1}
 .res{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:58px;padding:6px 8px 4px;
   background:rgba(255,255,255,.9);border:1px solid rgba(0,0,0,.2);border-bottom:4px solid var(--c);border-radius:10px}
@@ -454,7 +455,7 @@ body{
 .char-opt:hover{background:var(--btn-hover)}
 .char-opt:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .char-opt[aria-checked="true"]{border-color:var(--accent);background:var(--btn-on)}
-.char-opt svg{width:44px;height:44px}
+.char-opt img{display:block;width:52px;height:52px;border-radius:50%;background:#f3ead9}
 /* Selector de color de asiento (misma pantalla, arriba del de personaje): 4 círculos de color, sin nombre (el color
    ya se distingue solo). Se intercambia con el del bot que lo tenía, para que sigan siendo 4 colores distintos. */
 /* Cantidad de jugadores contra bots: dos radios en línea (o 3 · o 4), siempre en 3 al entrar */
@@ -467,7 +468,7 @@ body{
 .color-opt:hover{filter:brightness(1.08)}
 .color-opt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .color-opt[aria-checked="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent),inset 0 0 0 3px rgba(0,0,0,.15)}
-@media (max-width:420px){.char-picker{grid-template-columns:repeat(4,1fr);gap:6px}.char-opt svg{width:38px;height:38px}.color-opt{width:28px;height:28px}}
+@media (max-width:420px){.char-picker{grid-template-columns:repeat(4,1fr);gap:6px}.char-opt img{width:44px;height:44px}.color-opt{width:28px;height:28px}}
 
 .room-seats{list-style:none;display:flex;flex-direction:column;gap:8px}
 .room-seats li{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--btn);font-weight:700}
@@ -524,7 +525,7 @@ body{
 .dialog.summary .row{display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:8px;background:var(--btn);border:2px solid transparent}
 .dialog.summary .row.winner{border-color:var(--accent)}
 .dialog.summary .row .av{width:28px;height:28px;border-radius:50%;overflow:hidden;box-shadow:0 0 0 2px var(--pc);flex:none}
-.dialog.summary .row .av svg{display:block;width:100%;height:100%}
+.dialog.summary .row .av img{display:block;width:100%;height:100%}
 .dialog.summary .row .nm{font-weight:700;font-size:.8rem;flex:none;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dialog.summary .row .bdg{display:flex;gap:1px;flex:none}
 .dialog.summary .row .bdg svg{width:14px;height:14px}
@@ -604,7 +605,7 @@ body{
 .dialog button.pick .dot{width:40px;height:40px;overflow:hidden;transition:transform .15s}
 .dialog button.pick:hover .dot{transform:scale(1.08)}
 .dialog button.pick .av{display:block;width:100%;height:100%;border-radius:50%;overflow:hidden}
-.dialog button.pick .av svg{display:block;width:100%;height:100%}
+.dialog button.pick .av img{display:block;width:100%;height:100%}
 .dialog button.pick small{max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.68rem;font-weight:700;line-height:1}
 .dialog button.pick[aria-pressed="false"]{opacity:.4}
 .dialog button.pick[aria-pressed="false"] .dot{border-style:dashed}
@@ -641,7 +642,7 @@ body{
 .dialog.offer .head{display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:8px}
 .dialog.offer .head .who{font-family:'Fraunces',Georgia,serif;font-size:1.05rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dialog.offer .from .av{display:block;width:40px;height:40px;border-radius:50%;overflow:hidden;box-shadow:0 0 0 3px var(--pc);transition:box-shadow .25s}
-.dialog.offer .from .av svg{display:block;width:100%;height:100%}
+.dialog.offer .from .av img{display:block;width:100%;height:100%}
 .dialog .dots{display:flex;justify-content:center;gap:12px;margin:4px 0 2px}
 .dialog .dot{display:inline-flex;align-items:center;justify-content:center;gap:3px;width:36px;height:36px;padding:0;border-radius:50%;border:3px solid var(--pc);background:transparent;color:var(--pt);font-size:1.15rem;font-weight:900;line-height:1;flex:none;transition:opacity .25s,box-shadow .25s}
 .dialog.offer .dot i{width:4px;height:4px;border-radius:50%;background:var(--pc);animation:dot-think 1.2s infinite ease-in-out}

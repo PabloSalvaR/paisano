@@ -9,7 +9,7 @@ import { createAudio } from './audio.js';
 import { topology } from '../engine';
 import { LocalSession } from './session';
 import { drawBastos11, devCardURL, awardURL } from './cardart';
-import { BOT_NAMES, CHARACTERS, characterById } from './characters';
+import { DEFAULT_CAST, characterById, drawBotCharacters, portraitHTML } from './characters';
 
 export const MARKUP = `
 <div id="stage">
@@ -146,26 +146,6 @@ export var SEAT_COLORS = [
   { id: 'orange', css: '#f0932b', text: '#2b1a05' },
   { id: 'white', css: '#f1eee6', text: '#2b2216' }
 ];
-
-/**
- * Dibuja un personaje (cara, pelo, sombrero o pañuelo, bigote) con el poncho del color `i.css`. `i` trae los campos de
- * `Character` (`skin`, `hair`, `hat`, `mustache`, `headscarf`) más `css` (color del poncho). Se usa en la mesa
- * (`avatarSVG`, con el color del asiento) y en el selector de personaje del menú (con el color del asiento 0).
- */
-export function characterSVG(i) {
-  var hair = i.headscarf ? '' : '<path d="M11.5 17 Q12 8 20 8 Q28 8 28.5 17 Q24 12 20 12 Q16 12 11.5 17Z" fill="' + i.hair + '"/>';
-  var topgear = i.hat
-    ? '<ellipse cx="20" cy="10.5" rx="13" ry="3" fill="#2b2118"/><path d="M13 10.5 Q13 3 20 3 Q27 3 27 10.5Z" fill="#2b2118"/>'
-    : i.headscarf
-    ? '<path d="M9.5 15 Q9 5 20 5 Q31 5 30.5 15 Q25 10.5 20 10.5 Q15 10.5 9.5 15Z" fill="#d9a441" stroke="#8a5a1e" stroke-width="1.2"/><circle cx="29.5" cy="13.5" r="2.4" fill="#d9a441" stroke="#8a5a1e" stroke-width="1"/>'
-    : '';
-  var mustache = i.mustache ? '<path d="M16 21.6 Q20 24 24 21.6" stroke="' + i.hair + '" stroke-width="1.8" fill="none" stroke-linecap="round"/>' : '';
-  return '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#e7dfcc"/>' +
-    '<path d="M5 40 Q8 28 20 28 Q32 28 35 40Z" fill="' + i.css + '" stroke="#3b2a18" stroke-width="1.5"/>' +
-    '<circle cx="20" cy="18" r="8" fill="' + i.skin + '" stroke="#3b2a18" stroke-width="1.5"/>' +
-    hair + topgear +
-    '<circle cx="17" cy="19" r="1" fill="#2b2118"/><circle cx="23" cy="19" r="1" fill="#2b2118"/>' + mustache + '</svg>';
-}
 
 // opts (en línea): { session, seats: [{ name, bot }], seed }. Sin `session` es partida local: opts.mode 'bots' (vos contra tres bots) o 'local' (los 4 en la pantalla).
 export function initBoard(opts) {
@@ -1525,8 +1505,9 @@ export function initBoard(opts) {
     };
     var BADGE_ROAD = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="8" width="16" height="4.5" rx="1.5" transform="rotate(-25 10 10)" fill="currentColor"/></svg>';
     var BADGE_ARMY = '<svg viewBox="0 0 20 20" aria-hidden="true"><g transform="rotate(-40 10 10)" fill="currentColor"><path d="M8 7.8H15.6Q18.6 8.4 19.6 10.4Q17.4 12.3 14.2 12.4H8Z"/><rect x="5.9" y="5.8" width="2.3" height="9" rx="1"/><rect x="0.8" y="8.6" width="5.4" height="3.6" rx="1.6"/></g></svg>'; // silueta de un facón: hoja con punta, guarda y mango
-    // El personaje (piel, pelo, sombrero o pañuelo) sale de `characters.ts` y sí se puede elegir (ver `opts.characterId`).
-    var PLAYER_INFO = SEAT_COLORS.map(function (sc, i) { return wearCharacter({ name: CHARACTERS[i].label, css: sc.css, text: sc.text }, CHARACTERS[i]); });
+    // El personaje (el retrato) sale de `characters.ts`: contra bots lo elegís vos y los bots sacan otros; la mesa local y las
+    // salas online usan el elenco por asiento (`DEFAULT_CAST`), con el nombre del retrato hasta que la sala diga otro.
+    var PLAYER_INFO = SEAT_COLORS.map(function (sc, i) { var ch = characterById(DEFAULT_CAST[i]); return { name: ch.name, character: ch.id, color: sc.id, css: sc.css, text: sc.text }; });
     if (online) opts.seats.forEach(function (st, i) { if (PLAYER_INFO[i]) PLAYER_INFO[i].name = st.name; }); // los nombres vienen de la sala
     // cuántos juegan: en línea, los de la sala; contra bots, lo elegido (3 o 4); en la mesa local, siempre 4
     var SEATS = online ? opts.seats.length : opts.mode === 'bots' && opts.players === 3 ? 3 : 4;
@@ -1534,35 +1515,31 @@ export function initBoard(opts) {
     if (!online && opts.mode === 'bots' && opts.name) { // contra bots: el primer asiento es la persona, con el nombre que puso
       PLAYER_INFO[0].name = opts.name;
       var chosen = characterById(opts.characterId);
-      if (chosen) wearCharacter(PLAYER_INFO[0], chosen);
+      if (chosen) PLAYER_INFO[0].character = chosen.id;
       drawBots();
     }
-    // El aspecto de un personaje va siempre entero (piel, pelo, sombrero, bigote, pañuelo): nunca se mezclan rasgos de dos.
-    function wearCharacter(pl, ch) { pl.skin = ch.skin; pl.hair = ch.hair; pl.hat = ch.hat; pl.mustache = !!ch.mustache; pl.headscarf = !!ch.headscarf; return pl; }
     function shuffleAny(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
-    // Contra bots, quiénes te tocan se sortea en cada partida: cada bot saca un personaje entre los 8 (sin repetir el tuyo)
-    // y un nombre de la lista de hombres o mujeres según ese personaje (`BOT_NAMES`), sin repetir ni uno que se llame como
-    // vos (así no hacen falta sufijos como «(bot)»). Los colores también: vos tenés el elegido (rojo si no elegiste) y los
-    // otros tres se reparten al azar entre los bots, sin repetirse.
+    // Contra bots, quiénes te tocan se sortea en cada partida: cada bot saca un personaje entre los 12 (sin repetir el tuyo ni
+    // uno que se llame como vos, así no hacen falta sufijos como «(bot)») y se llama como su retrato (`drawBotCharacters`). Los
+    // colores también: vos tenés el elegido (rojo si no elegiste) y los otros tres se reparten al azar entre los bots, sin repetirse.
     function drawBots() {
-      var mine = opts.name.toLowerCase(), pool = shuffleAny(CHARACTERS.filter(function (c) { return c.id !== opts.characterId; }));
-      var names = { men: shuffleAny(BOT_NAMES.men.filter(function (n) { return n.toLowerCase() !== mine; })), women: shuffleAny(BOT_NAMES.women.filter(function (n) { return n.toLowerCase() !== mine; })) };
+      var pool = drawBotCharacters(PLAYER_INFO.length - 1, PLAYER_INFO[0].character, opts.name);
       var myColor = Math.max(0, SEAT_COLORS.findIndex(function (c) { return c.id === opts.colorId; }));
       var colors = [myColor].concat(shuffleAny(SEAT_COLORS.map(function (c, i) { return i; }).filter(function (i) { return i !== myColor; })));
       for (var p = 0; p < PLAYER_INFO.length; p++) {
         // las piezas 3D usan su propio material por asiento: van con el mismo color que el puesto
-        PLAYER_INFO[p].css = SEAT_COLORS[colors[p]].css; PLAYER_INFO[p].text = SEAT_COLORS[colors[p]].text; PLAYERS[p] = SEAT_MATS[colors[p]];
-        if (p > 0) { PLAYER_INFO[p].name = names[pool[p - 1].woman ? 'women' : 'men'].pop(); wearCharacter(PLAYER_INFO[p], pool[p - 1]); }
+        PLAYER_INFO[p].color = SEAT_COLORS[colors[p]].id; PLAYER_INFO[p].css = SEAT_COLORS[colors[p]].css; PLAYER_INFO[p].text = SEAT_COLORS[colors[p]].text; PLAYERS[p] = SEAT_MATS[colors[p]];
+        if (p > 0) { PLAYER_INFO[p].name = pool[p - 1].name; PLAYER_INFO[p].character = pool[p - 1].id; }
       }
     }
-    function avatarSVG(p) { return characterSVG(PLAYER_INFO[p]); }
+    function avatarHTML(p) { return portraitHTML(PLAYER_INFO[p].character, PLAYER_INFO[p].color); } // la ropa, del color del asiento
     var handEl = stage.querySelector('.hand'), whoEl = document.getElementById('who'), seatsEl = document.getElementById('seats');
     var STAR = '<svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="10,1.5 12.6,7.2 18.8,7.8 14.1,12 15.5,18.2 10,15 4.5,18.2 5.9,12 1.2,7.8 7.4,7.2" fill="#f2c230" stroke="#7a5a10" stroke-width="1.4" stroke-linejoin="round"/></svg>';
     var vps = [0, 0, 0, 0], vpCards = [0, 0, 0, 0]; // puntos de victoria que se ven: casas, estancias y reconocimientos (los Puntos de victoria ajenos no se ven hasta el final); vpCards: esas cartas, las que se conocen
     var openingOn = false, devCounts = [0, 0, 0, 0], knights = [0, 0, 0, 0], roadLens = [0, 0, 0, 0], awardRoad = { holder: null, length: 0 }, awardArmy = { holder: null, size: 0 }; // cartas de desarrollo por jugador (cuántas, no cuáles), caballeros jugados y quién tiene cada reconocimiento
     var myHand = {}, counts = [], turn = 0, VIEWER = 0; // myHand: la mano de quien mira; counts: cartas de cada jugador (de los demás solo se sabe cuántas); VIEWER: el jugador cuya mano muestra el banner (en la partida local, el de turno)
     seatsEl.innerHTML = PLAYER_INFO.map(function (pl, p) {
-      return '<div class="seat" data-p="' + p + '" style="--pc:' + pl.css + '"><div class="av">' + avatarSVG(p) + '</div><span class="nm">' + pl.name + '</span>' +
+      return '<div class="seat" data-p="' + p + '" style="--pc:' + pl.css + '"><div class="av">' + avatarHTML(p) + '</div><span class="nm">' + pl.name + '</span>' +
         '<span class="vp" title="Puntos de victoria">' + STAR + '<b>0</b></span>' +
         '<span class="cnt"><svg viewBox="0 0 16 20" aria-hidden="true"><rect x="2" y="2" width="12" height="16" rx="2" fill="#f6ecd4" stroke="#5b4630" stroke-width="1.6"/></svg><b>0</b></span>' +
         '<span class="aw"><span class="bdg road" title="Ruta más larga">' + BADGE_ROAD + '<b></b></span><span class="bdg army" title="Gauchos jugados">' + BADGE_ARMY + '<b></b></span>' +
@@ -1574,7 +1551,7 @@ export function initBoard(opts) {
     function renderHand() {
       var pl = PLAYER_INFO[VIEWER];
       handEl.style.setProperty('--pc', pl.css); handEl.style.setProperty('--pt', pl.text);
-      whoEl.innerHTML = '<div class="av">' + avatarSVG(VIEWER) + '</div><span class="nm">' + pl.name + '</span><span class="vp" title="Puntos de victoria">' + STAR + '<b>' + vps[VIEWER] + '</b></span>';
+      whoEl.innerHTML = '<div class="av">' + avatarHTML(VIEWER) + '</div><span class="nm">' + pl.name + '</span><span class="vp" title="Puntos de victoria">' + STAR + '<b>' + vps[VIEWER] + '</b></span>';
       HAND_KINDS.forEach(function (k) { handEl.querySelector('[data-res="' + k + '"] b').textContent = myHand[k]; });
     }
     function renderSeats() {
@@ -1741,7 +1718,7 @@ export function initBoard(opts) {
       } else {
         html = '<h3></h3><div class="victims">' + ph.victims.map(function (v) {
           var total = counts[v];
-          return '<button type="button" class="victim" data-victim="' + v + '" style="--pc:' + PLAYER_INFO[v].css + '"><span class="av">' + avatarSVG(v) + '</span><span>' + PLAYER_INFO[v].name + '</span><small>' + total + ' cartas</small></button>';
+          return '<button type="button" class="victim" data-victim="' + v + '" style="--pc:' + PLAYER_INFO[v].css + '"><span class="av">' + avatarHTML(v) + '</span><span>' + PLAYER_INFO[v].name + '</span><small>' + total + ' cartas</small></button>';
         }).join('') + '</div>';
       }
       dialogEl.innerHTML = html;
@@ -1814,7 +1791,7 @@ export function initBoard(opts) {
         var settlements = 0, cities = 0;
         shown.vertexBuildings.forEach(function (b) { if (b && b.player === p) { if (b.city) cities++; else settlements++; } });
         var badges = (awardRoad.holder === p ? BADGE_ROAD : '') + (awardArmy.holder === p ? BADGE_ARMY : '');
-        return '<div class="row' + (p === ph.winner ? ' winner' : '') + '" style="--pc:' + pl.css + '"><span class="av">' + avatarSVG(p) + '</span>' +
+        return '<div class="row' + (p === ph.winner ? ' winner' : '') + '" style="--pc:' + pl.css + '"><span class="av">' + avatarHTML(p) + '</span>' +
           '<span class="nm">' + pl.name + '</span>' + (badges ? '<span class="bdg">' + badges + '</span>' : '') +
           '<small title="' + settlements + ' casa' + (settlements === 1 ? '' : 's') + ' y ' + cities + ' estancia' + (cities === 1 ? '' : 's') + '">' + ICON_HOUSE + settlements + ICON_CITY + cities + '</small>' + // íconos de los botones de construir: con el texto no entraban la insignia y los Puntos de victoria
           (vpCards[p] ? '<span class="vpc" title="' + vpCards[p] + (vpCards[p] === 1 ? ' Punto de victoria' : ' Puntos de victoria') + '"><img src="' + devCardURL('victoryPoint') + '" alt="Punto de victoria" draggable="false">' + (vpCards[p] > 1 ? '<b>×' + vpCards[p] + '</b>' : '') + '</span>' : '') +
@@ -1865,7 +1842,7 @@ export function initBoard(opts) {
       // chico debajo (elegido con borde lleno, el resto punteado y apagado); al ofrecer, los elegidos pasan a «pensando».
       var tos = others().map(function (p) {
         return '<button type="button" class="pick" data-to="' + p + '" aria-pressed="' + (o.to.indexOf(p) >= 0 ? 'true' : 'false') + '" style="--pc:' + PLAYER_INFO[p].css + ';--pt:' + PLAYER_INFO[p].text + '">' +
-          '<span class="dot"><span class="av">' + avatarSVG(p) + '</span></span><small></small></button>';
+          '<span class="dot"><span class="av">' + avatarHTML(p) + '</span></span><small></small></button>';
       }).join('');
       return strip('give') + strip('get') +
         '<div class="to-row"><div class="dots">' + tos + '</div></div>' + // sin línea de ayuda: el ✓ gris ya dice que falta algo
@@ -1941,7 +1918,7 @@ export function initBoard(opts) {
         var attrs = ' class="' + cls + '" data-p="' + p + '" data-st="' + LABEL[r.status] + '" style="--pc:' + PLAYER_INFO[p].css + ';--pt:' + PLAYER_INFO[p].text + '"';
         return tap ? '<button type="button" data-with="' + p + '"' + attrs + '>' + inner + '</button>' : '<span' + attrs + '>' + inner + '</span>';
       }).join('') + '</div>';
-      var from = '<span class="from' + (t.done && t.done.with !== undefined ? ' chosen' : '') + '" data-p="' + t.from + '" style="--pc:' + PLAYER_INFO[t.from].css + '"><span class="av">' + avatarSVG(t.from) + '</span></span>';
+      var from = '<span class="from' + (t.done && t.done.with !== undefined ? ' chosen' : '') + '" data-p="' + t.from + '" style="--pc:' + PLAYER_INFO[t.from].css + '"><span class="av">' + avatarHTML(t.from) + '</span></span>';
       var outGive = asked ? dirIco(true, 'Esto te entra') : dirIco(false, own ? 'Esto se te va' : 'Da');
       var outGet = asked ? dirIco(false, 'Esto se te va') : dirIco(true, own ? 'Esto te entra' : 'Pide');
       dialogEl.className = 'panel dialog trade offer' + (watch ? ' mini' : '') + (t.done ? ' done' : '');
@@ -2474,7 +2451,7 @@ export function initBoard(opts) {
       clearDice();
       if (!online && opts.mode === 'bots' && opts.name) { // partida nueva, bots nuevos
         drawBots();
-        Array.prototype.forEach.call(seatsEl.children, function (el, p) { el.style.setProperty('--pc', PLAYER_INFO[p].css); el.querySelector('.av').innerHTML = avatarSVG(p); el.querySelector('.nm').textContent = PLAYER_INFO[p].name; });
+        Array.prototype.forEach.call(seatsEl.children, function (el, p) { el.style.setProperty('--pc', PLAYER_INFO[p].css); el.querySelector('.av').innerHTML = avatarHTML(p); el.querySelector('.nm').textContent = PLAYER_INFO[p].name; });
       }
       buildBoard((Math.random() * 1e9) | 0);
       for (var n = 2; n <= 12; n++) rollCounts[n] = 0;

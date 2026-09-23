@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { MARKUP, SEAT_COLORS, characterSVG, initBoard } from "@/lib/board";
-import { CHARACTERS } from "@/lib/characters";
+import { MARKUP, SEAT_COLORS, initBoard } from "@/lib/board";
+import { CHARACTERS, portraitURL } from "@/lib/characters";
 import { characterStore, colorStore, nameStore, saveCharacter, saveColor, saveName } from "@/lib/identity";
 
 const MODES = ["bots", "local"];
@@ -24,7 +24,6 @@ export default function LocalBoard() {
   const storedColor = useSyncExternalStore(colorStore.subscribe, colorStore.get, colorStore.getServer);
   const [typedColor, setTypedColor] = useState<string | null>(null);
   const colorId = typedColor ?? storedColor; // el elegido, o el último usado en este navegador
-  const previewCss = SEAT_COLORS.find((c) => c.id === colorId)?.css ?? SEAT_COLORS[0].css;
   const [players, setPlayers] = useState(3); // vos y dos o tres bots. Siempre arranca en 3 (no se recuerda, como «Caos»)
   const [chaos, setChaos] = useState(false); // «Caos»: números del mapa al azar. Siempre arranca apagado (en serie, como el juego original)
   const [player, setPlayer] = useState<{ name: string; characterId: string; colorId: string; players: number; chaos: boolean } | null>(null); // ya elegidos: recién ahí arranca el tablero
@@ -116,12 +115,14 @@ export default function LocalBoard() {
                   type="button"
                   role="radio"
                   aria-checked={c.id === characterId}
-                  aria-label={c.label}
-                  title={c.label}
+                  aria-label={c.name}
+                  title={c.name}
                   className="char-opt"
                   onClick={() => setTypedCharacter(c.id)}
-                  dangerouslySetInnerHTML={{ __html: characterSVG({ ...c, css: previewCss }) }}
-                />
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- retrato chico ya optimizado (webp de 256 px): no hace falta next/image */}
+                  <img src={portraitURL(c.id, colorId)} alt="" draggable={false} /> {/* con la ropa del color elegido arriba */}
+                </button>
               ))}
             </div>
           </div>

@@ -2,7 +2,7 @@
 // Puede fallar o venir vacío (ventana privada, datos borrados): todo va con try/catch y la app funciona sin esto,
 // solo que hay que volver a presentarse.
 
-import { DEFAULT_CHARACTER_ID } from './characters';
+import { DEFAULT_CHARACTER_ID, characterById } from './characters';
 
 export interface Identity {
   token: string;
@@ -110,10 +110,16 @@ export const nameStore = {
   getServer: (): string => '',
 };
 
-/** Para React: el último personaje elegido (o `DEFAULT_CHARACTER_ID` la primera vez). Mismo patrón que `nameStore`. */
+/**
+ * Para React: el último personaje elegido (o `DEFAULT_CHARACTER_ID` la primera vez, o si el guardado ya no existe: los ids del
+ * catálogo de 8 dibujos, anterior a los retratos, quedaron en algunos navegadores). Mismo patrón que `nameStore`.
+ */
 export const characterStore = {
   subscribe: (): (() => void) => () => {},
-  get: (): string => lastCharacter() ?? DEFAULT_CHARACTER_ID,
+  get: (): string => {
+    const id = lastCharacter();
+    return id && characterById(id) ? id : DEFAULT_CHARACTER_ID;
+  },
   getServer: (): string => DEFAULT_CHARACTER_ID,
 };
 

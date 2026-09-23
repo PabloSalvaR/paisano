@@ -1,37 +1,56 @@
-// Catálogo de personajes elegibles como avatar: 4 gauchos (con sombrero) y 4 criollas (sin sombrero), cada uno con su
-// propio tono de piel y de pelo para distinguirse. El color de asiento (el poncho del dibujo, y las piezas del tablero)
-// es aparte y depende de la posición en la mesa, no del personaje elegido: así dos personas pueden elegir el mismo
-// personaje sin confundirse en el tablero. Arte propio, dibujado a mano en `board.js` (ver `avatarSVG`).
+// Catálogo de personajes: 12 retratos (6 hombres y 6 mujeres de época), cada uno con su nombre fijo. Los retratos son
+// imágenes generadas para el juego (recortadas de `prototipos/personajes.png`), con la ropa en cada color de asiento:
+// `public/personajes/<id>-<color>.webp` (el rojo del dibujo original recoloreado; el blanco, un gris cálido para que se vea
+// sobre el fondo crema). El color de asiento (la ropa, el aro del avatar y las piezas) depende de la posición en la mesa, no
+// del personaje: así dos personas pueden elegir el mismo personaje sin confundirse en el tablero.
 
 export interface Character {
   id: string;
-  label: string;
-  skin: string;
-  hair: string;
-  woman: boolean; // define de qué lista sale el nombre de un bot con este personaje
-  hat: boolean; // gaucho con sombrero
-  mustache?: boolean;
-  headscarf?: boolean; // criolla con pañuelo en vez de pelo suelto
+  /** Nombre fijo: es el del bot que sale con este retrato (en la mesa local y en línea, el del asiento por defecto). */
+  name: string;
 }
 
 export const CHARACTERS: Character[] = [
-  { id: 'tomas', label: 'Tomás', skin: '#f1c9a5', hair: '#5a3a22', woman: false, hat: true },
-  { id: 'lucia', label: 'Lucía', skin: '#c98f66', hair: '#2b2118', woman: true, hat: false },
-  { id: 'mateo', label: 'Mateo', skin: '#8d5a3b', hair: '#2b2118', woman: false, hat: true },
-  { id: 'sofia', label: 'Sofía', skin: '#f4d3b5', hair: '#a3402b', woman: true, hat: false },
-  { id: 'facundo', label: 'Facundo', skin: '#6b4226', hair: '#7a766e', woman: false, hat: true, mustache: true },
-  { id: 'ramon', label: 'Ramón', skin: '#e0ad7c', hair: '#7a4a20', woman: false, hat: true, mustache: true },
-  { id: 'rosario', label: 'Rosario', skin: '#a9714a', hair: '#241c12', woman: true, hat: false, headscarf: true },
-  { id: 'milagros', label: 'Milagros', skin: '#b97a4f', hair: '#3d2410', woman: true, hat: false },
+  { id: 'juan', name: 'Juan' },
+  { id: 'manuel', name: 'Manuel' },
+  { id: 'jacinto', name: 'Jacinto' },
+  { id: 'jose', name: 'José' },
+  { id: 'eusebio', name: 'Eusebio' },
+  { id: 'leandro', name: 'Leandro' },
+  { id: 'manuela', name: 'Manuela' },
+  { id: 'remedios', name: 'Remedios' },
+  { id: 'juana', name: 'Juana' },
+  { id: 'encarnacion', name: 'Encarnación' },
+  { id: 'mercedes', name: 'Mercedes' },
+  { id: 'francisca', name: 'Francisca' },
 ];
-
-// Nombres de los bots contra los que se juega en `/jugar/bots`: cada bot saca un personaje al azar y después un nombre
-// de la lista que corresponde a ese personaje (los rótulos de arriba son solo del selector y de la mesa local).
-export const BOT_NAMES = {
-  men: ['Juan', 'Manuel', 'Jacinto', 'José', 'Eusebio', 'Leandro'],
-  women: ['Manuela', 'Remedios', 'Juana', 'Encarnación', 'Mercedes', 'Francisca'],
-};
 
 export const DEFAULT_CHARACTER_ID = CHARACTERS[0].id;
 
+/** Elenco de la mesa local y de las salas online (por asiento), que no tienen selector. */
+export const DEFAULT_CAST = ['juan', 'manuela', 'jacinto', 'mercedes'];
+
 export const characterById = (id: string | null | undefined): Character | undefined => CHARACTERS.find((c) => c.id === id);
+
+/** Colores de asiento con retrato (los `id` de `SEAT_COLORS` en `board.js`). */
+export const PORTRAIT_COLORS = ['red', 'blue', 'orange', 'white'];
+
+/** Ruta del retrato con la ropa del color de asiento `color`. */
+export const portraitURL = (id: string, color = 'red'): string => `/personajes/${id}-${PORTRAIT_COLORS.includes(color) ? color : 'red'}.webp`;
+
+/** El retrato listo para meter en el HTML de la mesa (va dentro de un `.av` redondo con el aro del color del asiento). */
+export const portraitHTML = (id: string, color?: string): string => `<img src="${portraitURL(id, color)}" alt="" draggable="false">`;
+
+/**
+ * Los personajes de los bots en la partida contra bots: `count` distintos entre sí, sin el tuyo ni uno que se llame como vos
+ * (así no hace falta «… (bot)»). El nombre de cada bot es el de su retrato.
+ */
+export function drawBotCharacters(count: number, myId: string, myName: string, rng: () => number = Math.random): Character[] {
+  const plain = (s: string) => s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); // «Jose» también tapa a José
+  const pool = CHARACTERS.filter((c) => c.id !== myId && plain(c.name) !== plain(myName));
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, count);
+}
