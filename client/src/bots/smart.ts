@@ -6,6 +6,7 @@
 import { RESOURCES, canAfford, canSettleAt, handTotal, longestRoad, publicVictoryPoints, topology } from '../engine';
 import type { Command, Cost, GameState, Hand, LegalAction, PlayerId, Resource, Rng } from '../engine';
 import { robberVictims } from '../engine/robber';
+import { BALANCED, type BotProfile } from './profiles';
 import { commandFor, randomBot, type Bot, type BotInput } from './random';
 
 /** Puntos de probabilidad de una ficha (los «puntitos» del tablero): 6 y 8 valen 5; 2 y 12 valen 1. */
@@ -25,20 +26,23 @@ function produced(s: GameState, me: PlayerId): Set<Resource> {
   return out;
 }
 
-/** Cuánto vale un vértice para construir ahí: probabilidad de producir, variedad (sobre todo lo que aún no produce) y puerto. */
-export function vertexValue(s: GameState, v: number, mine: Set<Resource>): number {
+/**
+ * Cuánto vale un vértice para construir ahí: probabilidad de producir, variedad (sobre todo lo que aún no produce) y puerto.
+ * El perfil pesa cada recurso (el estanciero prefiere vaca, maíz y piedra; el colono, madera y ladrillo) y la variedad.
+ */
+export function vertexValue(s: GameState, v: number, mine: Set<Resource>, pf: BotProfile = BALANCED): number {
   const topo = topology();
   let value = 0;
   const seen = new Set<Resource>();
   for (const t of topo.vertices[v].tiles) {
     const terrain = s.map.terrains[t];
     if (terrain === 'desert') continue;
-    value += pips(s.map.numbers[t]) * (mine.has(terrain) ? 0.8 : 1.15);
+    value += pips(s.map.numbers[t]) * (mine.has(terrain) ? 0.8 : 1.15) * pf.resources[terrain];
     seen.add(terrain);
   }
-  value += seen.size * 0.6;
+  value += seen.size * pf.variety;
   const port = s.map.ports.find((pt) => pt.vertices.includes(v));
-  if (port) value += port.resource === null ? 1 : seen.has(port.resource) ? 1.5 : 0.4;
+  if (port) value += port.resource === null ? 1 : (seen.has(port.resource) ? 1.5 : 0.4) * pf.resources[port.resource];
   return value;
 }
 
@@ -60,19 +64,19 @@ function hasReachableSpot(s: GameState, me: PlayerId): boolean {
  * Un camino con los dos extremos ya en su red (cierra un anillo o rellena un hueco) y que no alarga la ruta vale 0: antes, sin
  * un lugar para casa a la vista, todos valían lo mismo y el bot terminaba dando vueltas en círculo alrededor de sus casas.
  */
-function roadScorer(s: GameState, me: PlayerId, mine: Set<Resource>) {
+function roadScorer(s: GameState, me: PlayerId, mine: Set<Resource>, pf: BotProfile) {
   const topo = topology();
   const base = longestRoad(s, me);
-  // si otro ya tiene una ruta mucho más larga, pelear el reconocimiento no vale la pena: estirar pesa menos
+  // si otro ya tiene una ruta mucho más larga, pelear el reconocimiento no vale la pena: estirar pesa menos (salvo al colono)
   const rival = Math.max(0, ...s.players.map((_, p) => (p === me ? 0 : longestRoad(s, p))));
-  const stretchWeight = rival - base > 3 ? 0.5 : 2;
+  const stretchWeight = rival - base > 3 && !pf.fightRoad ? 0.5 : pf.stretch;
   const parts = (edge: number) => {
     const e = topo.edges[edge];
     const fresh = [e.a, e.b].filter((v) => !onNetwork(s, v, me)); // el extremo «de avanzada»: el que todavía no es de su red
     let spot = 0;
     for (const v of fresh) {
-      if (canSettleAt(s, v)) spot = Math.max(spot, vertexValue(s, v, mine));
-      else if (!s.vertexBuildings[v]) for (const n of topo.vertices[v].neighbors) if (canSettleAt(s, n)) spot = Math.max(spot, vertexValue(s, n, mine) * 0.5);
+      if (canSettleAt(s, v)) spot = Math.max(spot, vertexValue(s, v, mine, pf));
+      else if (!s.vertexBuildings[v]) for (const n of topo.vertices[v].neighbors) if (canSettleAt(s, n)) spot = Math.max(spot, vertexValue(s, n, mine, pf) * 0.5);
     }
     const edgeRoads = s.edgeRoads.slice();
     edgeRoads[edge] = me;
@@ -127,7 +131,7 @@ function best<T>(xs: readonly T[], score: (x: T) => number, rng: Rng): T {
 }
 
 /** Las compras que le interesan, de más a menos valiosa: estancia (si tiene una casa para subir), casa y carta de desarrollo (salvo que esté juntando para las otras). */
-function goalsFor(s: GameState, me: PlayerId, hand: Hand): Cost[] {
+function goalsFor(s: GameState, me: PlayerId, hand: Hand, pf: BotProfile): Cost[] {
   const { costs, maxPieces } = s.config;
   let settlements = 0;
   let cities = 0;
@@ -139,15 +143,14 @@ function goalsFor(s: GameState, me: PlayerId, hand: Hand): Cost[] {
   const goals: Cost[] = [];
   if (cities < maxPieces.cities && settlements > 0) goals.push(costs.city);
   if (settlements < maxPieces.settlements) goals.push(costs.settlement);
-  if (!savingForBuilding(s, me, hand)) goals.push(costs.developmentCard); // si está juntando, no comercia para la carta
+  if (!savingForBuilding(s, me, hand, pf)) goals.push(costs.developmentCard); // si está juntando, no comercia para la carta
   return goals;
 }
 
-const SAVE_WITHIN = 2; // si a la estancia o a la casa le faltan hasta estas cartas, junta para ella en vez de comprar una carta
 const SAVE_MAX_HAND = 7; // con más cartas que esto gasta igual: con un 7 perdería la mitad
 
 /** Las construcciones para las que tiene sentido juntar: estancia (si tiene una casa para subir) y casa (si ya llega a un lugar libre). */
-function buildingTargets(s: GameState, me: PlayerId): Cost[] {
+function buildingTargets(s: GameState, me: PlayerId, withSettlement = true): Cost[] {
   const { costs, maxPieces } = s.config;
   let settlements = 0;
   let cities = 0;
@@ -158,22 +161,23 @@ function buildingTargets(s: GameState, me: PlayerId): Cost[] {
   }
   const targets: Cost[] = [];
   if (cities < maxPieces.cities && settlements > 0) targets.push(costs.city);
-  if (settlements < maxPieces.settlements && hasReachableSpot(s, me)) targets.push(costs.settlement);
+  if (withSettlement && settlements < maxPieces.settlements && hasReachableSpot(s, me)) targets.push(costs.settlement);
   return targets;
 }
 
 /**
  * Si conviene guardar en vez de comprar una carta de desarrollo: la carta usa vaca, maíz y piedra, lo mismo que piden la
  * estancia y la casa, así que comprarla apenas alcanzaba le comía lo que venía juntando. Guarda si le faltan pocas cartas
- * para una de las dos y la carta lo alejaría de ella, salvo con la mano llena (con un 7 perdería la mitad).
+ * para una de las dos y la carta lo alejaría de ella, salvo con la mano llena (con un 7 perdería la mitad). Cuánto le pueden
+ * faltar y si junta también para la casa lo dice el perfil (el estanciero junta solo para la estancia: compra más cartas).
  */
-function savingForBuilding(s: GameState, me: PlayerId, hand: Hand): boolean {
+function savingForBuilding(s: GameState, me: PlayerId, hand: Hand, pf: BotProfile): boolean {
   if (handTotal(hand) > SAVE_MAX_HAND) return false;
   const after = { ...hand };
   for (const r of RESOURCES) after[r] -= s.config.costs.developmentCard[r] ?? 0;
-  return buildingTargets(s, me).some((goal) => {
+  return buildingTargets(s, me, pf.saveForSettlement).some((goal) => {
     const d = distance(hand, [goal]);
-    return d <= SAVE_WITHIN && distance(after, [goal]) > d;
+    return d <= pf.saveWithin && distance(after, [goal]) > d;
   });
 }
 
@@ -206,7 +210,7 @@ function isLeader(s: GameState, p: PlayerId, me: PlayerId): boolean {
  * por ganar. A medida que avanza la partida rechaza más por las dudas (con probabilidad `lateness`), y el doble si quien
  * ofrece es el que va ganando.
  */
-function answerTrade(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAction, { type: 'respondTrade' }>, rng: Rng): boolean {
+function answerTrade(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAction, { type: 'respondTrade' }>, rng: Rng, pf: BotProfile): boolean {
   const offer = s.trade;
   if (!offer || !a.canAccept) return false;
   if (publicVictoryPoints(s, offer.from) >= s.config.victoryPoints - 2) return false; // no ayuda al que está por ganar
@@ -220,7 +224,7 @@ function answerTrade(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAct
     gets += offer.give[r] ?? 0;
     gives += offer.get[r] ?? 0;
   }
-  const goals = goalsFor(s, me, hand);
+  const goals = goalsFor(s, me, hand, pf);
   const before = distance(hand, goals);
   const now = distance(after, goals);
   return now < before || (now === before && gets > gives);
@@ -238,10 +242,10 @@ const TRADE_EAGERNESS: Record<1 | 2, number> = { 1: 0.65, 2: 0.35 }; // al princ
  * 1 no alcanzaría a nadie también con 2) y usa `tradeOffers` como índice: así cada intento del turno es una oferta
  * distinta y, si ya probó todas, no insiste más.
  */
-function proposeCommand(s: GameState, me: PlayerId, hand: Hand, rng: Rng): Command | null {
+function proposeCommand(s: GameState, me: PlayerId, hand: Hand, rng: Rng, pf: BotProfile): Command | null {
   const k = s.tradeOffers ?? 0;
   if (k >= BOT_MAX_OFFERS) return null;
-  const shortest = Math.min(...goalsFor(s, me, hand).map((goal) => {
+  const shortest = Math.min(...goalsFor(s, me, hand, pf).map((goal) => {
     const missing = missingFor(hand, goal);
     return missing.length ? missing.reduce((n, r) => n + (goal[r] ?? 0) - hand[r], 0) : Infinity;
   }));
@@ -261,7 +265,7 @@ function proposeCommand(s: GameState, me: PlayerId, hand: Hand, rng: Rng): Comma
     seen.add(key);
     candidates.push({ type: 'proposeTrade', player: me, give: { [give]: amount }, get: { [get]: 1 }, ...(to ? { to } : {}) });
   };
-  for (const goal of goalsFor(s, me, hand)) {
+  for (const goal of goalsFor(s, me, hand, pf)) {
     const missing = missingFor(hand, goal);
     const short = missing.reduce((n, r) => n + (goal[r] ?? 0) - hand[r], 0);
     if (!missing.length || short > 2) continue;
@@ -276,8 +280,8 @@ function proposeCommand(s: GameState, me: PlayerId, hand: Hand, rng: Rng): Comma
 }
 
 /** Comercia con el banco solo si con ese único cambio queda pagable una construcción (estancia, casa o carta). */
-function tradeForGoal(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAction, { type: 'bankTrade' }>): Command | null {
-  const goals = goalsFor(s, me, hand);
+function tradeForGoal(s: GameState, me: PlayerId, hand: Hand, a: Extract<LegalAction, { type: 'bankTrade' }>, pf: BotProfile): Command | null {
+  const goals = goalsFor(s, me, hand, pf);
   for (const goal of goals) {
     const missing = missingFor(hand, goal);
     if (missing.length !== 1 || (goal[missing[0]] ?? 0) - hand[missing[0]] !== 1) continue; // solo si UN cambio la completa
@@ -313,6 +317,17 @@ function tradeTowardBuilding(s: GameState, me: PlayerId, hand: Hand, a: Extract<
   return null;
 }
 
+/**
+ * Si le conviene comprar un camino. Con `roadGoal` (el estanciero), solo para llegar a un lugar nuevo: no compra si ya llega a
+ * uno libre (guarda para la casa) ni cuando ya tiene sus construcciones (casas más estancias, las que va a subir). Sin esto ponía
+ * unos 2 caminos de más por partida.
+ */
+function wantsRoad(s: GameState, me: PlayerId, pf: BotProfile): boolean {
+  if (pf.roadGoal === null) return true;
+  const buildings = s.vertexBuildings.filter((b) => b?.player === me).length;
+  return buildings < pf.roadGoal && !hasReachableSpot(s, me);
+}
+
 /** Descarta primero lo que más tiene (así conserva variedad para construir). */
 function discardCommand(me: PlayerId, hand: Hand, count: number): Command {
   const left = { ...hand };
@@ -325,16 +340,17 @@ function discardCommand(me: PlayerId, hand: Hand, count: number): Command {
   return { type: 'discard', player: me, cards };
 }
 
-export const smartBot: Bot = (input: BotInput, rng: Rng): Command => {
+/** El bot con criterio con un perfil (cómo pesa recursos, caminos, cartas y estancias). */
+export const makeSmartBot = (pf: BotProfile): Bot => (input: BotInput, rng: Rng): Command => {
   const { me, legal, hand, state: s } = input;
   if (!s) return randomBot(input, rng); // sin el estado completo no puede juzgar: cae al aleatorio
   const has = <T extends LegalAction['type']>(type: T) => legal.find((a): a is Extract<LegalAction, { type: T }> => a.type === type);
   const mine = produced(s, me);
-  const bestVertex = (vs: number[]) => best(vs, (v) => vertexValue(s, v, mine), rng);
+  const bestVertex = (vs: number[]) => best(vs, (v) => vertexValue(s, v, mine, pf), rng);
 
   // comercio con jugadores: responder (fuera de turno también) y, si propuse yo, concretar con el que aceptó y menos puntos tiene
   const rt = has('respondTrade');
-  if (rt) return { type: 'respondTrade', player: me, accept: answerTrade(s, me, hand, rt, rng) };
+  if (rt) return { type: 'respondTrade', player: me, accept: answerTrade(s, me, hand, rt, rng, pf) };
   const ct = has('confirmTrade');
   if (ct) return { type: 'confirmTrade', player: me, with: best(ct.with, (p) => -publicVictoryPoints(s, p), rng) };
   if (has('cancelTrade')) return { type: 'cancelTrade', player: me };
@@ -344,7 +360,7 @@ export const smartBot: Bot = (input: BotInput, rng: Rng): Command => {
   if (ps) return { type: 'placeSettlement', player: me, vertex: bestVertex(ps.vertices) };
   const pr = has('placeRoad');
   if (pr) {
-    const roads = roadScorer(s, me, mine);
+    const roads = roadScorer(s, me, mine, pf);
     return { type: 'placeRoad', player: me, edge: best(pr.edges, roads.value, rng) };
   }
 
@@ -363,25 +379,26 @@ export const smartBot: Bot = (input: BotInput, rng: Rng): Command => {
   // antes de tirar: el gaucho si el ladrón está sobre una casilla mía (todo lo demás espera a la tirada)
   const knight = has('playKnight');
   const robbed = !!s.map.numbers[s.robber] && topology().tiles[s.robber].vertices.some((v) => s.vertexBuildings[v]?.player === me);
-  if (knight && robbed) return { type: 'playKnight', player: me };
+  if (knight && (robbed || pf.eagerKnight)) return { type: 'playKnight', player: me }; // el estanciero va por la milicia
   if (has('rollDice')) return { type: 'rollDice', player: me };
   if (has('playRoadBuilding')) return { type: 'playRoadBuilding', player: me };
 
   // construir, en orden de rendimiento: estancia, casa, carta, camino
   const city = has('buildCity');
-  if (city) return { type: 'buildCity', player: me, vertex: bestVertex(city.vertices) };
   const settle = has('buildSettlement');
+  if (settle && pf.settlementFirst) return { type: 'buildSettlement', player: me, vertex: bestVertex(settle.vertices) }; // el colono, casa primero
+  if (city) return { type: 'buildCity', player: me, vertex: bestVertex(city.vertices) };
   if (settle) return { type: 'buildSettlement', player: me, vertex: bestVertex(settle.vertices) };
   const btb = has('bankTrade');
   if (btb) {
     const trade = tradeTowardBuilding(s, me, hand, btb);
     if (trade) return trade;
   }
-  if (has('buyDevCard') && !savingForBuilding(s, me, hand)) return { type: 'buyDevCard', player: me };
+  if (has('buyDevCard') && !savingForBuilding(s, me, hand, pf)) return { type: 'buyDevCard', player: me };
   const road = has('buildRoad');
-  if (road) {
+  if (road && (s.phase.kind === 'roadBuilding' || wantsRoad(s, me, pf))) {
     // si ya llega a un lugar para una casa, guarda madera y ladrillo para ella: solo gasta en un camino que abra otro lugar
-    const roads = roadScorer(s, me, mine);
+    const roads = roadScorer(s, me, mine, pf);
     const saving = hasReachableSpot(s, me);
     const worth = (x: number) => {
       const p = roads.parts(x);
@@ -406,16 +423,19 @@ export const smartBot: Bot = (input: BotInput, rng: Rng): Command => {
   // comerciar solo si completa una compra
   const bt = has('bankTrade');
   if (bt) {
-    const trade = tradeForGoal(s, me, hand, bt);
+    const trade = tradeForGoal(s, me, hand, bt, pf);
     if (trade) return trade;
   }
 
   // si le falta poco para una compra, ofrece un cambio a los demás
   if (has('proposeTrade')) {
-    const offer = proposeCommand(s, me, hand, rng);
+    const offer = proposeCommand(s, me, hand, rng, pf);
     if (offer) return offer;
   }
 
   if (has('endTurn')) return { type: 'endTurn', player: me };
   return commandFor(legal[0], me, hand, rng);
 };
+
+/** El bot de siempre (perfil balanceado): el que usan las salas y las simulaciones. */
+export const smartBot: Bot = makeSmartBot(BALANCED);

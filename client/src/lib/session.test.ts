@@ -196,4 +196,26 @@ describe('kick: apertura de un bot', () => {
     const session = new LocalSession(['Ana', 'B1', 'B2'], 1, undefined, { bots: [false, true, true] });
     expect(await session.kick()).toEqual([]);
   });
+
+  it('con perfiles sorteados, cada bot saca uno distinto (el humano ninguno) y la partida sigue andando', async () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      const four = new LocalSession(NAMES, seed, undefined, { bots: [false, true, true, true], profiles: 'draw', rng: mulberry32(seed) });
+      const p4 = four.debugProfiles();
+      expect(p4[0]).toBeNull();
+      expect(new Set(p4.slice(1)).size).toBe(3);
+      const three = new LocalSession(NAMES.slice(0, 3), seed, undefined, { bots: [false, true, true], profiles: 'draw', rng: mulberry32(seed) });
+      expect(new Set(three.debugProfiles().slice(1)).size).toBe(2);
+    }
+    const session = new LocalSession(NAMES, 4, { firstPlayer: 0 }, { bots: [false, true, true, true], profiles: 'draw', rng: mulberry32(4) });
+    session.autoSetup((options) => options[0]);
+    for (let i = 0; i < 30; i++) {
+      const view = session.view();
+      if (view.game!.phase.kind === 'finished') break;
+      const roll = view.legal.find((a) => a.type === 'rollDice');
+      const r = await session.send(roll ? { type: 'rollDice', player: 0 } : view.legal.some((a) => a.type === 'endTurn') ? { type: 'endTurn', player: 0 } : { type: 'rollDice', player: 0 });
+      if (!r.ok) break; // un descarte o un robo del humano cortan la prueba: alcanza con que los bots hayan jugado varias vueltas
+    }
+    expectConserved(session.debugState());
+    expect(session.debugState().dice.rolls).toBeGreaterThan(8);
+  });
 });

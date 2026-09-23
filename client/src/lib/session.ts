@@ -3,6 +3,8 @@
 // y, más adelante, una remota que habla con la API de salas. La vista es la misma en ambas (`RoomView`).
 
 import { playBots } from '../bots/play';
+import { drawProfiles, PROFILES, type BotProfileId } from '../bots/profiles';
+import { makeSmartBot } from '../bots/smart';
 import type { Bot } from '../bots/random';
 import { applyCommand, createGame, legalActions } from '../engine';
 import type { Command, GameConfig, GameEvent, GameState, Rng } from '../engine';
@@ -24,12 +26,16 @@ export interface LocalOptions {
   bots?: boolean[];
   rng?: Rng;
   bot?: Bot;
+  /** 'draw': cada bot saca un perfil distinto (estanciero, colono, balanceado) al crear la sesión; no se muestra en la mesa. */
+  profiles?: 'draw';
 }
 
 export class LocalSession implements GameSession {
   private state: GameState;
   private version = 1;
   private listeners = new Set<(view: RoomView, events: ViewEvent[]) => void>();
+  private profiles: (BotProfileId | null)[] = [];
+  private botList?: Bot[];
 
   constructor(
     private names: string[],
@@ -39,6 +45,12 @@ export class LocalSession implements GameSession {
   ) {
     if (opts.bots?.[0]) throw new Error('LocalSession: el primer asiento tiene que ser humano');
     this.state = createGame(names, seed, config);
+    const bots = opts.bots;
+    if (bots && opts.profiles === 'draw') {
+      const drawn = drawProfiles(bots.filter(Boolean).length, opts.rng ?? Math.random);
+      this.profiles = bots.map((isBot) => (isBot ? drawn.shift()! : null));
+      this.botList = this.profiles.map((id) => makeSmartBot(PROFILES[id ?? 'balanced']));
+    }
   }
 
   /** Quién mira: en la partida contra bots, el humano (asiento 0); en la de varios en la misma pantalla, quien tiene el turno. */
@@ -72,7 +84,7 @@ export class LocalSession implements GameSession {
     const bots = this.opts.bots;
     if (bots) {
       // los bots juegan enseguida, hasta que vuelve a tocarle al humano: sus eventos siguen a los del comando
-      const played = playBots(this.state, (p) => bots[p], this.opts.rng ?? Math.random, this.opts.bot);
+      const played = playBots(this.state, (p) => bots[p], this.opts.rng ?? Math.random, this.botList ?? this.opts.bot);
       this.state = played.state;
       all.push(...played.events);
     }
@@ -90,7 +102,7 @@ export class LocalSession implements GameSession {
   async kick(): Promise<ViewEvent[]> {
     const bots = this.opts.bots;
     if (!bots || !bots[this.state.turn] || this.state.phase.kind === 'finished') return [];
-    const played = playBots(this.state, (p) => bots[p], this.opts.rng ?? Math.random, this.opts.bot);
+    const played = playBots(this.state, (p) => bots[p], this.opts.rng ?? Math.random, this.botList ?? this.opts.bot);
     this.state = played.state;
     this.version++;
     return played.events.map((e) => viewEvent(e, 0));
@@ -115,6 +127,11 @@ export class LocalSession implements GameSession {
       this.state = r.state;
     }
     this.version++;
+  }
+
+  /** El perfil de cada asiento (null: humano o sin sortear): solo para pruebas; en la mesa no se muestra. */
+  debugProfiles(): (BotProfileId | null)[] {
+    return this.state.players.map((_, p) => this.profiles[p] ?? null);
   }
 
   /** Estado completo (con manos y semillas): solo para el gancho de pruebas `?debug`. */

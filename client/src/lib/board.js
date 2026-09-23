@@ -1158,7 +1158,7 @@ export function initBoard(opts) {
     function buildBoard(seed) {
       if (board) scene.remove(board);
       var rnd = mulberry32(seed);
-      session = online ? opts.session : new LocalSession(PLAYER_INFO.slice(0, SEATS).map(function (p) { return p.name; }), seed, { firstPlayer: null, numberPlacement: opts.chaos ? 'random' : 'spiral' }, withOthers ? { bots: [false, true, true, true].slice(0, SEATS) } : {}); pull();
+      session = online ? opts.session : new LocalSession(PLAYER_INFO.slice(0, SEATS).map(function (p) { return p.name; }), seed, { firstPlayer: null, numberPlacement: opts.chaos ? 'random' : 'spiral' }, withOthers ? { bots: [false, true, true, true].slice(0, SEATS), profiles: 'draw' } : {}); pull();
       var topo = topology();
       board = new THREE.Group(); scene.add(board);
       setOrbit(false); closeOpening(); tiles = []; tileMeshes = []; ships = []; trees = []; robber = null; hoverTile = null; busy = false; sending = false; pieceSeen = {};
@@ -2595,6 +2595,7 @@ export function initBoard(opts) {
       window.__paisano = {
         pick: function (x, y) { var r = renderer.domElement.getBoundingClientRect(); pointer.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1); raycaster.setFromCamera(pointer, camera); var h = raycaster.intersectObjects(markersGroup.children, false)[0]; return { hit: h ? h.object.userData : null, ray: [raycaster.ray.origin.toArray(), raycaster.ray.direction.toArray()], pointer: pointer.toArray(), cam: camera.position.toArray(), marker19: markersGroup.children.filter(function (c) { return c.userData.id === 19; }).map(function (c) { return c.matrixWorld.elements.slice(12, 15); }) }; },
         game: function () { return session.debugState ? session.debugState() : game; },
+        profiles: function () { return session.debugProfiles ? session.debugProfiles() : []; }, // el perfil de cada bot (en la mesa no se muestra)
         busy: function () { return busy; },
         camera: camera, controls: controls, // para acercar la cámara a un adorno y revisarlo
 

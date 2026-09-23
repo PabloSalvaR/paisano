@@ -29,13 +29,14 @@ export function nextBot(s: GameState, isBot: (player: PlayerId) => boolean): Pla
  * Juega por los bots hasta que le toque a un humano o termine la partida. Devuelve el estado nuevo y los eventos en orden.
  * Un bot que se equivoca corta la tanda sin trabar nada: el estado devuelto es siempre válido.
  */
-export function playBots(state: GameState, isBot: (player: PlayerId) => boolean, rng: Rng, bot: Bot = smartBot): { state: GameState; events: GameEvent[] } {
+export function playBots(state: GameState, isBot: (player: PlayerId) => boolean, rng: Rng, bot: Bot | Bot[] = smartBot): { state: GameState; events: GameEvent[] } {
+  const botOf = (p: PlayerId): Bot => (Array.isArray(bot) ? bot[p] ?? smartBot : bot); // un bot para todos, o uno por asiento (perfiles)
   const events: GameEvent[] = [];
   let s = state;
   for (let i = 0, me = nextBot(s, isBot); i < MAX_STEPS && me !== null; i++, me = nextBot(s, isBot)) {
     const legal = legalActions(s, me);
     if (!legal.length) break;
-    const result = applyCommand(s, bot({ me, legal, hand: s.players[me].hand, state: s }, rng));
+    const result = applyCommand(s, botOf(me)({ me, legal, hand: s.players[me].hand, state: s }, rng));
     if (!result.ok) break;
     s = result.state;
     events.push(...result.events);
