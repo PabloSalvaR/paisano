@@ -34,6 +34,7 @@ Leer el archivo que corresponda **antes de tocar ese tema**:
 
 - `docs/multijugador.md`: sesiones (`GameSession`), salas, API, bots, reglas de seguridad y reproducción de eventos en el tablero.
 - `docs/referencia-visual.md`: especificación del tablero 3D (medidas, colores, piezas, luces, cámara, banner, dados). El código de `client/src/lib/board.js` manda si difiere.
+- `docs/refactor-tablero.md`: plan pendiente para dividir `board.js` en módulos (y después interfaz en React y, si se quiere, React Three Fiber), con la nota de performance.
 - `docs/decisiones-interfaz.md`: decisiones de interfaz y su porqué (confirmar construcciones, sonido, botón de turno, textos en voseo, comercio con el banco, adornos de la mesa).
 
 ## Propiedad intelectual
@@ -255,6 +256,7 @@ Las fases 1-4 del plan original (Java/Spring) quedan pospuestas: se hicieron en 
 2. Antes de invitar a mucha gente: leer en el FAQ de Upstash qué pasa al llegar al tope del plan gratis (el consumo medido: ~660 comandos en una tarde corta de pruebas; ver `docs/multijugador.md`).
 
 **Siguiente (sin orden fijo, a elección del desarrollador)**
+- **Refactor del tablero** (anotado para después, 23 sept 2026): dividir `board.js` en módulos sin cambiar nada visible; después, la interfaz en React y, si se quiere, React Three Fiber. Plan completo en `docs/refactor-tablero.md`.
 - **Portfolio (fase 9):** README con capturas o GIF y la demo online.
 - **Pulido gráfico** (fase 8): lo que el desarrollador vaya marcando. Primer avance (árboles con brisa, íconos de maíz/piedra, animación de cartas al jugarlas, copa y resumen de fin de partida) en «Decisiones tomadas». Sin probar a mano: cómo se siente el balanceo de los árboles y el ritmo de la animación de las cartas en una partida real (solo se vio con Chrome y `?debug`).
 - **Tiempo límite por turno y reemplazo por un bot.** El diseño está en `docs/multijugador.md` («Diseño propuesto: tiempo límite por turno…») y **faltan las respuestas del desarrollador a 4 preguntas** (reloj de turno vs presencia, duración por defecto y opciones, reemplazo permanente o recuperable, aviso previo). Empezar por ahí y por los tests.
