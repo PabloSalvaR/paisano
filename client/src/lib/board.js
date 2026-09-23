@@ -1685,7 +1685,6 @@ export function initBoard(opts) {
         }
         case 'roll': return me ? 'Tu turno: jugá los dados' : 'Turno de ' + name;
         case 'main':
-          if (game.trade) return game.trade.from === VIEWER ? 'Tu oferta está abierta: esperá las respuestas' : PLAYER_INFO[game.trade.from].name + ' ofrece un cambio';
           if (buildMode) return me ? { road: 'Elegí dónde va el camino', settlement: 'Elegí dónde va la casa', city: 'Elegí qué casa mejorar' }[buildMode] : 'Turno de ' + name;
           return me ? 'Tu turno' : 'Turno de ' + name;
         case 'discard': return me ? 'Salió un 7: descartá ' + ph.queue[0].count + ' cartas' : name + ' descarta ' + ph.queue[0].count + ' cartas';
@@ -1722,9 +1721,11 @@ export function initBoard(opts) {
       clearGhost();
       dialogEl.className = 'panel dialog'; dialogEl.style.left = dialogEl.style.top = dialogEl.style.transform = '';
       if (summaryUI && !busy) { dialogKey = ''; renderSummary(); return; }
-      if (game.trade && !busy && renderOffer()) { dialogKey = ''; return; }
+      var ot = offerNow(), watch = !!ot && offerWatch(ot); // la oferta se ve también mientras se reproducen eventos
+      if (ot && !watch) { dialogKey = ''; renderOffer(ot, false); return; }
       if (tradeUI && !busy && ph.kind === 'main') { dialogKey = ''; renderTrade(); return; }
       if (cardsUI && !busy) { dialogKey = ''; renderCards(); return; }
+      if (ot) { dialogKey = ''; renderOffer(ot, true); return; } // entre otros: chica arriba, sin tapar tus paneles
       if (busy || game.turn !== me || (ph.kind !== 'discard' && ph.kind !== 'steal')) { dialogEl.hidden = true; dialogKey = ''; return; } // descartar y elegir víctima solo lo ve quien actúa
       var key = ph.kind + ':' + game.turn + ':' + (ph.kind === 'discard' ? ph.queue.length : ph.victims.join(','));
       if (key !== dialogKey) { dialogKey = key; discardSel = {}; }
@@ -1830,7 +1831,6 @@ export function initBoard(opts) {
     }
     // Comercio entre jugadores: la oferta se arma con pasos ± (doy / pido) y se manda a todos o a algunos. Las reglas las valida el motor.
     function others() { var o = []; for (var i = 0; i < game.players.length; i++) if (i !== me) o.push(i); return o; }
-    function cardsText(c) { return HAND_KINDS.filter(function (k) { return c[k]; }).map(function (k) { return c[k] + ' × ' + TERRAINS[k].res; }).join(' + '); }
     function cardChips(c) {
       return '<span class="chips">' + HAND_KINDS.filter(function (k) { return c[k]; }).map(function (k) {
         return '<span class="chip" style="--c:' + handEl.querySelector('[data-res="' + k + '"]').style.getPropertyValue('--c') + '" title="' + TERRAINS[k].res + '"><span class="ico">' + resIcon(k) + '</span><b>×' + c[k] + '</b></span>';
@@ -1904,29 +1904,56 @@ export function initBoard(opts) {
         '<div class="yesno"' + (give && tradeUI.get ? '' : ' style="visibility:hidden"') + '><button type="button" class="no" data-cancel aria-label="Cancelar" title="Cancelar">✕</button><button type="button" class="yes" data-ok aria-label="Confirmar" title="Confirmar">✓</button></div>';
       dialogEl.hidden = false;
     }
-    // Oferta abierta: a quien la recibe le pregunta (aceptar / rechazar); a quien la hizo le muestra las respuestas y le deja elegir con quién
-    // concreta o cancelar. Los demás solo la ven en el texto de estado. Devuelve false si no hay nada que mostrarle a quien mira.
+    // Oferta abierta, en un solo panel y sin texto: arriba quien ofrece y las cartas (flechas desde su lado; si te la ofrecen a
+    // vos, desde el tuyo), abajo un redondel del color de cada consultado (pensando / ✓ / ✕). Quien ofrece concreta tocando un
+    // redondel con ✓; a quien la recibe le salen además ✕ / ✓. Si no participás, la ves chica arriba, sin botones. Durante una
+    // reproducción de eventos el panel sigue a `offerShown` (se llena al ritmo de las respuestas); al cerrarse queda
+    // `OFFER_END_MS` con el resultado (los dos que cambiaron resaltados, o todo apagado) y se va.
     function dirIco(down, label) { return '<span class="dir ' + (down ? 'in' : 'out') + '" title="' + label + '" aria-label="' + label + '">' + (down ? '↓' : '↑') + '</span>'; }
-    function renderOffer() {
-      var t = game.trade, mine = legal.filter(function (a) { return a.type === 'respondTrade'; })[0], from = PLAYER_INFO[t.from];
-      if (mine) {
-        dialogEl.className = 'panel dialog trade offer';
-        dialogEl.innerHTML = '<h3></h3><div class="swap">' + dirIco(true, 'Esto te entra') + cardChips(t.give) + '</div><div class="swap">' + dirIco(false, 'Esto se te va') + cardChips(t.get) + '</div>' +
-          (mine.canAccept ? '' : '<div class="sum">No tenés lo que te piden</div>') +
-          '<div class="yesno"><button type="button" class="no" data-reject aria-label="Rechazar" title="Rechazar">✕</button>' + (mine.canAccept ? '<button type="button" class="yes" data-accept aria-label="Aceptar" title="Aceptar">✓</button>' : '') + '</div>';
-        dialogEl.querySelector('h3').textContent = from.name + ' quiere comerciar';
-      } else if (t.from === me) {
-        var stat = { pending: 'pensando…', accepted: 'aceptó', rejected: 'rechazó' };
-        dialogEl.className = 'panel dialog trade offer';
-        dialogEl.innerHTML = '<h3>Tu oferta</h3><div class="swap">' + dirIco(false, 'Esto se te va') + cardChips(t.give) + '</div><div class="swap">' + dirIco(true, 'Esto te entra') + cardChips(t.get) + '</div><div class="rows">' +
-          t.responses.map(function (r) {
-            return '<div class="row st-' + r.status + '" style="--pc:' + PLAYER_INFO[r.player].css + '"><span class="av">' + avatarSVG(r.player) + '</span><span class="nm"></span><em>' + stat[r.status] + '</em>' +
-              (r.status === 'accepted' ? '<button type="button" class="deal" data-with="' + r.player + '">Cambiar</button>' : '') + '</div>';
-          }).join('') + '</div><button type="button" class="primary" data-cancel-offer>Cancelar oferta</button>';
-        Array.prototype.forEach.call(dialogEl.querySelectorAll('.row'), function (row, i) { row.querySelector('.nm').textContent = PLAYER_INFO[t.responses[i].player].name; });
-      } else return false;
+    var offerShown = null, offerEnd = null, offerEndTimer = null, offerFresh = -1, offerCan = true, OFFER_END_MS = 1000;
+    function copyOffer(t) { return { from: t.from, give: t.give, get: t.get, responses: t.responses.map(function (r) { return { player: r.player, status: r.status }; }) }; }
+    function offerNow() { return (playing ? offerShown : game.trade) || offerEnd; }
+    function offerWatch(t) { return t.from !== me && !t.responses.some(function (r) { return r.player === me; }); }
+    function closeOffer(done) {
+      var t = offerShown || (game.trade && copyOffer(game.trade));
+      offerShown = null; offerFresh = -1; clearTimeout(offerEndTimer);
+      if (t) { t.done = done; offerEnd = t; offerEndTimer = setTimeout(function () { offerEnd = null; renderDialog(); }, reduced() ? 0 : OFFER_END_MS); }
+      renderDialog();
+    }
+    function renderOffer(t, watch) {
+      var live = !busy && !t.done && !!game.trade, act = function (type) { return live ? legal.filter(function (a) { return a.type === type; })[0] : null; };
+      var mine = act('respondTrade'), conf = act('confirmTrade'), own = t.from === me, asked = !own && !watch, ended = !!t.done && t.done.with === undefined;
+      // Botones y aviso ocupan siempre su lugar (invisibles cuando no corresponden), para que el panel no cambie de tamaño al
+      // responder o al cerrarse. Si el motor no lo dice (ya respondiste, o se está reproduciendo), se mira la mano: es solo aspecto.
+      // Cerrada la oferta vale lo que se vio abierta (la mano ya cambió con el cambio).
+      var can = t.done ? offerCan : mine ? mine.canAccept : HAND_KINDS.every(function (k) { return (myHand[k] || 0) >= (t.get[k] || 0); });
+      offerCan = can;
+      var LABEL = { pending: 'pensando', accepted: 'aceptó', rejected: 'rechazó' };
+      var dots = '<div class="dots">' + t.responses.map(function (r) {
+        var p = r.player, pick = !!t.done && t.done.with === p, tap = !!conf && conf.with.indexOf(p) >= 0;
+        var cls = 'dot st-' + r.status + (pick ? ' chosen' : '') + (offerFresh === p ? ' fresh' : '') + (tap ? ' tap' : '');
+        var inner = r.status === 'accepted' ? '✓' : r.status === 'rejected' ? '✕' : '<i></i><i></i><i></i>';
+        var attrs = ' class="' + cls + '" data-p="' + p + '" data-st="' + LABEL[r.status] + '" style="--pc:' + PLAYER_INFO[p].css + ';--pt:' + PLAYER_INFO[p].text + '"';
+        return tap ? '<button type="button" data-with="' + p + '"' + attrs + '>' + inner + '</button>' : '<span' + attrs + '>' + inner + '</span>';
+      }).join('') + '</div>';
+      var from = '<span class="from' + (t.done && t.done.with !== undefined ? ' chosen' : '') + '" data-p="' + t.from + '" style="--pc:' + PLAYER_INFO[t.from].css + '"><span class="av">' + avatarSVG(t.from) + '</span></span>';
+      var outGive = asked ? dirIco(true, 'Esto te entra') : dirIco(false, own ? 'Esto se te va' : 'Da');
+      var outGet = asked ? dirIco(false, 'Esto se te va') : dirIco(true, own ? 'Esto te entra' : 'Pide');
+      dialogEl.className = 'panel dialog trade offer' + (watch ? ' mini' : '') + (t.done ? ' done' : '') + (ended ? ' ended' : '');
+      if (watch) dialogEl.innerHTML = from + '<span class="swap">' + outGive + cardChips(t.give) + '</span><span class="swap">' + outGet + cardChips(t.get) + '</span>' + dots;
+      else dialogEl.innerHTML = (asked ? '<div class="head">' + from + '<b class="who"></b></div>' : '') +
+        '<div class="swap">' + outGive + cardChips(t.give) + '</div><div class="swap">' + outGet + cardChips(t.get) + '</div>' + dots +
+        (asked && !can ? '<div class="sum">No tenés lo que te piden</div>' : '') +
+        (asked ? '<div class="yesno"' + (mine ? '' : ' style="visibility:hidden"') + '><button type="button" class="no" data-reject aria-label="Rechazar" title="Rechazar"' + (mine ? '' : ' disabled') + '>✕</button>' +
+          (can ? '<button type="button" class="yes" data-accept aria-label="Aceptar" title="Aceptar"' + (mine ? '' : ' disabled') + '>✓</button>' : '') + '</div>' : '') +
+        (own ? '<button type="button" class="primary" data-cancel-offer' + (live ? '' : ' disabled style="visibility:hidden"') + '>Cancelar oferta</button>' : '');
+      Array.prototype.forEach.call(dialogEl.querySelectorAll('[data-p]'), function (el) { // los nombres van por DOM (los escribe el jugador)
+        var nm = PLAYER_INFO[+el.getAttribute('data-p')].name, st = el.getAttribute('data-st');
+        el.title = nm; el.setAttribute('aria-label', st ? nm + ': ' + st : nm);
+      });
+      var who = dialogEl.querySelector('.who'); if (who) who.textContent = PLAYER_INFO[t.from].name;
+      offerFresh = -1; // el saltito del redondel que acaba de cambiar va una sola vez
       dialogEl.hidden = false;
-      return true;
     }
     dialogEl.addEventListener('click', function (e) {
       var b = e.target.closest('button'); if (!b || b.disabled || busy) return;
@@ -1942,8 +1969,7 @@ export function initBoard(opts) {
         else if (b.hasAttribute('data-reject')) tc = { type: 'respondTrade', player: me, accept: false };
         else if (b.hasAttribute('data-with')) tc = { type: 'confirmTrade', player: me, with: +b.getAttribute('data-with') };
         else if (b.hasAttribute('data-cancel-offer')) tc = { type: 'cancelTrade', player: me };
-        if (tc) dispatch(tc);
-        return;
+        if (tc) { dispatch(tc); return; } // si no, el clic es de otro panel (la oferta entre otros no tapa «Mis cartas»)
       }
       if (cardsUI) {
         if (b.hasAttribute('data-close')) cardsUI = null;
@@ -2045,7 +2071,7 @@ export function initBoard(opts) {
     var playing = false, queue = []; // queue: tandas de eventos de otros que llegaron mientras se reproducía otra
     function playEvents(events) {
       var animate = !reduced(), i = 0, note = null;
-      playing = true;
+      playing = true; offerShown = game.trade && copyOffer(game.trade);
       busy = true; refreshUi();
       function pause(cont, ms) { if (animate && ms > 0) setTimeout(cont, ms); else cont(); }
       // Antes de una acción de otro jugador: espera BOT_GAP_MS. `spent`: la acción abre con ResourcesSpent (construir); su pieza
@@ -2059,7 +2085,7 @@ export function initBoard(opts) {
           // el aviso del robo sobrevive al refresco final, pero solo si sigue siendo lo último que se mostró: si después pasó
           // otra cosa (sobre todo el cambio de turno) no se repone, para que no quede colgado cuando te toca tirar
           var keep = note && note.seq === statusSeq;
-          playing = false; busy = false; pull(); syncPieces(); applyView();
+          playing = false; busy = false; offerShown = null; pull(); syncPieces(); applyView();
           if (keep) showStatus(note.text, false, true, note.who);
           return;
         }
@@ -2116,13 +2142,15 @@ export function initBoard(opts) {
           case 'TradeProposed':
             return gap(p, function () {
               audio.card();
-              showStatus((p === VIEWER ? 'Ofreciste ' : PLAYER_INFO[p].name + ' ofrece ') + cardsText(ev.give) + ' por ' + cardsText(ev.get), false, true, p);
+              clearTimeout(offerEndTimer); offerEnd = null; offerFresh = -1;
+              offerShown = { from: p, give: ev.give, get: ev.get, responses: ev.to.map(function (q) { return { player: q, status: 'pending' }; }) };
+              renderDialog();
               if (animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
               pause(cont, foreign(p) ? 1100 : 300);
             });
           case 'TradeResponded':
-            showStatus((p === VIEWER ? 'Respondiste que ' + (ev.accept ? 'sí' : 'no') : PLAYER_INFO[p].name + (ev.accept ? ' aceptó' : ' rechazó')), false, true, p);
-            if (animate) pop(seatsEl.children[p], PLAYER_INFO[p].css);
+            if (offerShown) offerShown.responses.forEach(function (r) { if (r.player === p) r.status = ev.accept ? 'accepted' : 'rejected'; });
+            offerFresh = animate ? p : -1; renderDialog();
             return pause(cont, foreign(p) ? 900 : 0);
           case 'TradeCompleted': {
             var gn = sumOf(ev.give), tn = sumOf(ev.get);
@@ -2133,11 +2161,11 @@ export function initBoard(opts) {
             });
             renderSeats(); renderHand(); audio.trade();
             if (animate) { pop(seatsEl.children[p], PLAYER_INFO[p].css); pop(seatsEl.children[ev.with], PLAYER_INFO[ev.with].css); }
-            showStatus(PLAYER_INFO[p].name + ' y ' + PLAYER_INFO[ev.with].name + ' intercambiaron cartas', false, true, p);
+            closeOffer({ with: ev.with });
             return pause(cont, foreign(p) || foreign(ev.with) ? 900 : 0);
           }
           case 'TradeCancelled':
-            showStatus(ev.reason === 'rejected' ? 'Nadie aceptó la oferta de ' + PLAYER_INFO[p].name : PLAYER_INFO[p].name + ' canceló la oferta', false, true, p);
+            closeOffer({ reason: ev.reason });
             return pause(cont, foreign(p) ? 700 : 0);
           case 'DevCardBought':
             return gap(p, function () {
@@ -2360,15 +2388,19 @@ export function initBoard(opts) {
         };
         if (!animate) { gain(); return; }
         var stolen = j.from !== undefined, delay = stolen ? 250 : 450 + n * 260, sx, sy;
-        if (stolen) { // robo: sale del avatar de la víctima, que pierde la carta en el momento de partir
-          var fs = seatsEl.children[j.from], fr = fs.querySelector('.av').getBoundingClientRect();
+        if (stolen) { // robo: sale de la víctima, que pierde la carta en el momento de partir; si sos vos, de la tarjeta del recurso en el banner
+          var fs = seatsEl.children[j.from], robbedMe = j.from === VIEWER, fr = (robbedMe ? card.querySelector('svg') : fs.querySelector('.av')).getBoundingClientRect();
           sx = fr.left - sr.left + fr.width / 2; sy = fr.top - sr.top + fr.height / 2;
-          setTimeout(function () { counts[j.from] -= 1; if (j.from === VIEWER) { myHand[k] -= 1; handEl.querySelector('[data-res="' + k + '"] b').textContent = myHand[k]; } fs.querySelector('.cnt b').textContent = handTotal(j.from); pop(fs, PLAYER_INFO[j.from].css); }, delay);
+          setTimeout(function () {
+            counts[j.from] -= 1; fs.querySelector('.cnt b').textContent = handTotal(j.from);
+            if (robbedMe) { myHand[k] -= 1; card.querySelector('b').textContent = myHand[k]; pop(card, card.style.getPropertyValue('--c')); floatText(card, '−1', card.style.getPropertyValue('--c')); }
+            else pop(fs, PLAYER_INFO[j.from].css);
+          }, delay);
         } else {
           var v = new THREE.Vector3(j.t.x, TILE_TOP + 0.35, j.t.z).project(camera); sx = (v.x * 0.5 + 0.5) * w; sy = (0.5 - v.y * 0.5) * h;
         }
         var ar = (mine ? card.querySelector('svg') : seat.querySelector('.av')).getBoundingClientRect(), tx = ar.left - sr.left + ar.width / 2, ty = ar.top - sr.top + ar.height / 2;
-        var fly = document.createElement('div'); fly.className = 'fly'; fly.style.background = PLAYER_INFO[stolen ? j.from : p].css; fly.appendChild(card.querySelector('svg').cloneNode(true)); stage.appendChild(fly);
+        var fly = document.createElement('div'); fly.className = 'fly'; fly.style.background = pl.css; fly.appendChild(card.querySelector('svg').cloneNode(true)); stage.appendChild(fly);
         var at = function (x, y, sc) { return 'translate(' + (x - 20) + 'px,' + (y - 20) + 'px) scale(' + sc + ')'; };
         fly.animate([
           { transform: at(sx, sy, 0.4), opacity: 0 },
@@ -2449,6 +2481,7 @@ export function initBoard(opts) {
       updateStats();
       session.autoSetup(pickCentral); // la sesión juega la colocación con comandos legales; acá solo se elige dónde
       pull(); syncPieces(); applyView();
+      if (session.kick) session.kick().then(function (evs) { if (evs.length) playEvents(evs); }); // si el primer turno es de un bot, que juegue
     });
     var btnStats = document.getElementById('btnStats');
     btnStats.addEventListener('click', function () { statsEl.hidden = !statsEl.hidden; pressed(btnStats, !statsEl.hidden); });
