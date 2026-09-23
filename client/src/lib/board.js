@@ -9,7 +9,7 @@ import { createAudio } from './audio.js';
 import { topology } from '../engine';
 import { LocalSession } from './session';
 import { drawBastos11, devCardURL, awardURL } from './cardart';
-import { CHARACTERS, characterById } from './characters';
+import { BOT_NAMES, CHARACTERS, characterById } from './characters';
 
 export const MARKUP = `
 <div id="stage">
@@ -1526,29 +1526,34 @@ export function initBoard(opts) {
     var BADGE_ROAD = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="8" width="16" height="4.5" rx="1.5" transform="rotate(-25 10 10)" fill="currentColor"/></svg>';
     var BADGE_ARMY = '<svg viewBox="0 0 20 20" aria-hidden="true"><g transform="rotate(-40 10 10)" fill="currentColor"><path d="M8 7.8H15.6Q18.6 8.4 19.6 10.4Q17.4 12.3 14.2 12.4H8Z"/><rect x="5.9" y="5.8" width="2.3" height="9" rx="1"/><rect x="0.8" y="8.6" width="5.4" height="3.6" rx="1.6"/></g></svg>'; // silueta de un facón: hoja con punta, guarda y mango
     // El personaje (piel, pelo, sombrero o pañuelo) sale de `characters.ts` y sí se puede elegir (ver `opts.characterId`).
-    var PLAYER_INFO = SEAT_COLORS.map(function (sc, i) {
-      var ch = CHARACTERS[i];
-      return { name: ch.label, css: sc.css, text: sc.text, skin: ch.skin, hair: ch.hair, hat: ch.hat, mustache: !!ch.mustache, headscarf: !!ch.headscarf };
-    });
+    var PLAYER_INFO = SEAT_COLORS.map(function (sc, i) { return wearCharacter({ name: CHARACTERS[i].label, css: sc.css, text: sc.text }, CHARACTERS[i]); });
     if (online) opts.seats.forEach(function (st, i) { if (PLAYER_INFO[i]) PLAYER_INFO[i].name = st.name; }); // los nombres vienen de la sala
     // cuántos juegan: en línea, los de la sala; contra bots, lo elegido (3 o 4); en la mesa local, siempre 4
     var SEATS = online ? opts.seats.length : opts.mode === 'bots' && opts.players === 3 ? 3 : 4;
+    var SEAT_MATS = PLAYERS.slice(); // materiales 3D en el orden de SEAT_COLORS (drawBots los reparte)
     if (!online && opts.mode === 'bots' && opts.name) { // contra bots: el primer asiento es la persona, con el nombre que puso
       PLAYER_INFO[0].name = opts.name;
-      // Color elegido: se intercambia con el que tenía ese color por posición, así siguen habiendo 4 colores distintos
-      // (el bot que lo tenía se queda con el rojo de seat 0; nombre y personaje de cada asiento no se mueven, solo el color).
-      var colorIx = SEAT_COLORS.findIndex(function (c) { return c.id === opts.colorId; });
-      if (colorIx > 0) {
-        var mineCss = PLAYER_INFO[0].css, mineText = PLAYER_INFO[0].text;
-        PLAYER_INFO[0].css = PLAYER_INFO[colorIx].css; PLAYER_INFO[0].text = PLAYER_INFO[colorIx].text;
-        PLAYER_INFO[colorIx].css = mineCss; PLAYER_INFO[colorIx].text = mineText;
-        // las piezas 3D usan su propio material por asiento: se intercambian igual (si no, el fantasma sale del color
-        // elegido y la pieza puesta, del color fijo del asiento)
-        var mineMat = PLAYERS[0]; PLAYERS[0] = PLAYERS[colorIx]; PLAYERS[colorIx] = mineMat;
-      }
       var chosen = characterById(opts.characterId);
-      if (chosen) { PLAYER_INFO[0].skin = chosen.skin; PLAYER_INFO[0].hair = chosen.hair; PLAYER_INFO[0].hat = chosen.hat; PLAYER_INFO[0].mustache = !!chosen.mustache; PLAYER_INFO[0].headscarf = !!chosen.headscarf; }
-      PLAYER_INFO.forEach(function (pl, i) { if (i > 0 && pl.name.toLowerCase() === opts.name.toLowerCase()) pl.name += ' (bot)'; }); // si coincide con un bot, se distinguen
+      if (chosen) wearCharacter(PLAYER_INFO[0], chosen);
+      drawBots();
+    }
+    // El aspecto de un personaje va siempre entero (piel, pelo, sombrero, bigote, pañuelo): nunca se mezclan rasgos de dos.
+    function wearCharacter(pl, ch) { pl.skin = ch.skin; pl.hair = ch.hair; pl.hat = ch.hat; pl.mustache = !!ch.mustache; pl.headscarf = !!ch.headscarf; return pl; }
+    function shuffleAny(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+    // Contra bots, quiénes te tocan se sortea en cada partida: cada bot saca un personaje entre los 8 (sin repetir el tuyo)
+    // y un nombre de la lista de hombres o mujeres según ese personaje (`BOT_NAMES`), sin repetir ni uno que se llame como
+    // vos (así no hacen falta sufijos como «(bot)»). Los colores también: vos tenés el elegido (rojo si no elegiste) y los
+    // otros tres se reparten al azar entre los bots, sin repetirse.
+    function drawBots() {
+      var mine = opts.name.toLowerCase(), pool = shuffleAny(CHARACTERS.filter(function (c) { return c.id !== opts.characterId; }));
+      var names = { men: shuffleAny(BOT_NAMES.men.filter(function (n) { return n.toLowerCase() !== mine; })), women: shuffleAny(BOT_NAMES.women.filter(function (n) { return n.toLowerCase() !== mine; })) };
+      var myColor = Math.max(0, SEAT_COLORS.findIndex(function (c) { return c.id === opts.colorId; }));
+      var colors = [myColor].concat(shuffleAny(SEAT_COLORS.map(function (c, i) { return i; }).filter(function (i) { return i !== myColor; })));
+      for (var p = 0; p < PLAYER_INFO.length; p++) {
+        // las piezas 3D usan su propio material por asiento: van con el mismo color que el puesto
+        PLAYER_INFO[p].css = SEAT_COLORS[colors[p]].css; PLAYER_INFO[p].text = SEAT_COLORS[colors[p]].text; PLAYERS[p] = SEAT_MATS[colors[p]];
+        if (p > 0) { PLAYER_INFO[p].name = names[pool[p - 1].woman ? 'women' : 'men'].pop(); wearCharacter(PLAYER_INFO[p], pool[p - 1]); }
+      }
     }
     function avatarSVG(p) { return characterSVG(PLAYER_INFO[p]); }
     var handEl = stage.querySelector('.hand'), whoEl = document.getElementById('who'), seatsEl = document.getElementById('seats');
@@ -2401,6 +2406,10 @@ export function initBoard(opts) {
     function pressed(btn, on) { btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
     function newGame() {
       clearDice();
+      if (!online && opts.mode === 'bots' && opts.name) { // partida nueva, bots nuevos
+        drawBots();
+        Array.prototype.forEach.call(seatsEl.children, function (el, p) { el.style.setProperty('--pc', PLAYER_INFO[p].css); el.querySelector('.av').innerHTML = avatarSVG(p); el.querySelector('.nm').textContent = PLAYER_INFO[p].name; });
+      }
       buildBoard((Math.random() * 1e9) | 0);
       for (var n = 2; n <= 12; n++) rollCounts[n] = 0;
       updateStats();
