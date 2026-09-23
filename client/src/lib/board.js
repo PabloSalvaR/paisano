@@ -1861,13 +1861,14 @@ export function initBoard(opts) {
             '<button type="button" ' + pre + 'dec="' + k + '" aria-label="Menos ' + TERRAINS[k].res + verb + '"' + (n ? '' : ' disabled') + '>−</button></div>';
         }).join('') + '</div></div>';
       }
+      // A quién: los mismos redondeles del color de cada uno que muestra la oferta abierta, con el avatar adentro y el nombre
+      // chico debajo (elegido con borde lleno, el resto punteado y apagado); al ofrecer, los elegidos pasan a «pensando».
       var tos = others().map(function (p) {
-        return '<button type="button" class="to" data-to="' + p + '" aria-pressed="' + (o.to.indexOf(p) >= 0 ? 'true' : 'false') + '" style="--pc:' + PLAYER_INFO[p].css + '"><span class="av">' + avatarSVG(p) + '</span><small></small></button>';
+        return '<button type="button" class="pick" data-to="' + p + '" aria-pressed="' + (o.to.indexOf(p) >= 0 ? 'true' : 'false') + '" style="--pc:' + PLAYER_INFO[p].css + ';--pt:' + PLAYER_INFO[p].text + '">' +
+          '<span class="dot"><span class="av">' + avatarSVG(p) + '</span></span><small></small></button>';
       }).join('');
-      // «Se lo ofrezco a» y los avatares en una sola fila (en el celular, sin los nombres: quedan en el title)
       return strip('give') + strip('get') +
-        '<div class="to-row"><p>Se lo ofrezco a</p><div class="tos">' + tos + '</div></div>' +
-        '<div class="sum">' + (sg && st ? '' : 'Elegí qué das y qué pedís') + '</div>' +
+        '<div class="to-row"><div class="dots">' + tos + '</div></div>' + // sin línea de ayuda: el ✓ gris ya dice que falta algo
         '<div class="yesno"><button type="button" class="yes" data-offer aria-label="Ofrecer" title="Ofrecer"' + (ok && pl ? '' : ' disabled') + '>✓</button></div>'; // la tilde verde de siempre
     }
     function renderTrade() {
@@ -1880,7 +1881,7 @@ export function initBoard(opts) {
       dialogEl.className = 'panel dialog trade';
       if (tradeUI.tab === 'players') {
         dialogEl.innerHTML = '<h3>Comerciar con jugadores</h3>' + tabs + renderPlayersTab();
-        Array.prototype.forEach.call(dialogEl.querySelectorAll('.to'), function (el) { var nm = PLAYER_INFO[+el.getAttribute('data-to')].name; el.querySelector('small').textContent = nm; el.title = nm; el.setAttribute('aria-label', nm); });
+        Array.prototype.forEach.call(dialogEl.querySelectorAll('[data-to]'), function (el) { var nm = PLAYER_INFO[+el.getAttribute('data-to')].name; el.querySelector('small').textContent = nm; el.title = nm; el.setAttribute('aria-label', 'Ofrecerle a ' + nm); });
         dialogEl.hidden = false;
         return;
       }
@@ -1900,7 +1901,7 @@ export function initBoard(opts) {
         chips('give', tradeUI.give, function (k) { return !!byGive[k]; }, function (k) { return byGive[k] ? byGive[k].rate + ':1' : '&nbsp;'; }) +
         '<p>' + dirIco(true, 'Esto te entra') + 'Recibo</p>' +
         chips('get', tradeUI.get, function (k) { return !!give && give.get.indexOf(k) >= 0; }, function () { return '1'; }) +
-        '<div class="sum">' + (give && tradeUI.get ? give.rate + ' × ' + TERRAINS[tradeUI.give].res + ' → 1 × ' + TERRAINS[tradeUI.get].res : 'Elegí qué dar y qué recibir') + '</div>' +
+        '<div class="sum">' + (give && tradeUI.get ? give.rate + ' × ' + TERRAINS[tradeUI.give].res + ' → 1 × ' + TERRAINS[tradeUI.get].res : '&nbsp;') + '</div>' + // sin ayuda (el ✓ aparece al completar); el renglón queda reservado
         '<div class="yesno"' + (give && tradeUI.get ? '' : ' style="visibility:hidden"') + '><button type="button" class="no" data-cancel aria-label="Cancelar" title="Cancelar">✕</button><button type="button" class="yes" data-ok aria-label="Confirmar" title="Confirmar">✓</button></div>';
       dialogEl.hidden = false;
     }
@@ -1908,9 +1909,9 @@ export function initBoard(opts) {
     // vos, desde el tuyo), abajo un redondel del color de cada consultado (pensando / ✓ / ✕). Quien ofrece concreta tocando un
     // redondel con ✓; a quien la recibe le salen además ✕ / ✓. Si no participás, la ves chica arriba, sin botones. Durante una
     // reproducción de eventos el panel sigue a `offerShown` (se llena al ritmo de las respuestas); al cerrarse queda
-    // `OFFER_END_MS` con el resultado (los dos que cambiaron resaltados, o todo apagado) y se va.
+    // `OFFER_END_MS` con el resultado (los dos que cambiaron resaltados, o todo apagado): 2 s quieto y medio segundo desvaneciéndose.
     function dirIco(down, label) { return '<span class="dir ' + (down ? 'in' : 'out') + '" title="' + label + '" aria-label="' + label + '">' + (down ? '↓' : '↑') + '</span>'; }
-    var offerShown = null, offerEnd = null, offerEndTimer = null, offerFresh = -1, offerCan = true, OFFER_END_MS = 1000;
+    var offerShown = null, offerEnd = null, offerEndTimer = null, offerFresh = -1, offerCan = true, OFFER_END_MS = 2500;
     function copyOffer(t) { return { from: t.from, give: t.give, get: t.get, responses: t.responses.map(function (r) { return { player: r.player, status: r.status }; }) }; }
     function offerNow() { return (playing ? offerShown : game.trade) || offerEnd; }
     function offerWatch(t) { return t.from !== me && !t.responses.some(function (r) { return r.player === me; }); }
@@ -1922,7 +1923,7 @@ export function initBoard(opts) {
     }
     function renderOffer(t, watch) {
       var live = !busy && !t.done && !!game.trade, act = function (type) { return live ? legal.filter(function (a) { return a.type === type; })[0] : null; };
-      var mine = act('respondTrade'), conf = act('confirmTrade'), own = t.from === me, asked = !own && !watch, ended = !!t.done && t.done.with === undefined;
+      var mine = act('respondTrade'), conf = act('confirmTrade'), own = t.from === me, asked = !own && !watch;
       // Botones y aviso ocupan siempre su lugar (invisibles cuando no corresponden), para que el panel no cambie de tamaño al
       // responder o al cerrarse. Si el motor no lo dice (ya respondiste, o se está reproduciendo), se mira la mano: es solo aspecto.
       // Cerrada la oferta vale lo que se vio abierta (la mano ya cambió con el cambio).
@@ -1939,7 +1940,7 @@ export function initBoard(opts) {
       var from = '<span class="from' + (t.done && t.done.with !== undefined ? ' chosen' : '') + '" data-p="' + t.from + '" style="--pc:' + PLAYER_INFO[t.from].css + '"><span class="av">' + avatarSVG(t.from) + '</span></span>';
       var outGive = asked ? dirIco(true, 'Esto te entra') : dirIco(false, own ? 'Esto se te va' : 'Da');
       var outGet = asked ? dirIco(false, 'Esto se te va') : dirIco(true, own ? 'Esto te entra' : 'Pide');
-      dialogEl.className = 'panel dialog trade offer' + (watch ? ' mini' : '') + (t.done ? ' done' : '') + (ended ? ' ended' : '');
+      dialogEl.className = 'panel dialog trade offer' + (watch ? ' mini' : '') + (t.done ? ' done' : '');
       if (watch) dialogEl.innerHTML = from + '<span class="swap">' + outGive + cardChips(t.give) + '</span><span class="swap">' + outGet + cardChips(t.get) + '</span>' + dots;
       else dialogEl.innerHTML = (asked ? '<div class="head">' + from + '<b class="who"></b></div>' : '') +
         '<div class="swap">' + outGive + cardChips(t.give) + '</div><div class="swap">' + outGet + cardChips(t.get) + '</div>' + dots +
@@ -2151,7 +2152,9 @@ export function initBoard(opts) {
           case 'TradeResponded':
             if (offerShown) offerShown.responses.forEach(function (r) { if (r.player === p) r.status = ev.accept ? 'accepted' : 'rejected'; });
             offerFresh = animate ? p : -1; renderDialog();
-            return pause(cont, foreign(p) ? 900 : 0);
+            // si lo que sigue ya cierra la oferta, no hace falta esperar: el resultado queda a la vista al cerrarse
+            var closes = events[i] && (events[i].type === 'TradeCancelled' || events[i].type === 'TradeCompleted');
+            return pause(cont, foreign(p) && !closes ? 900 : 0);
           case 'TradeCompleted': {
             var gn = sumOf(ev.give), tn = sumOf(ev.get);
             counts[p] += tn - gn; counts[ev.with] += gn - tn;
