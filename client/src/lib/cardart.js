@@ -232,7 +232,7 @@ function gauchoArt(x) {
   path(x, [[40, 32], [63, 32], [60, 26], [43, 26]]); fillStroke(x, '#c0332b', OL, 1);
 }
 
-// Acopio: sacos de arpillera atados, con maíz y granos sueltos.
+// Acopio: sacos de arpillera atados (sin maíz: la carta sirve para cualquier recurso).
 function acopioArt(x) {
   var wall = x.createLinearGradient(0, 12, 0, 154); wall.addColorStop(0, '#e9d3a3'); wall.addColorStop(1, '#c9a56a');
   x.fillStyle = wall; x.fillRect(12, 12, 104, 142);
@@ -248,15 +248,6 @@ function acopioArt(x) {
   sack(38, 104, 40, 52, '#cdae78');
   sack(88, 108, 44, 56, '#d8bc86');
   sack(62, 88, 50, 62, '#e0c690');
-  // mazorcas de maíz
-  [[24, 134, -0.5], [100, 136, 0.6], [64, 140, 1.5]].forEach(function (c) {
-    x.save(); x.translate(c[0], c[1]); x.rotate(c[2]);
-    ell(x, 0, 0, 5, 12, 0, '#f2c230', OL, 1.2);
-    for (var r = -7; r <= 7; r += 4) for (var q = -2; q <= 2; q += 4) ell(x, q, r, 1, 1, 0, '#c99a12', null);
-    poly(x, [[-4, 6], [0, 18], [5, 6]], '#5aa03e', OL, 1);
-    x.restore();
-  });
-  for (var g = 0; g < 26; g++) ell(x, 26 + ((g * 37) % 76), 144 + ((g * 11) % 9), 1.3, 1, 0, '#f0c93a', null); // granos
 }
 
 // Buena cosecha: sol grande sobre un campo dorado, con espigas y maíz al frente.

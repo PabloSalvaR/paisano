@@ -2168,7 +2168,7 @@ export function initBoard(opts) {
               counts[p] += total; if (p === VIEWER) myHand[ev.resource] += total;
               renderSeats(); renderHand();
               if (foreign(p)) audio.card();
-              if (animate) { pop(seatsEl.children[p], css); cardPlayed(p, 'monopoly'); if (total) floatText(seatsEl.children[p], '+' + total, css); }
+              if (animate) { pop(seatsEl.children[p], css); cardPlayed(p, 'monopoly', ev.resource); if (total) floatText(seatsEl.children[p], '+' + total, css); }
               showStatus((p === VIEWER ? 'Jugaste Acopio' : PLAYER_INFO[p].name + ' jugó Acopio') + ': ' + TERRAINS[ev.resource].res.toLowerCase() + (total ? ' (+' + total + ')' : ' (nadie tenía)'), false, true, p);
               pause(cont, foreign(p) ? PLAYED_MS : 1100);
             });
@@ -2383,22 +2383,30 @@ export function initBoard(opts) {
     // Al jugar una carta de desarrollo (Gaucho, Acopio, Buena cosecha, Empedrado) la ve toda la mesa: aparece grande en el
     // centro, con una cinta del color de quien la jugó (si no fuiste vos), y después "baja" al tablero (se achica e inclina hacia el centro de
     // la mesa) y se desvanece, porque se descarta. Dura PLAYED_MS; las pausas de los demás la esperan.
-    var PLAYED_MS = 3000; // ~2 s quieta en el centro: tiene que alcanzar para leerla
-    function cardPlayed(p, kind) {
+    // Tramos (ms): aparece, queda quieta en el centro (tiene que alcanzar para leerla), baja al tablero y se desvanece.
+    var PLAYED_IN = 270, PLAYED_HOLD = 3000, PLAYED_DOWN = 570, PLAYED_FADE = 210;
+    var PLAYED_MS = PLAYED_IN + PLAYED_HOLD + PLAYED_DOWN + PLAYED_FADE;
+    // `res` (opcional): el recurso elegido (Acopio), en una medalla sobre la esquina de la carta, para que se sepa qué se llevó sin leer el estado.
+    function cardPlayed(p, kind, res) {
       var w = stage.clientWidth, h = stage.clientHeight;
       var el = document.createElement('div'); el.className = 'played';
       el.innerHTML = '<img alt="" draggable="false"><span></span>';
       el.firstChild.src = devCardURL(kind); el.firstChild.alt = DEV[kind].name;
       var tag = el.lastChild; // la cinta con el nombre es solo para la carta de otro: la propia ya sabés quién la jugó
       if (p === VIEWER) tag.remove(); else { tag.textContent = PLAYER_INFO[p].name; tag.style.background = PLAYER_INFO[p].css; tag.style.color = PLAYER_INFO[p].text; }
+      if (res) {
+        var medal = document.createElement('i'); medal.className = 'res-medal'; medal.title = TERRAINS[res].res;
+        medal.style.setProperty('--c', TERRAINS[res].ui); medal.innerHTML = resIcon(res);
+        el.appendChild(medal);
+      }
       stage.appendChild(el);
       var cx = w / 2, cy = h * 0.42, v = new THREE.Vector3(0, TILE_TOP, 0).project(camera), tx = (v.x * 0.5 + 0.5) * w, ty = (0.5 - v.y * 0.5) * h;
       var at = function (x, y, sc, rot) { return 'translate(' + x + 'px,' + y + 'px) translate(-50%,-50%) scale(' + sc + ') rotate(' + rot + 'deg)'; };
       el.animate([
         { transform: at(cx, cy + 40, 0.5, -8), opacity: 0 },
-        { transform: at(cx, cy, 1.05, 2), opacity: 1, offset: 0.09 },
-        { transform: at(cx, cy, 1, 0), opacity: 1, offset: 0.74 },
-        { transform: at(tx, ty, 0.35, 14), opacity: 0.9, offset: 0.93 },
+        { transform: at(cx, cy, 1.05, 2), opacity: 1, offset: PLAYED_IN / PLAYED_MS },
+        { transform: at(cx, cy, 1, 0), opacity: 1, offset: (PLAYED_IN + PLAYED_HOLD) / PLAYED_MS },
+        { transform: at(tx, ty, 0.35, 14), opacity: 0.9, offset: (PLAYED_MS - PLAYED_FADE) / PLAYED_MS },
         { transform: at(tx, ty, 0.3, 16), opacity: 0 }
       ], { duration: PLAYED_MS, easing: 'ease-in-out', fill: 'both' }).onfinish = function () { el.remove(); };
     }

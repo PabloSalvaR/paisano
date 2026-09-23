@@ -5,6 +5,7 @@
 
 import { RESOURCES, canAfford, canSettleAt, handTotal, longestRoad, publicVictoryPoints, topology } from '../engine';
 import type { Command, Cost, GameState, Hand, LegalAction, PlayerId, Resource, Rng } from '../engine';
+import { robberVictims } from '../engine/robber';
 import { commandFor, randomBot, type Bot, type BotInput } from './random';
 
 /** Puntos de probabilidad de una ficha (los «puntitos» del tablero): 6 y 8 valen 5; 2 y 12 valen 1. */
@@ -294,7 +295,11 @@ export const smartBot: Bot = (input: BotInput, rng: Rng): Command => {
   const dis = has('discard');
   if (dis) return discardCommand(me, hand, dis.count);
   const mr = has('moveRobber');
-  if (mr) return { type: 'moveRobber', player: me, tile: best(mr.tiles, (t) => tileHarm(s, t, me), rng) };
+  if (mr) {
+    // primero las casillas donde hay a quién robarle (un rival con cartas): tapar al que va ganando sin sacarle nada vale menos
+    const robbable = mr.tiles.filter((t) => tileHarm(s, t, me) > 0 && robberVictims(s, me, t).length > 0);
+    return { type: 'moveRobber', player: me, tile: best(robbable.length ? robbable : mr.tiles, (t) => tileHarm(s, t, me), rng) };
+  }
   const st = has('steal');
   if (st) return { type: 'steal', player: me, victim: best(st.victims, (v) => publicVictoryPoints(s, v) * 10 + handTotal(s.players[v].hand), rng) };
 

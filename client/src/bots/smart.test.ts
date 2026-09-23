@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, createGame, legalActions, longestRoad, mulberry32, publicVictoryPoints, topology, victoryPoints } from '../engine';
 import type { GameState } from '../engine';
+import { robberVictims } from '../engine/robber';
 import { expectConserved, mainPhaseGame, NAMES, setHand } from '../engine/testutil';
 import { nextBot, playBots } from './play';
 import { randomBot } from './random';
@@ -167,6 +168,24 @@ describe('bot con criterio', () => {
       const cmd = smartBot({ me: 0, legal: legalActions(s, 0), hand: s.players[0].hand, state: s }, mulberry32(i));
       expect(cmd.type).not.toBe('proposeTrade');
     }
+  });
+
+  it('el ladrón va donde hay algo para robar: no lo pone junto al que va ganando si no tiene cartas', () => {
+    const s = mainPhaseGame(7, NAMES.slice(0, 3)); // con esta semilla la casilla que más daña es solo del 1
+    s.vertexBuildings = s.vertexBuildings.map((b) => (b?.player === 1 ? { ...b, city: true } : b)); // el 1 va ganando, sin cartas
+    setHand(s, 2, { forest: 1, fields: 1 });
+    s.phase = { kind: 'moveRobber', after: 'main' };
+    const legal = legalActions(s, 0);
+    const tiles = legal[0].type === 'moveRobber' ? legal[0].tiles : [];
+    expect(tiles.some((t) => robberVictims(s, 0, t).includes(2))).toBe(true);
+    for (let i = 0; i < 30; i++) {
+      const cmd = smartBot({ me: 0, legal, hand: s.players[0].hand, state: s }, mulberry32(i));
+      expect(cmd.type === 'moveRobber' && robberVictims(s, 0, cmd.tile)).toEqual([2]);
+    }
+    // si nadie tiene cartas, sigue yendo contra el que va ganando
+    setHand(s, 2, {});
+    const cmd = smartBot({ me: 0, legal, hand: s.players[0].hand, state: s }, mulberry32(1));
+    expect(cmd.type === 'moveRobber' && topology().tiles[cmd.tile].vertices.some((v) => s.vertexBuildings[v]?.player === 1)).toBe(true);
   });
 
   it('a medida que avanza la partida los bots comercian mucho menos, y al que va ganando casi no le dan nada', () => {
