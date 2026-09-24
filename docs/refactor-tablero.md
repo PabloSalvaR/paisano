@@ -1,60 +1,83 @@
-# Refactor del tablero (`client/src/lib/board.js`): pendiente
+# Refactor del tablero (`client/src/lib/board/`)
 
-Propuesto el 23 sept 2026 y dejado para más adelante, a pedido del desarrollador. **No está empezado.**
+Propuesto el 23 sept 2026. **Etapa 1 hecha el 24 sept 2026**; las etapas 2 y 3 siguen pendientes.
 
 ## Por qué
 
-`board.js` tiene ~2750 líneas y es **una sola función** (`initBoard`, de la línea ~151 al final) que mezcla la escena 3D, la
-interfaz de encima (armada con strings e `innerHTML`), la reproducción de eventos y las animaciones. Todo comparte las
-variables internas de esa función (escena, cámara, `game`, `legal`, `busy`, manos, puestos…), así que para entender o cambiar
-una parte hay que leer casi todo.
+`board.js` tenía ~2750 líneas y era **una sola función** (`initBoard`) que mezclaba la escena 3D, la interfaz de encima
+(armada con strings e `innerHTML`), la reproducción de eventos y las animaciones. Todo compartía las variables internas de
+esa función (escena, cámara, `game`, `legal`, `busy`, manos, puestos…), así que para entender o cambiar una parte había que
+leer casi todo.
 
 ## Plan en tres etapas
 
-1. **Dividir en módulos** (sin cambiar comportamiento ni aspecto). Es la que más ayuda a leerlo, casi sin riesgo.
+1. **Dividir en módulos** (sin cambiar comportamiento ni aspecto). — **hecha**
 2. **Pasar la interfaz de encima a componentes de React** (puestos, banner, paneles de comercio y cartas, resumen). Ahí se
    hace la mayoría de los cambios de interfaz; no toca el 3D ni three.js.
 3. **React Three Fiber para la escena**, solo si se quiere después. Obliga a actualizar three.js (R3F pide ≥ 0.156; el
    proyecto usa 0.128 fija porque cambian el color y la intensidad de las luces): hay que recalibrar el aspecto en una sesión
-   dedicada. Con las etapas 1 y 2 hechas, queda chica.
+   dedicada. La recomendación (24 sept 2026) es no hacerla por ahora: con la etapa 1 el 3D ya queda en módulos claros de
+   three.js y R3F no mejora la velocidad.
 
-## Etapa 1 en detalle
+## Etapa 1: cómo quedó
 
-**Estado compartido:** `initBoard` arma un objeto `ctx` con lo que hoy son variables compartidas; cada módulo es una función
-`crearX(ctx)` que devuelve sus funciones públicas (por ejemplo `crearPuestos(ctx)` → `{ renderSeats, … }`). Así cada archivo
-dice qué usa. Las funciones que se llaman entre la interfaz y la reproducción se registran en `ctx` después de crear los módulos.
+`page.tsx` y `OnlineBoard.tsx` siguen importando `MARKUP`, `SEAT_COLORS` e `initBoard` desde `@/lib/board` (ahora
+`board/index.js`). Los módulos ya no llevan `@ts-nocheck` ni `eslint-disable`: `npx eslint src/lib/board/` pasa (queda un
+aviso previo por `window.location.assign`).
 
-**Archivos** (en `client/src/lib/board/`; `page.tsx` sigue importando desde `@/lib/board`):
+**Estado compartido:** `initBoard` arma un objeto `ctx` con la escena, la partida (`session`, `game`, `legal`, `me`,
+`shown`, `busy`, `sending`, `playing`), lo que muestra la interfaz (`VIEWER`, `turn`, `myHand`, `counts`, `vps`…) y los
+paneles (`buildMode`, `pendingCmd`, `tradeUI`, `cardsUI`, `summaryUI`, `offerShown`); cada campo está comentado en
+`index.js`. Cada módulo es una función `createX(ctx)` que devuelve sus funciones públicas, y se registra en `ctx` con su
+nombre: las llamadas entre módulos dicen de dónde vienen (`ctx.hud.renderSeats()`, `ctx.replay.dispatch(cmd)`,
+`ctx.map.syncPieces()`). Lo que un módulo solo usa por dentro queda adentro (por ejemplo, los temporizadores de la oferta
+en `hud.js` o las mallas del tablero en `map.js`, que se piden con `ctx.map.tiles()`).
 
 | Archivo | Qué tiene |
 |---|---|
-| `index.js` | `initBoard`: arma `ctx`, conecta los módulos, `dispose` |
-| `markup.js` | `MARKUP` y `SEAT_COLORS` |
-| `scene.js` | renderer, cámara, luces, mapa de entorno, tamaño y bucle |
-| `textures.js` | texturas procedurales |
-| `materials.js` | geometrías y materiales compartidos |
-| `table.js` | mesa, marco y mar |
-| `decor.js` | mate, facón, farol, pava, naipe, botes |
-| `terrain.js` | decoración por terreno (árboles, vacas, rocas…) |
-| `ports.js` | puertos |
-| `map.js` | armado del tablero (casillas, fichas, vértices, marcadores) |
-| `pieces.js` | casas, estancias, caminos, ladrón y `syncPieces` |
-| `input.js` | clics y toques sobre el tablero |
-| `dice.js` | dados |
-| `hud/seats.js`, `hud/hand.js`, `hud/dialogs.js`, `hud/trade.js`, `hud/cards.js`, `hud/summary.js` | interfaz de encima |
+| `index.js` | `initBoard`: arma `ctx`, conecta los módulos, partida nueva, bucle y `dispose` |
+| `markup.js` | `MARKUP`, `SEAT_COLORS` y los íconos de los recursos (`RES_ICONS`) |
+| `constants.js` | medidas del tablero, terrenos, recursos y cartas de desarrollo |
+| `util.js` | azar con semilla, colores, lienzos, `reduced`, `sumOf`, `pressed` |
+| `scene.js` | renderer, cámara y controles (vista por defecto, giro final), mapa de entorno, tamaño |
+| `lights.js` | luces y momentos del día |
+| `materials.js` | fábrica de materiales y texturas (`createKit`) y materiales de los asientos |
+| `textures.js` | texturas procedurales de mesa, mar y terrenos |
+| `table.js`, `decor.js` | mesa, marco y mar; mate, pava, naipes, facón y farol |
+| `terrain.js`, `ports.js`, `pieces.js` | casillas y su decorado, fichas; puertos; casas, estancias, caminos y ladrón |
+| `map.js` | el tablero de la partida: armado, piezas, pieza a confirmar, marcadores, ladrón y animación por cuadro |
+| `input.js` | cartel del terreno bajo el puntero y toques sobre los marcadores |
+| `dice.js` | dados, chip y estadística |
+| `players.js` | asientos: nombre, personaje, color y sorteo de los bots |
+| `hud.js` | interfaz de encima: puestos, banner, botones, estado y paneles (lo que pasará a React) |
+| `fx.js` | animaciones de la interfaz (recursos que vuelan, cartas, placas, copa) |
 | `opening.js` | sorteo de quién abre |
-| `replay.js` | reproducción de eventos |
+| `replay.js` | comandos a la sesión y reproducción de eventos |
+| `bar.js`, `debug.js` | barra de controles; «Partida rápida» y gancho `?debug` |
 
-**Orden (un commit por paso):** 1) 3D estático (texturas, materiales, mesa, adornos, terreno, puertos); 2) escena y tablero
-(renderer, cámara, bucle, tamaño, mapa, piezas, clics, dados); 3) interfaz y sorteo; 4) reproducción de eventos e `index.js` liviano.
+**Diferencias con el plan original:** la interfaz quedó en un solo `hud.js` (más `fx.js` con las animaciones) en vez de seis
+`hud/*.js`, porque la etapa 2 la reescribe entera en React; se sumaron `constants.js`, `util.js`, `players.js`, `fx.js`,
+`bar.js` y `debug.js`. Se hizo en un solo commit (los pasos intermedios habrían pedido código de transición). Además:
+`?debug&seed=N` fija el mapa (para comparar capturas) y `seeded()` del mate se unificó con `mulberry32` (era el mismo
+algoritmo).
 
-**Verificación en cada paso:** `npm test`, `tsc`, `npm run build`; capturas antes y después con un mapa fijo (sumar
-`?seed=` al modo `?debug`): tablero de día y de noche, puestos, oferta, cartas y resumen; y una partida rápida con clics reales.
+**Verificación (24 sept 2026):** `npm test` (262), `tsc`, `eslint` y `npm run build`; el HTML de `MARKUP` es idéntico al
+anterior; capturas antes y después con `?debug&seed=12345` (tablero de día: 58 píxeles distintos sobre 1,1 millones, todos
+del salto del ladrón; noche con «Mis cartas», igual); con clics reales: Acopio, construir un camino con ✓, pasar y tirar,
+descarte, resumen final, sorteo contra bots, ofertas de bots (aceptar y el ✕ inmediato), varios turnos de bots y una sala
+online (en memoria) con bots.
 
-**Fuera de la etapa 1:** pasar a TypeScript (después, de a un módulo, sacando el `@ts-nocheck`).
+## Etapa 2: ideas para empezar
 
-**Riesgos:** el orden de inicialización (hoy se usan funciones antes de declararlas dentro de la misma función); las llamadas
-cruzadas entre interfaz y reproducción. Estimado: dos o tres sesiones, casi todo de verificación.
+- El puente es un store chico en el cliente al que React se suscribe con `useSyncExternalStore`; la reproducción de eventos
+  (`replay.js`) y `fx.js` lo actualizan en vez de tocar el DOM. Los campos de `ctx` que lee `hud.js` son justamente ese
+  estado.
+- Ir de a un panel (por ejemplo, primero el resumen final o «Mis cartas», que son los más aislados) y dejar las animaciones
+  de `fx.js` como están (son imperativas y conviene que sigan así).
+- **Error latente encontrado al verificar** (existía antes del refactor): si una animación de recursos que vuelan termina
+  tarde (pasa con la pestaña en segundo plano, donde Chrome frena las animaciones pero no los temporizadores), su `gain()`
+  suma sobre la mano ya sincronizada, a veces la del siguiente jugador en la mesa local; el banner queda mal hasta el
+  próximo refresco. Con la interfaz en React conviene que el vuelo solo anime y que los números salgan del estado.
 
 ## Performance (consulta del desarrollador)
 

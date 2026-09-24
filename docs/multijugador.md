@@ -7,7 +7,7 @@ Diseño y estado de la parte de red del cliente/servidor de prueba (sept 2026). 
 El servidor es el único que aplica reglas. El cliente envía **comandos** y dibuja lo que recibe. Hay una sola interfaz entre el tablero 3D y la partida, `GameSession`, con dos implementaciones: local (motor en el navegador) y remota (API de salas con polling).
 
 ```
-board.js ──► GameSession ──┬─► LocalSession   (motor en el navegador: 4 en la misma pantalla, o 1 humano + 3 bots)
+board/   ──► GameSession ──┬─► LocalSession   (motor en el navegador: 4 en la misma pantalla, o 1 humano + 3 bots)
                            └─► RemoteSession  (fetch + polling a /api/rooms/…: partida online por sala)
 ```
 
@@ -16,7 +16,7 @@ board.js ──► GameSession ──┬─► LocalSession   (motor en el naveg
 ```
  ┌────────────────────────┐
  │  NAVEGADOR (front)      │
- │  board.js + RemoteSession│
+ │  board/ + RemoteSession  │
  └───────────┬─────────────┘
              │ (1) fetch POST /api/rooms/:id/command  { command }   ← cuando VOS jugás
              │ (2) fetch GET  /api/rooms/:id?since=N               ← polling, cada 1,5 s SIEMPRE
@@ -102,7 +102,7 @@ Un bot es una función `(BotInput, rng) => Command`, con `BotInput = { me, legal
 
 ## Cómo se reproducen los eventos en el tablero
 
-Después de un comando llega una lista de eventos (los propios y, con bots o en línea, los de los demás). `playEvents` (en `board.js`) los reproduce en orden, con pausas cuando actúa otro (650 ms por pieza, 800 el ladrón, 450 el cambio de turno). Mientras tanto `game` (la vista) queda como estaba y `shown` (piezas y ladrón), `counts`, `myHand` y `vps` avanzan al ritmo de la animación; al terminar se hace `pull()` y se corrige todo con el estado real. Detalle a tener en cuenta al tocar esa parte: `syncPieces` dibuja desde `shown`, no desde `game`.
+Después de un comando llega una lista de eventos (los propios y, con bots o en línea, los de los demás). `playEvents` (en `board/replay.js`) los reproduce en orden, con pausas cuando actúa otro (650 ms por pieza, 800 el ladrón, 450 el cambio de turno). Mientras tanto `game` (la vista) queda como estaba y `shown` (piezas y ladrón), `counts`, `myHand` y `vps` avanzan al ritmo de la animación; al terminar se hace `pull()` y se corrige todo con el estado real. Detalle a tener en cuenta al tocar esa parte: `syncPieces` dibuja desde `shown`, no desde `game`.
 
 ## Partida online (pantallas y flujo)
 

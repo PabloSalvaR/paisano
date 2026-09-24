@@ -2,7 +2,7 @@
 // hace lo suyo (el estanciero sube estancias y compra cartas; el colono pone caminos y casas y pelea la ruta).
 
 import { describe, expect, it } from 'vitest';
-import { applyCommand, createGame, legalActions, mulberry32 } from '../engine';
+import { applyCommand, createGame, legalActions, mulberry32, topology } from '../engine';
 import type { GameState, PlayerId } from '../engine';
 import { expectConserved, NAMES } from '../engine/testutil';
 import { nextBot, playBots } from './play';
@@ -10,32 +10,37 @@ import { BALANCED, drawProfiles, PROFILES, type BotProfileId } from './profiles'
 import type { Bot } from './random';
 import { makeSmartBot, smartBot } from './smart';
 
-interface Tally { games: number; wins: number; cities: number; settlements: number; roads: number; bought: number; road: number; army: number }
+interface Tally { games: number; wins: number; cities: number; settlements: number; roads: number; bought: number; road: number; army: number; buildRes: number }
 
 /** Una partida de bots, cada asiento con su bot; devuelve el estado final y lo que hizo cada asiento. */
 function play(seed: number, bots: Bot[]) {
   const rng = mulberry32(seed * 13);
   let s: GameState = createGame(NAMES.slice(0, bots.length), seed);
   const bought = bots.map(() => 0);
+  let buildRes: boolean[] | null = null; // al terminar la colocación, si cada uno toca madera o barro
   for (let guard = 0; guard < 4000 && s.phase.kind !== 'finished'; guard++) {
     const me = nextBot(s, () => true)!;
     const r = applyCommand(s, bots[me]({ me, legal: legalActions(s, me), hand: s.players[me].hand, state: s }, rng));
     expect(r.ok).toBe(true);
     if (!r.ok) break;
     for (const e of r.events) if (e.type === 'DevCardBought') bought[e.player]++;
+    if (!buildRes && s.phase.kind === 'setup' && r.state.phase.kind !== 'setup') {
+      const topo = topology();
+      buildRes = bots.map((_, p) => r.state.vertexBuildings.some((b, v) => b?.player === p && topo.vertices[v].tiles.some((t) => ['forest', 'hills'].includes(r.state.map.terrains[t]))));
+    }
     s = r.state;
   }
-  return { s, bought };
+  return { s, bought, buildRes: buildRes ?? bots.map(() => false) };
 }
 
 /** Mesas de 3, un bot de cada perfil, rotando los asientos (las 6 permutaciones). */
 function tournament(games: number): Record<BotProfileId, Tally> {
   const ids = Object.keys(PROFILES) as BotProfileId[];
   const perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
-  const out = Object.fromEntries(ids.map((id) => [id, { games: 0, wins: 0, cities: 0, settlements: 0, roads: 0, bought: 0, road: 0, army: 0 }])) as Record<BotProfileId, Tally>;
+  const out = Object.fromEntries(ids.map((id) => [id, { games: 0, wins: 0, cities: 0, settlements: 0, roads: 0, bought: 0, road: 0, army: 0, buildRes: 0 }])) as Record<BotProfileId, Tally>;
   for (let g = 0; g < games; g++) {
     const seats = perms[g % perms.length].map((i) => ids[i]);
-    const { s, bought } = play(1000 + g, seats.map((id) => makeSmartBot(PROFILES[id])));
+    const { s, bought, buildRes } = play(1000 + g, seats.map((id) => makeSmartBot(PROFILES[id])));
     expectConserved(s);
     seats.forEach((id, p: PlayerId) => {
       const t = out[id];
@@ -44,6 +49,7 @@ function tournament(games: number): Record<BotProfileId, Tally> {
       for (const b of s.vertexBuildings) if (b?.player === p) { if (b.city) t.cities++; else t.settlements++; }
       t.roads += s.edgeRoads.filter((x) => x === p).length;
       t.bought += bought[p];
+      if (buildRes[p]) t.buildRes++;
       if (s.longestRoad.holder === p) t.road++;
       if (s.largestArmy.holder === p) t.army++;
     });
@@ -87,6 +93,8 @@ describe('perfiles de bot', () => {
     expect(avg('rancher', 'cities')).toBeGreaterThan(avg('settler', 'cities'));
     expect(avg('rancher', 'bought')).toBeGreaterThan(avg('settler', 'bought'));
     expect(avg('rancher', 'army')).toBeGreaterThan(avg('settler', 'army'));
+    // estanciero: en la colocación se asegura madera o barro, para poder expandirse
+    expect(avg('rancher', 'buildRes')).toBeGreaterThan(0.9);
     // colono: más caminos, más casas y más rutas más largas que el estanciero
     expect(avg('settler', 'roads')).toBeGreaterThan(avg('rancher', 'roads'));
     expect(avg('settler', 'settlements')).toBeGreaterThan(avg('rancher', 'settlements'));

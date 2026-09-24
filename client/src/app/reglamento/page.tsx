@@ -158,7 +158,7 @@ const SECTIONS: { title: string; items: Item[]; open?: boolean }[] = [
       "Las 18 fichas se ponen en espiral. Se arranca en una esquina del borde, se da la vuelta por afuera en sentido antihorario, se sigue por el anillo del medio y se termina en el centro, salteando el desierto.",
       "El orden de la espiral va por letras: A5, B2, C6, D3, E8, F10, G9, H12, I11, J4, K8, L10, M9, N4, O5, P6, Q3 y R11. En el tablero no se ven las letras: solo fijan el orden.",
       "Esta configuración garantiza que nunca queden juntos un 6 y un 8, ni dos casillas vecinas con el mismo número.",
-      "Modo Caos: si se activa, los números se reparten al azar, cuidando igualmente la anterior condición de balanceo. Los puertos también se mezclan, pero nunca quedan tres 3:1 seguidos.",
+      "Modo Anarquía: si se activa, los números se reparten al azar, cuidando igualmente la anterior condición de balanceo. Los puertos también se mezclan, pero nunca quedan tres 3:1 seguidos.",
     ],
   },
 ];

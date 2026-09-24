@@ -13,7 +13,7 @@ const roomKey = (roomId: string): string => `paisano:sala:${roomId.toUpperCase()
 const NAME_KEY = 'paisano:nombre';
 const CHARACTER_KEY = 'paisano:personaje';
 const COLOR_KEY = 'paisano:color';
-/** El id de `SEAT_COLORS[0]` en `board.js` (rojo): mismo valor por defecto que ya tenía la persona antes de poder elegir. */
+/** El id de `SEAT_COLORS[0]` en `board/markup.js` (rojo): mismo valor por defecto que ya tenía la persona antes de poder elegir. */
 export const DEFAULT_COLOR_ID = 'red';
 
 export function loadIdentity(roomId: string, storage: Pick<Storage, 'getItem'> | null = safeStorage()): Identity | null {

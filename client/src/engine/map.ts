@@ -115,7 +115,7 @@ function conflict(a: number, b: number): boolean {
 /**
  * Los 9 puertos van siempre en los mismos lugares de la costa; lo que cambia es el tipo de cada uno. En serie (`'spiral'`), la
  * secuencia del tablero de referencia (`PORT_SEQUENCE`), arrancando en uno de los 3 lugares equivalentes al azar (como el
- * separado 3-3-4 se repite cada 3 puertos, es el mismo dibujo girado 120°). En Caos (`'random'`), al azar, pero nunca tres 3:1
+ * separado 3-3-4 se repite cada 3 puertos, es el mismo dibujo girado 120°). En Anarquía (`'random'`), al azar, pero nunca tres 3:1
  * seguidos (con puro azar pasaba en ~36 % de los mapas: una costa entera de puertos genéricos).
  */
 function placePorts(topo: Topology, rng: Rng, placement: NumberPlacement): Port[] {

@@ -218,4 +218,33 @@ describe('kick: apertura de un bot', () => {
     expectConserved(session.debugState());
     expect(session.debugState().dice.rolls).toBeGreaterThan(8);
   });
+
+  it('con perfiles según el tablero, cada bot elige al poner su segunda casa, sin repetir, y la partida sigue andando', async () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      for (const n of [3, 4]) {
+        const session = new LocalSession(NAMES.slice(0, n), seed, { firstPlayer: 0 }, { bots: [false, true, true, true].slice(0, n), profiles: 'board', rng: mulberry32(seed) });
+        expect(session.debugProfiles().every((p) => p === null)).toBe(true); // nadie eligió todavía: abre el humano
+        const v = session.view();
+        const placed = await session.send({ type: 'placeSettlement', player: 0, vertex: v.legal.find((a) => a.type === 'placeSettlement')!.vertices[0] });
+        expect(placed.ok).toBe(true);
+        const edge = session.view().legal.find((a) => a.type === 'placeRoad')!.edges[0];
+        expect((await session.send({ type: 'placeRoad', player: 0, edge })).ok).toBe(true); // abre el humano: los bots ya pusieron sus dos casas
+        const chosen = session.debugProfiles();
+        expect(chosen[0]).toBeNull();
+        expect(new Set(chosen.slice(1)).size).toBe(n - 1);
+        expect(chosen.slice(1).every((p) => p !== null)).toBe(true);
+      }
+    }
+    const session = new LocalSession(NAMES, 4, { firstPlayer: 0 }, { bots: [false, true, true, true], profiles: 'board', rng: mulberry32(4) });
+    session.autoSetup((options) => options[0]); // sin colocación propia (partida rápida): eligen con lo que les tocó
+    for (let i = 0; i < 30; i++) {
+      const view = session.view();
+      if (view.game!.phase.kind === 'finished') break;
+      const roll = view.legal.find((a) => a.type === 'rollDice');
+      const r = await session.send(roll ? { type: 'rollDice', player: 0 } : view.legal.some((a) => a.type === 'endTurn') ? { type: 'endTurn', player: 0 } : { type: 'rollDice', player: 0 });
+      if (!r.ok) break;
+    }
+    expect(new Set(session.debugProfiles().slice(1)).size).toBe(3);
+    expectConserved(session.debugState());
+  });
 });

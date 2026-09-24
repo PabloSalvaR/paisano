@@ -32,7 +32,7 @@ export const DEFAULT_CAST = ['juan', 'manuela', 'jacinto', 'mercedes'];
 
 export const characterById = (id: string | null | undefined): Character | undefined => CHARACTERS.find((c) => c.id === id);
 
-/** Colores de asiento con retrato (los `id` de `SEAT_COLORS` en `board.js`). */
+/** Colores de asiento con retrato (los `id` de `SEAT_COLORS` en `board/markup.js`). */
 export const PORTRAIT_COLORS = ['red', 'blue', 'orange', 'white'];
 
 /** Ruta del retrato con la ropa del color de asiento `color`. */

@@ -425,7 +425,7 @@ describe('sorteo de quién abre (tirada de dados)', () => {
 });
 
 describe('reparto de números (GameConfig.numberPlacement)', () => {
-  it('por defecto va en serie (espiral de las letras); con "random" (Caos) sale el reparto al azar', () => {
+  it('por defecto va en serie (espiral de las letras); con "random" (Anarquía) sale el reparto al azar', () => {
     for (const seed of [1, 2, 3, 4, 5]) {
       const serie = createGame(NAMES, seed);
       expect(serie.config.numberPlacement).toBe('spiral');

@@ -2,6 +2,7 @@
 // de los cambios. Hay dos implementaciones: `LocalSession` (motor en el navegador, los 3-4 jugadores en la misma pantalla)
 // y, más adelante, una remota que habla con la API de salas. La vista es la misma en ambas (`RoomView`).
 
+import { makeBoardBots } from '../bots/adaptive';
 import { playBots } from '../bots/play';
 import { drawProfiles, PROFILES, type BotProfileId } from '../bots/profiles';
 import { makeSmartBot } from '../bots/smart';
@@ -26,8 +27,9 @@ export interface LocalOptions {
   bots?: boolean[];
   rng?: Rng;
   bot?: Bot;
-  /** 'draw': cada bot saca un perfil distinto (estanciero, colono, balanceado) al crear la sesión; no se muestra en la mesa. */
-  profiles?: 'draw';
+  /** Perfiles de los bots (estanciero, colono, balanceado), distintos entre sí y sin mostrarse en la mesa. 'draw': sorteados al
+   *  crear la sesión; 'board': cada bot elige en su primera colocación el que mejor le queda con lo que quedó libre. */
+  profiles?: 'draw' | 'board';
 }
 
 export class LocalSession implements GameSession {
@@ -50,6 +52,11 @@ export class LocalSession implements GameSession {
       const drawn = drawProfiles(bots.filter(Boolean).length, opts.rng ?? Math.random);
       this.profiles = bots.map((isBot) => (isBot ? drawn.shift()! : null));
       this.botList = this.profiles.map((id) => makeSmartBot(PROFILES[id ?? 'balanced']));
+    }
+    if (bots && opts.profiles === 'board') {
+      const board = makeBoardBots(bots, opts.rng ?? Math.random);
+      this.profiles = board.chosen; // se va llenando a medida que eligen
+      this.botList = board.bots;
     }
   }
 

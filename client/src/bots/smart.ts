@@ -325,7 +325,14 @@ function tradeTowardBuilding(s: GameState, me: PlayerId, hand: Hand, a: Extract<
 function wantsRoad(s: GameState, me: PlayerId, pf: BotProfile): boolean {
   if (pf.roadGoal === null) return true;
   const buildings = s.vertexBuildings.filter((b) => b?.player === me).length;
-  return buildings < pf.roadGoal && !hasReachableSpot(s, me);
+  return (buildings < pf.roadGoal && !hasReachableSpot(s, me)) || chasingRoad(s, me, pf);
+}
+
+/** Ruta oportunista (`roadChance`): le faltan pocos caminos para quedarse con la Ruta más larga (que todavía no tiene). */
+function chasingRoad(s: GameState, me: PlayerId, pf: BotProfile): boolean {
+  if (pf.roadChance === null || s.longestRoad.holder === me) return false;
+  const need = Math.max(s.config.longestRoadMin, s.longestRoad.holder === null ? 0 : s.longestRoad.length + 1);
+  return need - longestRoad(s, me) <= pf.roadChance;
 }
 
 /** Descarta primero lo que más tiene (así conserva variedad para construir). */
@@ -357,7 +364,18 @@ export const makeSmartBot = (pf: BotProfile): Bot => (input: BotInput, rng: Rng)
 
   // colocación inicial
   const ps = has('placeSettlement');
-  if (ps) return { type: 'placeSettlement', player: me, vertex: bestVertex(ps.vertices) };
+  if (ps) {
+    // con `buildResource`, si la primera casa no toca madera ni barro, la segunda va a un lugar que toque alguno (el otro lo cambia).
+    // Se probó además una etapa de expansión (casa antes que estancia hasta 4, juntar para ella y comerciar por caminos): en
+    // 1500 mesas con un bot balanceado en lugar de la persona ganaba 3 a 5 puntos menos; esto solo no cambia las victorias (sept 2026).
+    let spots = ps.vertices;
+    if (pf.buildResource && !mine.has('forest') && !mine.has('hills') && s.vertexBuildings.some((b) => b?.player === me)) {
+      const topo = topology();
+      const withBuild = spots.filter((v) => topo.vertices[v].tiles.some((t) => s.map.terrains[t] === 'forest' || s.map.terrains[t] === 'hills'));
+      if (withBuild.length) spots = withBuild;
+    }
+    return { type: 'placeSettlement', player: me, vertex: bestVertex(spots) };
+  }
   const pr = has('placeRoad');
   if (pr) {
     const roads = roadScorer(s, me, mine, pf);
@@ -399,7 +417,7 @@ export const makeSmartBot = (pf: BotProfile): Bot => (input: BotInput, rng: Rng)
   if (road && (s.phase.kind === 'roadBuilding' || wantsRoad(s, me, pf))) {
     // si ya llega a un lugar para una casa, guarda madera y ladrillo para ella: solo gasta en un camino que abra otro lugar
     const roads = roadScorer(s, me, mine, pf);
-    const saving = hasReachableSpot(s, me);
+    const saving = hasReachableSpot(s, me) && !chasingRoad(s, me, pf); // yendo por la ruta, también vale estirarla
     const worth = (x: number) => {
       const p = roads.parts(x);
       return saving ? p.spot : p.spot + p.stretch;

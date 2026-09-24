@@ -121,7 +121,7 @@ describe('mapa base: tipos de puerto', () => {
     expect(starts.size).toBe(3);
   });
 
-  it('en Caos (random): tipos al azar, pero nunca tres 3:1 seguidos (dos juntos sí, como en el tablero de referencia)', () => {
+  it('en Anarquía (random): tipos al azar, pero nunca tres 3:1 seguidos (dos juntos sí, como en el tablero de referencia)', () => {
     let pairs = 0;
     const seen = new Set<string>();
     for (const m of maps) {

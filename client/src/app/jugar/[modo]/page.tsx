@@ -24,8 +24,8 @@ export default function LocalBoard() {
   const storedColor = useSyncExternalStore(colorStore.subscribe, colorStore.get, colorStore.getServer);
   const [typedColor, setTypedColor] = useState<string | null>(null);
   const colorId = typedColor ?? storedColor; // el elegido, o el último usado en este navegador
-  const [players, setPlayers] = useState(3); // vos y dos o tres bots. Siempre arranca en 3 (no se recuerda, como «Caos»)
-  const [chaos, setChaos] = useState(false); // «Caos»: números del mapa al azar. Siempre arranca apagado (en serie, como el juego original)
+  const [players, setPlayers] = useState(3); // vos y dos o tres bots. Siempre arranca en 3 (no se recuerda, como «Anarquía»)
+  const [chaos, setChaos] = useState(false); // «Anarquía»: números del mapa al azar. Siempre arranca apagado (en serie, como el juego original)
   const [player, setPlayer] = useState<{ name: string; characterId: string; colorId: string; players: number; chaos: boolean } | null>(null); // ya elegidos: recién ahí arranca el tablero
   const [loading, setLoading] = useState(true); // armar la escena 3D bloquea la página un par de segundos: mientras, se ve el loader
 
@@ -66,7 +66,7 @@ export default function LocalBoard() {
       <main className="room-page">
         <div className="room-card">
           <div className="logo" role="img" aria-label="Paisano" />
-          <h1>Jugar contra bots</h1>
+          <h1>Un jugador</h1>
           <label>
             Ingresá tu nombre
             <input
@@ -128,7 +128,7 @@ export default function LocalBoard() {
           </div>
           <label className="chaos-toggle" title="Apagado, los números y los puertos van en el orden de siempre. Prendido, se reparten al azar.">
             <input type="checkbox" role="switch" checked={chaos} onChange={(e) => setChaos(e.target.checked)} />
-            Caos: números y puertos al azar
+            Anarquía: números y puertos al azar
           </label>
           <button type="button" className="room-btn primary" disabled={!name.trim()} onClick={start}>
             Jugar

@@ -37,7 +37,7 @@ export default function OnlineStart() {
     <main className="room-page">
       <div className="room-card">
         <div className="logo" role="img" aria-label="Paisano" />
-        <h1>Jugar online</h1>
+        <h1>Multijugador</h1>
         <p>Armá una sala y pasales el link a tus amigos, o entrá a la de alguien con su código.</p>
         <label>
           Tu nombre
