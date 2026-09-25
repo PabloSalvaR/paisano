@@ -519,7 +519,13 @@ export const makeSmartBot = (pf: BotProfile): Bot => (input: BotInput, rng: Rng)
   if (yop) {
     const wanted = missing.filter((r) => yop.resources.includes(r));
     const pool = wanted.length ? wanted : yop.resources;
-    return { type: 'playYearOfPlenty', player: me, resources: Array.from({ length: yop.count }, (_, i) => pool[i % pool.length]) };
+    const left = { ...s.bank }; // no pedir de un recurso más cartas de las que quedan en el banco
+    const resources = Array.from({ length: yop.count }, (_, i) => {
+      const r = [pool[i % pool.length], ...pool, ...yop.resources].find((x) => left[x] > 0)!;
+      left[r]--;
+      return r;
+    });
+    return { type: 'playYearOfPlenty', player: me, resources };
   }
   if (has('playMonopoly')) return { type: 'playMonopoly', player: me, resource: missing.length ? best(missing, () => 0, rng) : best([...RESOURCES], (r) => -hand[r], rng) };
   if (knight && !canAfford(hand, goal)) return { type: 'playKnight', player: me };

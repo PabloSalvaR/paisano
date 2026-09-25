@@ -285,6 +285,22 @@ describe('bot con criterio', () => {
     }
   });
 
+  it('Buena cosecha con 1 sola carta de un recurso en el banco: no pide 2 de ese (antes se trababa con bank-empty)', () => {
+    const s = mainPhaseGame(4, NAMES.slice(0, 3));
+    setHand(s, 0, { mountains: 3 }); // para la estancia le faltan 2 maíces
+    s.players[0].dev.yearOfPlenty = 1;
+    s.bank.fields = 1;
+    expect(legalActions(s, 0).some((a) => a.type === 'playYearOfPlenty')).toBe(true);
+    for (const bot of [smartBot, randomBot]) {
+      for (let i = 0; i < 30; i++) {
+        const legal = legalActions(s, 0).filter((a) => a.type === 'playYearOfPlenty');
+        const cmd = bot({ me: 0, legal, hand: s.players[0].hand, state: s }, mulberry32(i));
+        const r = applyCommand(s, cmd);
+        expect(r.ok ? 'ok' : r.error.code).toBe('ok');
+      }
+    }
+  });
+
   it('con más de 7 cartas compra la carta igual: con un 7 perdería la mitad de lo que junta', () => {
     const s = mainPhaseGame(4, NAMES.slice(0, 3));
     setHand(s, 0, { pasture: 5, fields: 1, mountains: 2 }); // 8 cartas, a 2 de la estancia

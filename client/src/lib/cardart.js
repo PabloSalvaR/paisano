@@ -2,7 +2,8 @@
 //   - drawBastos11: el naipe español de adorno de la mesa (caballero de bastos: jinete a caballo con una maza verde).
 //   - drawDevCard: las cartas de desarrollo del juego (Gaucho, Acopio, Buena cosecha, Empedrado, Punto de victoria).
 // Los dos llevan el estilo de las láminas de referencia: colores planos, contorno oscuro y figuras simples.
-// `devCardURL` devuelve la carta como imagen (cacheada) para usarla en el panel «Mis cartas».
+// `devCardURL` devuelve la carta como imagen (cacheada) para usarla en el panel «Mis cartas»: desde sept 2026 es la lámina de
+// public/cartas/ y estos dibujos quedan de respaldo mientras baja (y para las placas de Ruta más larga y Milicia más grande).
 
 var OL = '#3a220b'; // contorno
 var TAU = Math.PI * 2;
@@ -518,9 +519,22 @@ export function awardURL(kind) {
   return awardUrls[kind];
 }
 
+// Láminas definitivas de las cartas de desarrollo (public/cartas/<kind>.webp, 400 × 600): se bajan apenas se carga este módulo y,
+// mientras tanto o si fallan, `devCardURL` devuelve el dibujo propio de arriba (mismo criterio que el 11 de bastos de la mesa).
+var LAMINAS = ['knight', 'monopoly', 'yearOfPlenty', 'roadBuilding', 'victoryPoint'];
+var laminas = {};
+if (typeof Image !== 'undefined') {
+  LAMINAS.forEach(function (kind) {
+    var img = new Image();
+    img.onload = function () { laminas[kind] = img.src; };
+    img.src = '/cartas/' + kind + '.webp';
+  });
+}
+
 var urls = {};
-/** La carta como imagen (data URL, 256 × 400 para verse nítida), cacheada por tipo. */
+/** La carta como imagen: la lámina si ya bajó; si no, el dibujo (data URL, 256 × 400 para verse nítida), cacheado por tipo. */
 export function devCardURL(kind) {
+  if (laminas[kind]) return laminas[kind];
   if (urls[kind]) return urls[kind];
   var c = document.createElement('canvas'); c.width = 256; c.height = 400;
   var x = c.getContext('2d'); x.scale(2, 2); drawDevCard(x, kind);

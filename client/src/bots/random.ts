@@ -46,7 +46,12 @@ export function commandFor(a: LegalAction, player: PlayerId, hand: Hand, rng: Rn
     case 'playMonopoly':
       return { type: a.type, player, resource: pick(RESOURCES) };
     case 'playYearOfPlenty':
-      return { type: a.type, player, resources: Array.from({ length: a.count }, () => pick(a.resources)) };
+    {
+      // dos distintos si se puede: repetir uno solo es seguro si es el único que queda (el banco podría tener 1 sola de ese)
+      const first = pick(a.resources);
+      const rest = a.resources.filter((r) => r !== first);
+      return { type: a.type, player, resources: a.count === 2 ? [first, rest.length ? pick(rest) : first] : [first] };
+    }
     case 'proposeTrade': {
       const own = RESOURCES.filter((r) => hand[r] > 0);
       const give = pick(own);

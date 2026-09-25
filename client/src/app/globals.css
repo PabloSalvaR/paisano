@@ -506,7 +506,7 @@ body{
 .dialog.cards{width:min(392px,calc(100% - 20px));max-height:calc(100% - 24px);overflow-y:auto}
 .dialog.cards .cardgrid{display:flex;flex-wrap:wrap;gap:12px 10px;justify-content:center;margin-bottom:2px}
 .dialog.cards .dcard{width:112px;display:flex;flex-direction:column;align-items:stretch;gap:5px}
-.dialog.cards .dcard .pic{position:relative;aspect-ratio:128/200;filter:drop-shadow(0 3px 5px rgba(0,0,0,.4));transition:transform .15s}
+.dialog.cards .dcard .pic{position:relative;aspect-ratio:2/3;filter:drop-shadow(0 3px 5px rgba(0,0,0,.4));transition:transform .15s}
 .dialog.cards .dcard:not(.off):hover .pic{transform:translateY(-3px) rotate(-1deg)}
 .dialog.cards .dcard img{display:block;width:100%;height:100%;user-select:none;-webkit-user-drag:none}
 .dialog.cards .dcard.off .pic{opacity:.6;filter:grayscale(.45) drop-shadow(0 2px 4px rgba(0,0,0,.3))}
@@ -532,7 +532,7 @@ body{
 .dialog.summary .row small{flex:1;min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:2px;color:var(--muted);font-size:.72rem;font-weight:700;white-space:nowrap}
 .dialog.summary .row small svg{flex:none;width:12px;height:12px;margin-left:4px}
 .dialog.summary .row .vpc{flex:none;display:flex;align-items:center;gap:2px}
-.dialog.summary .row .vpc img{display:block;width:16px;height:25px;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.35)}
+.dialog.summary .row .vpc img{display:block;width:16px;height:24px;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.35)}
 .dialog.summary .row .vpc b{min-width:0;width:auto;font-size:.72rem;line-height:1;color:var(--muted)}
 @media (max-width:640px){
   .dialog.cards .cardgrid{gap:10px 6px}
@@ -640,6 +640,7 @@ body{
 .dialog .dir.in{color:#2e9e4f}
 .dialog .dir.out{color:#c81e1e}
 .dialog.offer .yesno{justify-content:center;margin-top:8px}
+.dialog.offer [data-cancel-offer]{margin-top:16px} /* aire respecto de los redondeles (el de ✓ lleva un aro verde por fuera) */
 /* Oferta entre jugadores: un redondel del color de cada consultado (pensando / ✓ / ✕); quien ofrece toca el que tiene ✓ para concretar */
 .dialog.offer .head{display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:8px}
 .dialog.offer .head .who{font-family:'Fraunces',Georgia,serif;font-size:1.05rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
