@@ -154,6 +154,61 @@ describe('bot con criterio', () => {
     expect(rings).toBe(0);
   }, 60_000);
 
+  it('une sus dos redes de caminos: si la colocación lo deja a 1 o 2 caminos, casi siempre las une', () => {
+    const topo = topology();
+    // caminos libres que faltan para unir la red de su primera casa con la de la segunda (0 = ya están unidas)
+    const gap = (s: GameState, p: number): number => {
+      const network = (from: number) => {
+        const seen = new Set([from]);
+        const stack = [from];
+        while (stack.length) {
+          const v = stack.pop()!;
+          for (const e of topo.vertices[v].edges) {
+            const w = topo.edges[e].a === v ? topo.edges[e].b : topo.edges[e].a;
+            if (s.edgeRoads[e] !== p || seen.has(w)) continue;
+            seen.add(w);
+            stack.push(w);
+          }
+        }
+        return seen;
+      };
+      const [a, b] = s.vertexBuildings.flatMap((x, v) => (x?.player === p ? [v] : []));
+      const target = network(b);
+      const dist = new Map([...network(a)].map((v) => [v, 0]));
+      const queue = [...dist.keys()];
+      while (queue.length) {
+        const v = queue.shift()!;
+        if (target.has(v)) return dist.get(v)!;
+        if (s.vertexBuildings[v] && s.vertexBuildings[v]!.player !== p) continue;
+        for (const e of topo.vertices[v].edges) {
+          const w = topo.edges[e].a === v ? topo.edges[e].b : topo.edges[e].a;
+          if (s.edgeRoads[e] !== null || dist.has(w)) continue;
+          dist.set(w, dist.get(v)! + 1);
+          queue.push(w);
+        }
+      }
+      return Infinity;
+    };
+    let close = 0;
+    let joined = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const rng = mulberry32(seed * 11);
+      let s = createGame(NAMES.slice(0, 3), seed);
+      let near: number[] | null = null;
+      for (let guard = 0; guard < 3000 && s.phase.kind !== 'finished'; guard++) {
+        if (!near && s.phase.kind !== 'setup') near = [0, 1, 2].filter((p) => gap(s, p) > 0 && gap(s, p) <= 2);
+        const me = nextBot(s, () => true)!;
+        const r = applyCommand(s, smartBot({ me, legal: legalActions(s, me), hand: s.players[me].hand, state: s }, rng));
+        if (!r.ok) break;
+        s = r.state;
+      }
+      close += near!.length;
+      joined += near!.filter((p) => gap(s, p) === 0).length;
+    }
+    expect(close).toBeGreaterThan(30);
+    expect(joined / close).toBeGreaterThan(0.6); // antes miraba un solo camino hacia adelante y las unía menos de la mitad de las veces
+  }, 60_000);
+
   it('al final de la partida no propone cambios aunque le falte una sola carta', () => {
     const s = mainPhaseGame(4, NAMES.slice(0, 3));
     s.tradeOffers = 0;

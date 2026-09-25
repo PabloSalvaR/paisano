@@ -22,6 +22,9 @@ export interface BotProfile {
   eagerKnight: boolean;
   /** Cuánto vale estirar la ruta continua más larga con un camino. */
   stretch: number;
+  /** Cuánto vale unir sus dos redes de caminos (las de las dos casas de la colocación) en una ruta, por cada camino que suma.
+   *  Juntando para una casa también compra el camino que las une. */
+  joinRoads: number;
   /** Pelea la Ruta más larga aunque un rival le lleve mucha ventaja. */
   fightRoad: boolean;
   /** Si no es null, compra caminos solo para llegar a un lugar nuevo y mientras tenga menos de estas construcciones (casas más estancias). */
@@ -45,6 +48,7 @@ export const BALANCED: BotProfile = {
   saveForSettlement: true,
   eagerKnight: false,
   stretch: 2,
+  joinRoads: 1.5,
   fightRoad: false,
   roadGoal: null,
   buildResource: false,
@@ -62,6 +66,7 @@ export const RANCHER: BotProfile = {
   saveForSettlement: false,
   eagerKnight: true,
   stretch: 1,
+  joinRoads: 0, // no juega a la ruta: con 1,5 ganaba menos (usa madera y ladrillo para los caminos a sus casas)
   fightRoad: false,
   roadGoal: 4, // 4 casas para subir a 4 estancias: 4 caminos alcanzan (2 de la colocación y 1 por cada casa nueva)
   buildResource: true,
@@ -78,6 +83,7 @@ export const SETTLER: BotProfile = {
   saveForSettlement: true,
   eagerKnight: false,
   stretch: 3,
+  joinRoads: 1.5,
   fightRoad: true,
   roadGoal: null,
   buildResource: false,

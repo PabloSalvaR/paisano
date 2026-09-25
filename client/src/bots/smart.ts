@@ -56,13 +56,20 @@ function hasReachableSpot(s: GameState, me: PlayerId): boolean {
   return topology().vertices.some((v) => canSettleAt(s, v.id) && v.edges.some((e) => s.edgeRoads[e] === me));
 }
 
+const SPOT_REACH = [1, 0.5, 0.25]; // cuánto vale un lugar para casa según los caminos que falten para llegar (0, 1 o 2)
+const LOOKAHEAD = 3; // caminos que mira más allá del que evalúa, siguiendo por la punta nueva
+
 /**
- * Puntuador de caminos. Suma dos cosas:
- * - `spot`: lo bueno que es el lugar para una casa al que lleva (el extremo nuevo y, algo menos, sus vecinos).
- * - `stretch`: cuánto alarga su ruta continua más larga, más un poco si el extremo nuevo queda abierto para seguir. Así
- *   prefiere estirar la punta de la ruta hacia afuera, que es lo que suma para la Ruta más larga.
- * Un camino con los dos extremos ya en su red (cierra un anillo o rellena un hueco) y que no alarga la ruta vale 0: antes, sin
- * un lugar para casa a la vista, todos valían lo mismo y el bot terminaba dando vueltas en círculo alrededor de sus casas.
+ * Puntuador de caminos. Devuelve tres partes:
+ * - `spot`: el mejor lugar para una casa al que el camino lo acerca (llega, o le quedan 1 o 2 caminos), pesado por la distancia.
+ *   Solo cuenta si de verdad acorta: un camino hacia un lugar al que ya llegaba igual de cerca por otro lado no suma.
+ * - `stretch`: cuánto alarga su ruta continua más larga, a la mitad si por esa punta la ruta se tranca enseguida (costa, casa o
+ *   camino rival): mira hasta `LOOKAHEAD` caminos más por la punta nueva. Así estira hacia donde se puede seguir.
+ * - `bridge`: si con este camino y hasta `LOOKAHEAD` más une las dos partes de su red (las casas de la colocación quedan
+ *   separadas), lo que crece la ruta por cada camino usado, según `joinRoads` del perfil. Antes solo miraba un camino hacia
+ *   adelante y casi nunca las unía, aunque 1 de cada 3 bots terminaba la colocación a 1-3 caminos de hacerlo.
+ * Un camino con los dos extremos ya en su red que no une partes ni alarga la ruta (cierra un anillo o rellena un hueco) vale 0:
+ * antes, sin un lugar para casa a la vista, todos valían lo mismo y el bot terminaba dando vueltas en círculo alrededor de sus casas.
  */
 function roadScorer(s: GameState, me: PlayerId, mine: Set<Resource>, pf: BotProfile) {
   const topo = topology();
@@ -70,26 +77,105 @@ function roadScorer(s: GameState, me: PlayerId, mine: Set<Resource>, pf: BotProf
   // si otro ya tiene una ruta mucho más larga, pelear el reconocimiento no vale la pena: estirar pesa menos (salvo al colono)
   const rival = Math.max(0, ...s.players.map((_, p) => (p === me ? 0 : longestRoad(s, p))));
   const stretchWeight = rival - base > 3 && !pf.fightRoad ? 0.5 : pf.stretch;
+  const blocked = (v: number) => !!s.vertexBuildings[v] && s.vertexBuildings[v]!.player !== me; // una casa rival corta el paso
+
+  // caminos que faltan para llegar a cada vértice (0 = ya está en la red), por caminos libres o propios, hasta 2
+  const reach = (from: number[]): Map<number, number> => {
+    const dist = new Map<number, number>(from.map((v) => [v, 0]));
+    const queue = [...from];
+    while (queue.length) {
+      const v = queue.shift()!;
+      const d = dist.get(v)!;
+      if (blocked(v)) continue;
+      for (const e of topo.vertices[v].edges) {
+        const owner = s.edgeRoads[e];
+        if (owner !== null && owner !== me) continue;
+        const edge = topo.edges[e];
+        const w = edge.a === v ? edge.b : edge.a;
+        const nd = d + (owner === me ? 0 : 1);
+        if (nd >= SPOT_REACH.length || (dist.get(w) ?? Infinity) <= nd) continue;
+        dist.set(w, nd);
+        if (owner === me) queue.unshift(w); // camino propio: misma distancia (BFS 0-1)
+        else queue.push(w);
+      }
+    }
+    return dist;
+  };
+  const network = topo.vertices.filter((v) => onNetwork(s, v.id, me)).map((v) => v.id);
+  const before = reach(network);
+  const spots = topo.vertices.filter((v) => canSettleAt(s, v.id)).map((v) => ({ v: v.id, value: vertexValue(s, v.id, mine, pf) }));
+
+  // partes separadas de su red (al principio, una por cada casa de la colocación): a qué parte pertenece cada vértice
+  const part = new Map<number, number>();
+  for (const v of network) {
+    if (part.has(v)) continue;
+    const stack = [v];
+    part.set(v, v);
+    while (stack.length) {
+      const x = stack.pop()!;
+      if (blocked(x)) continue;
+      for (const e of topo.vertices[x].edges) {
+        if (s.edgeRoads[e] !== me) continue;
+        const y = topo.edges[e].a === x ? topo.edges[e].b : topo.edges[e].a;
+        if (!part.has(y)) {
+          part.set(y, v);
+          stack.push(y);
+        }
+      }
+    }
+  }
+
+  // mira hasta LOOKAHEAD caminos más encadenados por la punta nueva:
+  // - `ahead`: si la ruta sigue creciendo por ahí (1: un camino más por cada camino puesto; 0: la dirección se tranca enseguida)
+  // - `bridge`: si la cadena llega a otra parte de su red (une sus dos redes), lo que crece la ruta por cada camino usado
+  const lookahead = (edge: number, tip: number, from: number, gain: number) => {
+    const edgeRoads = s.edgeRoads.slice();
+    edgeRoads[edge] = me;
+    let ahead = 0;
+    let bridge = 0;
+    const walk = (v: number, depth: number): void => {
+      const joins = part.has(v) && part.get(v) !== from;
+      if (depth > 0) {
+        const g = longestRoad({ ...s, edgeRoads }, me) - base;
+        ahead = Math.max(ahead, Math.min(1, (g - gain) / depth));
+        if (joins) bridge = Math.max(bridge, g / (depth + 1));
+      }
+      if (depth === LOOKAHEAD || blocked(v) || part.has(v)) return;
+      for (const e of topo.vertices[v].edges) {
+        if (edgeRoads[e] !== null) continue;
+        const next = topo.edges[e];
+        edgeRoads[e] = me;
+        walk(next.a === v ? next.b : next.a, depth + 1);
+        edgeRoads[e] = null;
+      }
+    };
+    walk(tip, 0);
+    return { ahead, bridge };
+  };
+
   const parts = (edge: number) => {
     const e = topo.edges[edge];
     const fresh = [e.a, e.b].filter((v) => !onNetwork(s, v, me)); // el extremo «de avanzada»: el que todavía no es de su red
-    let spot = 0;
-    for (const v of fresh) {
-      if (canSettleAt(s, v)) spot = Math.max(spot, vertexValue(s, v, mine, pf));
-      else if (!s.vertexBuildings[v]) for (const n of topo.vertices[v].neighbors) if (canSettleAt(s, n)) spot = Math.max(spot, vertexValue(s, n, mine, pf) * 0.5);
-    }
     const edgeRoads = s.edgeRoads.slice();
     edgeRoads[edge] = me;
     const gain = longestRoad({ ...s, edgeRoads }, me) - base;
-    if (!fresh.length && gain <= 0) return { spot: 0, stretch: 0 }; // anillo o relleno: no suma nada
-    // extremo abierto: caminos libres para seguir desde ahí, sin una casa rival que corte
-    let open = 0;
-    for (const v of fresh) {
-      const b = s.vertexBuildings[v];
-      if (b && b.player !== me) continue;
-      open += topo.vertices[v].edges.filter((x) => x !== edge && s.edgeRoads[x] === null).length;
+    if (!fresh.length) {
+      // las dos puntas ya son de su red: une dos partes (vale todo lo que crece la ruta), o cierra un anillo o rellena un hueco
+      const join = part.get(e.a) !== part.get(e.b) ? Math.max(0, gain) * pf.joinRoads : 0;
+      return { spot: 0, stretch: Math.max(gain, join) * stretchWeight, bridge: join * stretchWeight };
     }
-    return { spot, stretch: gain > 0 ? gain * stretchWeight + open * 0.3 : 0 };
+    let spot = 0;
+    const after = reach(fresh);
+    for (const { v, value } of spots) {
+      const d = after.get(v);
+      if (d !== undefined && d < (before.get(v) ?? Infinity)) spot = Math.max(spot, value * SPOT_REACH[d]);
+    }
+    // estirar la punta vale más si por ahí se puede seguir (a la mitad si se tranca enseguida); unir sus redes, lo que crece la ruta
+    const tip = fresh[0];
+    const { ahead, bridge } = lookahead(edge, tip, part.get(tip === e.a ? e.b : e.a)!, gain);
+    const join = bridge * pf.joinRoads;
+    const grow = Math.max(gain * (0.5 + 0.5 * ahead), join);
+    return { spot, stretch: grow * stretchWeight, bridge: join * stretchWeight };
   };
   return {
     parts,
@@ -420,7 +506,7 @@ export const makeSmartBot = (pf: BotProfile): Bot => (input: BotInput, rng: Rng)
     const saving = hasReachableSpot(s, me) && !chasingRoad(s, me, pf); // yendo por la ruta, también vale estirarla
     const worth = (x: number) => {
       const p = roads.parts(x);
-      return saving ? p.spot : p.spot + p.stretch;
+      return saving ? p.spot + p.bridge : p.spot + p.stretch; // juntando para la casa, solo un camino que abra otro lugar o una sus redes
     };
     const e = best(road.edges, worth, rng);
     if (worth(e) > 0) return { type: 'buildRoad', player: me, edge: e };
